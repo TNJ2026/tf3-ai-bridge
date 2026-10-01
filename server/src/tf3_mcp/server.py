@@ -12,6 +12,7 @@ from .bridge import Bridge, BridgeError
 from .map_cache import MapCache
 from .planning_app import apps, TOOL_META, card_result
 from .subventions import SubventionAutoAccept, make_policy
+from .compact import compact_ping, compact_road, compact_status
 from mcp.types import CallToolResult
 
 ALLOW_EVAL = os.environ.get("TF3_MCP_ALLOW_EVAL", "") == "1"
@@ -111,18 +112,20 @@ async def commit_facility(preview_token: str) -> dict:
 
 
 @mcp.tool()
-async def bridge_status() -> dict:
-    """Check whether the game is connected: returns the mod's last heartbeat, its age,
-    and the Lua environment probe (which libraries the game exposes to mods)."""
+async def bridge_status(verbose: bool = False) -> dict:
+    """Check whether the game is connected: heartbeat age, bridge version, game time, paused flag.
+    verbose=True adds the full heartbeat and the Lua environment probe (libraries exposed to mods)."""
     status = bridge().heartbeat()
     status["bridgeDir"] = str(bridge().dir)
-    return status
+    return status if verbose else compact_status(status)
 
 
 @mcp.tool()
-async def ping(echo: str = "") -> dict:
-    """Round-trip a request through the game. Useful to verify the command channel works."""
-    return await _call("ping", echo=echo)
+async def ping(echo: str = "", verbose: bool = False) -> dict:
+    """Round-trip a request through the game. Useful to verify the command channel works.
+    verbose=True includes the Lua environment probe."""
+    result = await _call("ping", echo=echo)
+    return result if verbose else compact_ping(result)
 
 
 @mcp.tool()
@@ -616,13 +619,16 @@ async def build_road(
     allow_collisions: bool = False,
     snap_radius: float = 5,
     max_segment_length: float = 50,
+    include_path: bool = False,
 ) -> dict:
     """Build a straight street from `start` to `end`, optionally through `via` points.
     Each point is {"node": id} for an existing street node, or {"x": .., "y": ..}; a coordinate within
     `snap_radius` metres of an existing STREET node joins that node (via points only snap with their own
     `snap` value). Optional `z` sets elevation; legs touching such points interpolate elevation, otherwise
     they follow terrain. `max_segment_length` is 10..200 metres (default 50); at most 128 points/512 segments.
-    Preview returns cost, blocking entities, resolved `points`, sampled `path` and `buildable`; it never builds.
+    Preview returns cost, blocking entities, resolved `points`, a path summary (pathPoints, minZ/maxZ,
+    maxGradePercent and where) and `buildable`; it never builds. include_path=True returns the full sampled
+    `path` and per-node id lists instead of summaries.
     This builds normal ground roads; it does not split existing edges or automatically create bridges/tunnels.
     On failure `reason` explains it: `blocking` lists buildings/streets in the way; `messages` holds the
     game's own errors (e.g. too sharp an angle at a junction). Returns current node and segment ids.
@@ -634,7 +640,8 @@ async def build_road(
                             "max_segment_length": max_segment_length}
     if via:
         args["via"] = via
-    return await _call("build_road", _timeout=BUILD_TIMEOUT, **args)
+    result = await _call("build_road", _timeout=BUILD_TIMEOUT, **args)
+    return result if include_path else compact_road(result)
 
 
 @mcp.tool()
