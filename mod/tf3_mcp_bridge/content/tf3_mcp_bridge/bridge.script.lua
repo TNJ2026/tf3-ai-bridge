@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.11.0"
+local BRIDGE_VERSION = "0.12.0"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -2836,6 +2836,285 @@ do
 		return reconcile(op)
 	end
 	for _, name in ipairs({"get_loans","preview_loan","commit_loan","get_loan_operation"}) do ENGINE_COMMANDS[name]=true end
+end
+
+-- Native subventions (补贴任务). get_subventions reads the native game-script state;
+-- accept_subvention sends the same "Subvention"/"onAccept" event as the UI button, once per uid.
+-- Automation belongs to the MCP server: update() runs in several unshared Lua states and must
+-- never accept on its own.
+do
+	local SCRIPT = "::/game_mechanics/subventions/subventions.gs"
+	local MAX_ACTIVE = 5 -- MaxAvailable in base subventions.script.tl
+	local LISTS = {{"proposedSubventions","Proposed"},{"activeSubventions","Active"},
+		{"completedSubventions","Complete"},{"failedSubventions","Failed"}}
+	local EXPECTABLE = {kind=true, toDeliver=true, target=true, upfrontMoney=true, failureMoney=true}
+	local MODES = {ROAD="TRUCK", RAIL="TRAIN", WATER="SHIP", TRAM="TRAM"}
+	local submitted = {} -- uid -> submission; bridge-local, lost when the script reloads
+
+	local function readState()
+		local entity = api.engine.system.gameScriptSystem.getEntityForGameScript(SCRIPT)
+		if not entity or entity < 0 then error("native subvention script is unavailable", 0) end
+		local component = getComponent(entity, "GAME_SCRIPT")
+		local state = component and component.state
+		if not state or not state.proposedSubventions or not state.activeSubventions then
+			error("subvention state is not initialized", 0)
+		end
+		return state, entity
+	end
+	local function now() return getComponent(api.engine.util.getWorld(), "GAME_TIME").gameTime end
+	local function dayMs() return tryField(function() return api.util.getDefaultDayDuration() end) end
+	local function yearMs() return tryField(function() return api.util.getDefaultYearDuration() end) end
+	local function ref(r) return type(r) == "table" and r.entity or nil end
+
+	local function cargoIds(d)
+		local ids = {}
+		for _, c in ipairs(listOf(d.cargosToDeliver)) do ids[#ids + 1] = c end
+		if type(d.cargoType) == "string" then
+			local id = tryField(function() return api.res.cargoTypeRep.find(d.cargoType) end)
+			if id and id >= 0 then ids[#ids + 1] = id end
+		end
+		return ids
+	end
+	local function effects(list)
+		local money, other = 0, {}
+		for _, b in ipairs(listOf(list)) do
+			local p = b.params or {}
+			if b.type == "Money" then money = money + (p.amount or 0)
+			else other[#other + 1] = {type=b.type, amount=p.amount, town=ref(p.townEntity)} end
+		end
+		return money, other
+	end
+	local function describeEntity(e)
+		if not e then return nil end
+		local industry = getComponent(e, "INDUSTRY")
+		local kind = industry and "industry" or getComponent(e, "TOWN") and "town"
+			or getComponent(e, "TOWN_BUILDING") and "townBuilding" or "other"
+		local name = entityName(e)
+		if not name and industry then name = entityName(industry.construction) end
+		return {entity=e, name=name, kind=kind, exists=api.engine.entityExists(e)}
+	end
+
+	local function describe(v, status, t, dms, yms)
+		local d = v.data or {}
+		local kind = type(v.id) == "string" and v.id:match("subventions/([%w_]+)/") or tostring(v.id)
+		local up, upOther = effects(d.upfront)
+		local done, doneOther = effects(d.complete)
+		local fail, failOther = effects(d.failure)
+		local cargo = cargoIds(d)
+		local names = {}
+		for _, c in ipairs(cargo) do names[#names + 1] = tryField(function() return api.res.cargoTypeRep.getName(c) end) end
+		local row = {uid=v.uid, status=status, kind=kind, resource=v.id, name=d.name, cargo=cargo, cargoNames=names,
+			toDeliver=d.toDeliver, delivered=d.delivered, upfrontMoney=up, completeMoney=done, failureMoney=fail,
+			otherEffects={upfront=upOther, complete=doneOther, failure=failOther},
+			spawnTime=v.spawnTime, acceptedTime=v.acceptedTime, completedTime=v.completedTime,
+			durationAfterAcceptMs=d.expireDuration, effectDurationMs=d.effectDuration,
+			target=describeEntity(ref(d.stockListEntity) or ref(d.townEntity) or ref(d.to)),
+			from=describeEntity(ref(d.from))}
+		local deadline
+		if status == "Proposed" and d.expireDurationProposed and d.expireDurationProposed > -1 then
+			row.offerDeadline = v.spawnTime + d.expireDurationProposed
+			deadline = row.offerDeadline
+		elseif status == "Active" and v.acceptedTime and d.expireDuration then
+			row.deadline = v.acceptedTime + d.expireDuration
+			deadline = row.deadline
+		end
+		if deadline then
+			row.remainingMs = deadline - t
+			if dms and dms > 0 then row.remainingDays = math.floor(row.remainingMs / dms) end
+		end
+		-- Proposed: average rate over the full contract; Active: rate still needed before the deadline.
+		local span = status == "Proposed" and d.expireDuration or status == "Active" and row.remainingMs or nil
+		if yms and d.toDeliver and span and span > 0 then
+			row.requiredPerYear = (d.toDeliver - (d.delivered or 0)) / (span / yms)
+		end
+		return row
+	end
+
+	local function catchables(station)
+		local set = {}
+		local list = tryField(function() return api.engine.system.catchmentAreaSystem.getStationCatchables(station, true) end)
+		for _, e in ipairs(listOf(list)) do set[e] = true end
+		return set
+	end
+	local function servesTarget(set, target, cargo)
+		if target.kind == "industry" then return set[target.entity] == true end
+		if target.kind ~= "town" then return false end
+		for e in pairs(set) do
+			local tb = getComponent(e, "TOWN_BUILDING")
+			if tb and tb.town == target.entity then
+				local demand = tryField(function() return api.engine.util.stock.getCargoMaxConsumptionPerYear(tb.stockList, cargo) end)
+				if (demand or 0) > 0 then return true end
+			end
+		end
+		return false
+	end
+	local function sourcesIn(set, cargo)
+		local out = {}
+		for e in pairs(set) do
+			local ind = getComponent(e, "INDUSTRY")
+			if ind then
+				local maxP = tryField(function() return api.engine.util.stock.getCargoMaxProductionPerYear(ind.stockList, cargo) end) or 0
+				if maxP > 0 then
+					out[#out + 1] = {industry=e, name=entityName(e) or entityName(ind.construction), maxPerYear=maxP,
+						actualPerYear=tryField(function() return api.engine.util.stock.getCargoProducedPerYear(ind.stockList, cargo) end) or 0}
+				end
+			end
+		end
+		return out
+	end
+	local function terminalNode(station, terminal)
+		local st = getComponent(station, "STATION")
+		local term = st and listOf(st.terminals)[terminal + 1]
+		return term and term.vehicleNodeId, term
+	end
+	local function pathLength(a, b, mode)
+		local steps = listOf(tryField(function() return api.engine.util.pathfinding.findPathNodeToNode({a}, {b}, {mode}) end))
+		if #steps == 0 then return nil end
+		local len = 0
+		for _, step in ipairs(steps) do
+			local s = step[1]
+			local net = getComponent(s.entity, "TRANSPORT_NETWORK")
+			local edge = net and listOf(net.edges)[s.index + 1]
+			len = len + (edge and tryField(function() return edge.geometry.length end) or 0)
+		end
+		return len
+	end
+	local function fleet(line)
+		local count, capacity, speed, carrier = 0, 0, nil, nil
+		for _, v in ipairs(listOf(api.engine.system.transportVehicleSystem.getLineVehicles(line))) do
+			local tv = getComponent(v, "TRANSPORT_VEHICLE")
+			local parts = listOf(tv and tryField(function() return tv.transportVehicleConfig.vehicles end))
+			for _, part in ipairs(parts) do
+				local info = modelInfo(part.part.modelId)
+				if info then
+					capacity = capacity + (info.capacity or 0)
+					if info.topSpeed then speed = math.min(speed or info.topSpeed, info.topSpeed) end
+					carrier = carrier or info.carrier
+				end
+			end
+			if #parts > 0 then count = count + 1 end
+		end
+		return count, capacity, speed, carrier
+	end
+
+	-- Which player lines already load the cargo from a producing industry and unload it at the target.
+	local function assess(row, yms)
+		local out = {supported=false, served=false, lines={}}
+		if row.kind ~= "deliver_cargo" and row.kind ~= "deliver_cargo_town" then out.reason = "unsupported_kind"; return out end
+		local cargo = row.cargo[1]
+		if cargo == nil or row.target == nil or not row.target.exists then out.reason = "unknown_cargo_or_target"; return out end
+		out.supported = true
+		local player = api.engine.util.getPlayer()
+		local counted, capacity, supplyActual, supplyMax = {}, 0, 0, 0
+		for _, line in ipairs(listOf(api.engine.system.lineSystem.getLines())) do
+			local comp = ownerOf(line) == player and getComponent(line, "LINE") or nil
+			local custom = comp and tryField(function() return comp.customFilters end) == true
+			local loading, unloading = {}, {}
+			for i, s in ipairs(listOf(comp and comp.stops)) do
+				local group = getComponent(s.stationGroup, "STATION_GROUP")
+				local station = group and listOf(group.stations)[s.station + 1]
+				if station then
+					local stop = {index=i - 1, station=station, terminal=s.terminal}
+					local set = catchables(station)
+					local loads = not custom or tryField(function() return s.stopConfig.load[cargo + 1] end) == true
+					if loads then
+						stop.sources = sourcesIn(set, cargo)
+						if #stop.sources > 0 then loading[#loading + 1] = stop end
+					end
+					local _, term = terminalNode(station, s.terminal)
+					local unloads = term ~= nil and tryField(function() return term.cargoUnload end) ~= false
+					if unloads and servesTarget(set, row.target, cargo) then unloading[#unloading + 1] = stop end
+				end
+			end
+			local a, b
+			for _, x in ipairs(loading) do for _, y in ipairs(unloading) do
+				if not a and x.index ~= y.index then a, b = x, y end
+			end end
+			if a then
+				local count, cap, speed, carrier = fleet(line)
+				local r = {line=line, name=entityName(line), loadStop=a.index, unloadStop=b.index, vehicles=count,
+					capacityPerTrip=cap, topSpeed=speed, sources=a.sources}
+				local mode = MODES[carrier or ""]
+				local modeId = mode and tryField(function() return api.type.enum.TransportMode[mode] end)
+				local na, nb = terminalNode(a.station, a.terminal), terminalNode(b.station, b.terminal)
+				if modeId and na and nb and speed and speed > 0 then
+					local there, back = pathLength(na, nb, modeId), pathLength(nb, na, modeId)
+					if there and back then
+						r.roundTripMeters = math.floor(there + back)
+						-- +30% for acceleration, grades and junctions, plus a minute for loading
+						r.roundTripSeconds = math.floor((there + back) / speed * 1.3 + 60)
+						if yms then r.capacityPerYear = cap * (yms / 1000) / r.roundTripSeconds end
+					else r.routeProblem = "no path between terminals" end
+				end
+				capacity = capacity + (r.capacityPerYear or 0)
+				for _, s in ipairs(a.sources) do
+					if not counted[s.industry] then
+						counted[s.industry] = true
+						supplyActual, supplyMax = supplyActual + s.actualPerYear, supplyMax + s.maxPerYear
+					end
+				end
+				out.lines[#out.lines + 1] = r
+			end
+		end
+		out.served = #out.lines > 0
+		out.capacityPerYear, out.supplyActualPerYear, out.supplyMaxPerYear = capacity, supplyActual, supplyMax
+		out.estimatedPerYear = math.min(capacity, supplyActual)
+		if row.requiredPerYear and row.requiredPerYear > 0 then out.margin = out.estimatedPerYear / row.requiredPerYear end
+		out.basis = "full vehicle capacity, pathfinding round trip, actual source output; estimates only"
+		return out
+	end
+
+	commands.get_subventions = function(args)
+		local state, entity = readState()
+		local t, dms, yms = now(), dayMs(), yearMs()
+		local out = {scriptEntity=entity, gameTime=t, dayMs=dms, yearMs=yms, maxActive=MAX_ACTIVE,
+			nativePaused=state.pause == true, activeCount=#listOf(state.activeSubventions), tasks={},
+			balance=tryField(function() return api.engine.util.finance.getPlayersBalance(api.engine.util.getPlayer()) end)}
+		for _, l in ipairs(LISTS) do
+			for _, v in ipairs(listOf(state[l[1]])) do
+				local row = describe(v, l[2], t, dms, yms)
+				if args.assess ~= false and l[2] == "Proposed" then row.assessment = assess(row, yms) end
+				local op = submitted[v.uid]
+				if op then row.submission = {gameTime=op.gameTime, callbackAccepted=op.callbackAccepted, dispatchError=op.dispatchError} end
+				out.tasks[#out.tasks + 1] = row
+			end
+		end
+		return out
+	end
+
+	commands.accept_subvention = function(args)
+		local uid = args.uid
+		if type(uid) ~= "number" or uid % 1 ~= 0 then error("uid must be an integer from get_subventions", 0) end
+		if submitted[uid] then error("accept already submitted for this uid; inspect get_subventions and never resend", 0) end
+		local state = readState()
+		local t = now()
+		local found
+		for _, v in ipairs(listOf(state.proposedSubventions)) do if v.uid == uid then found = v end end
+		if not found then error("subvention is not proposed (expired, declined or already accepted); query again", 0) end
+		local row = describe(found, "Proposed", t, dayMs(), yearMs())
+		if row.offerDeadline and row.offerDeadline < t then error("offer expired", 0) end
+		if #listOf(state.activeSubventions) >= MAX_ACTIVE then error("maximum active subventions reached", 0) end
+		if args.expect ~= nil then
+			if type(args.expect) ~= "table" then error("expect must be an object", 0) end
+			local actual = {kind=row.kind, toDeliver=row.toDeliver, target=row.target and row.target.entity,
+				upfrontMoney=row.upfrontMoney, failureMoney=row.failureMoney}
+			for k, v in pairs(args.expect) do
+				if not EXPECTABLE[k] then error("unknown expectation: " .. tostring(k), 0) end
+				if actual[k] ~= v then error("subvention terms changed: " .. k, 0) end
+			end
+		end
+		local op = {uid=uid, gameTime=t}
+		submitted[uid] = op
+		local ok, err = pcall(function()
+			api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Subvention", "onAccept", {uid=uid}),
+				function(_, success) op.callbackAccepted = success end)
+		end)
+		if not ok then op.dispatchError = tostring(err) end
+		return {uid=uid, submitted=ok, callbackAccepted=op.callbackAccepted, dispatchError=op.dispatchError, task=row,
+			instruction="The native script applies the accept on its own update. Confirm with get_subventions "
+				.. "(status Active, acceptedTime set). Never resend; the bridge refuses a second accept for this uid."}
+	end
+	for _, name in ipairs({"get_subventions","accept_subvention"}) do ENGINE_COMMANDS[name]=true end
 end
 
 commands.build_depot = function(args)

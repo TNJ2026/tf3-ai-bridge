@@ -11,6 +11,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from .bridge import Bridge, BridgeError
 from .map_cache import MapCache
 from .planning_app import apps, TOOL_META, card_result
+from .subventions import SubventionAutoAccept, make_policy
 from mcp.types import CallToolResult
 
 ALLOW_EVAL = os.environ.get("TF3_MCP_ALLOW_EVAL", "") == "1"
@@ -214,6 +215,65 @@ async def get_loan_operation(operation_id: str) -> dict:
     Use the original preview_token even if commit timed out. Unresolved operations block
     further loan commits. After reload, inspect get_loans and the game's finance journal."""
     return await _call("get_loan_operation", _engine=True, operation_id=operation_id)
+
+
+@mcp.tool()
+async def get_subventions(assess: bool = True) -> dict:
+    """Read native subventions (补贴任务): proposed, active, completed and failed, with money effects,
+    cargo, target and deadlines in game days. With assess=True each proposed cargo task gets an
+    estimate of which player lines already serve it, their yearly capacity and the source output."""
+    return await _call("get_subventions", _engine=True, assess=assess)
+
+
+async def _subvention_call(cmd: str, **args: Any) -> Any:
+    return await _call(cmd, _engine=True, **args)
+
+
+_autoaccept = SubventionAutoAccept(_subvention_call, lambda: bridge().dir / "subvention_autoaccept.json")
+
+
+@mcp.tool()
+async def accept_subvention(uid: int, expected_to_deliver: int | None = None, expected_target: int | None = None,
+                            expected_upfront_money: int | None = None, expected_failure_money: int | None = None) -> dict:
+    """Accept ONE proposed subvention by uid, exactly like the in-game Accept button. Only with user
+    authorization. The game pays the upfront money and applies failure penalties on timeout.
+    Expected_* values are re-checked before sending; changed terms abort. The native script applies
+    the accept on its next update: confirm with get_subventions. Never resend; a second accept for the
+    same uid is refused until the bridge reloads."""
+    if uid in _autoaccept.attempted:
+        raise ToolError("auto-accept already attempted this uid; inspect get_subventions")
+    expect = {k: v for k, v in dict(toDeliver=expected_to_deliver, target=expected_target,
+              upfrontMoney=expected_upfront_money, failureMoney=expected_failure_money).items() if v is not None}
+    return await _call("accept_subvention", _engine=True, uid=uid, expect=expect or None)
+
+
+@mcp.tool()
+async def subvention_autoaccept(action: str = "status", min_margin: float = 1.5, max_failure_money: int = 15_000_000,
+                                kinds: list[str] | None = None, min_remaining_days: int = 0, max_active: int = 5,
+                                interval_seconds: float = 30, dry_run: bool = True) -> dict:
+    """Rule-based auto-accept of subventions, polled from this MCP process (stops when it exits).
+    action: status | start | stop | run_once. start/run_once take the policy: kinds (default
+    deliver_cargo, deliver_cargo_town), min_margin (estimated yearly delivery vs required rate),
+    max_failure_money, min_remaining_days, max_active. dry_run=True (default) only logs decisions;
+    only start with dry_run=False when the user has authorized automatic acceptance. Each uid is
+    attempted once; decisions are logged to subvention_autoaccept.json in the bridge folder."""
+    if action == "status":
+        return _autoaccept.status()
+    if action == "stop":
+        await _autoaccept.stop()
+        return _autoaccept.status()
+    if action not in {"start", "run_once"}:
+        raise ToolError("action must be status, start, stop or run_once")
+    try:
+        policy = make_policy(kinds, min_margin, max_failure_money, min_remaining_days, max_active)
+        if action == "start":
+            return await _autoaccept.start(policy, interval_seconds, dry_run)
+        if _autoaccept.task and not _autoaccept.task.done():
+            raise ToolError("auto-accept is running; stop it before a manual run_once")
+        _autoaccept.policy, _autoaccept.dry_run = policy, dry_run
+        return await _autoaccept.run_once()
+    except ValueError as e:
+        raise ToolError(str(e)) from e
 
 
 @mcp.tool()

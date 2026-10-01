@@ -60,6 +60,9 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 | `preview_loan` | 只读预览借款或还款，生成 60 秒一次性令牌 |
 | `commit_loan` | 使用预览令牌单次提交原生借还款事件 |
 | `get_loan_operation` | 查询提交结果，核对合同与余额，不重发交易 |
+| `get_subventions` | 原生补贴任务（待接受/进行中/完成/失败）：金额、货物、目标、截止天数；可评估现有线路运力与货源 |
+| `accept_subvention` | 按 uid 单次接受补贴，等同游戏内"接受"按钮；发送前复核条款，同一 uid 不重发（0.12.0） |
+| `subvention_autoaccept` | 在 MCP 进程内按规则轮询自动接受补贴，默认 dry_run 只记录决策；日志写入桥接目录 `subvention_autoaccept.json` |
 | `list_towns` | 城镇列表 |
 | `list_stations` | 车站组（线路站点引用的对象）：名称、位置 |
 | `list_depots` | 车库：载具类型、位置、库内车辆 |

@@ -36,6 +36,8 @@ server/.venv/Scripts/python.exe scripts/rail_eval.py scripts/<已审查的任务
 
 ## 3. 地图采集与快速规划
 
+全局与局部布局优先使用 `capture_planning_snapshot` → `plan_global_development` / `plan_local_development` → `export_planning_report`，形成可复用 JSON 及 HTML、PNG、SVG。参数和边界见 [规划工具说明](PLANNING_TOOLS.md)。全局联系线与局部地表走廊不能直接用于施工；进入工程设计时继续使用下述流程。
+
 ### 3.1 先用缓存和局部走廊
 
 按以下顺序规划，不逐点反复向游戏请求：
@@ -170,6 +172,13 @@ line.customFilters=true
 6. `EN_ROUTE` 与 `noPath=false` 证明当时已分配并可行驶，不证明已完成一次运输，也不证明运力满足需求或长期稳定。
 
 本次 AMO F-15 在游戏中为 DIESEL 分类，购买价 293,958、载量 12、速度约 40 km/h；已购买 1 辆并分配到木板线。这些是当时数据，不是永久车型选择规则。
+
+### 8.1 补贴任务（桥接 0.12.0）
+
+- 通知中的"任务"是原生补贴（`::/game_mechanics/subventions/subventions.gs` 的游戏脚本状态），通知历史只存编号。用 `get_subventions` 读取；不要直接改写脚本状态。
+- 接受补贴会立即获得预付款，超时失败按 `failure` 扣款（可能包括退回预付款和额外罚款）。接受属于需授权的写操作；`accept_subvention` 只发送一次原生 `Subvention/onAccept` 事件，原生脚本在自身更新时处理，用 `get_subventions` 确认状态变为 Active，不重发。
+- 自动接受只能在 MCP 服务进程内轮询（`subvention_autoaccept`）。不要在 mod 的 `update()` 中实现：引擎 update 在多个互不共享状态的 Lua 状态中运行，可能重复接受。默认 `dry_run=True`；用户明确授权后才以 `dry_run=False` 启动。
+- 评估是估算：整车容量、寻路往返时间加 30% 余量与装卸时间、货源实际年产量。货运补贴以外的类型（运输工人、旅客）不自动接受。高速运行时补贴报价窗口约 5–6 个游戏月，人工确认往往来不及。
 
 ## 9. 保存与重载
 
