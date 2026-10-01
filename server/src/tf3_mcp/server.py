@@ -259,7 +259,9 @@ async def subvention_autoaccept(action: str = "status", min_margin: float = 1.5,
     deliver_cargo, deliver_cargo_town), min_margin (estimated yearly delivery vs required rate),
     max_failure_money, min_remaining_days, max_active. dry_run=True (default) only logs decisions;
     only start with dry_run=False when the user has authorized automatic acceptance. Each uid is
-    attempted once; decisions are logged to subvention_autoaccept.json in the bridge folder."""
+    attempted once; decisions are logged to subvention_autoaccept.json in the bridge folder.
+    submitted is not accepted: accepted lists newly confirmed native Active/Complete/Failed records.
+    A pending or unknown outcome blocks all further accepts until native confirmation; never retry."""
     if action == "status":
         return _autoaccept.status()
     if action == "stop":

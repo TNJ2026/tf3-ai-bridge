@@ -52,7 +52,7 @@ components[801]={[CT.TRANSPORT_NETWORK]={edges={{geometry={length=500}}}}}
 api.engine.util.pathfinding={findPathNodeToNode=function()return {{{entity=800,index=0}},{{entity=801,index=0}}} end}
 local load={};for i=1,30 do load[i]=false end;load[13]=true
 components[900]={[CT.LINE]={customFilters=true,stops={
-  {stationGroup=700,station=0,terminal=0,stopConfig={load=load}},
+  {stationGroup=700,station=0,terminal=0,stopConfig={load=load,maxLoad={[13]=1}}},
   {stationGroup=701,station=0,terminal=0,stopConfig={load={}}}}},
  [CT.PLAYER_OWNED]={player=2},[CT.NAME]={name="Logs"}}
 components[910]={[CT.TRANSPORT_VEHICLE]={line=900,transportVehicleConfig={vehicles={{part={modelId=50}}}}}}
@@ -207,8 +207,12 @@ def test_auto_accept_attempts_each_uid_once_and_one_per_pass(tmp_path):
     auto = SubventionAutoAccept(game, tmp_path / "log.json")
     auto.dry_run = False
     first = asyncio.run(auto.run_once())
-    assert first["accepted"] == [1] and game.accepts[0]["expect"]["target"] == 600
+    assert first["submitted"] == [1] and first["accepted"] == [] and game.accepts[0]["expect"]["target"] == 600
     asyncio.run(auto.run_once())  # uid 1 still shows as proposed: never resent
+    assert [a["uid"] for a in game.accepts] == [1]
+    game.tasks[0]['status']='Active'
+    confirmed=asyncio.run(auto.run_once())
+    assert confirmed['accepted']==[1]
     assert [a["uid"] for a in game.accepts] == [1, 2]
     asyncio.run(auto.run_once())
     assert [a["uid"] for a in game.accepts] == [1, 2]
@@ -222,3 +226,58 @@ def test_auto_accept_never_retries_after_an_error(tmp_path):
     asyncio.run(auto.run_once())
     assert len(game.accepts) == 1
     assert auto.attempted[1]["result"] == {"error": "timed out"}
+
+
+@pytest.mark.parametrize('fraction',[0, .1, .5, 1, None, -1, 2])
+def test_load_fraction_limits_capacity(game,fraction):
+    lua,call=game
+    lua.execute('components[900][api.type.ComponentType.LINE].stops[1].stopConfig.maxLoad[13]='+('nil' if fraction is None else str(fraction)))
+    task=by_uid(call('get_subventions'))[7001]
+    a=task['assessment']
+    if fraction is None or fraction<=0 or fraction>1:
+        assert not a['served'] and not evaluate(task,make_policy(),0)[0]
+    else:
+        assert a['lines'][0]['capacityPerTrip']==pytest.approx(20*fraction)
+        assert a['lines'][0]['capacityPerYear']==pytest.approx(20*fraction*1461/276)
+
+
+def test_native_blocks_other_accept_until_confirmation(game):
+    lua,call=game
+    call('accept_subvention',uid=7001)
+    with pytest.raises(Exception,match='requires reconciliation'):
+        call('accept_subvention',uid=7002)
+    assert len(events(lua))==1
+    lua.execute('SUB.activeSubventions[1]=table.remove(SUB.proposedSubventions,1)')
+    call('accept_subvention',uid=7002)
+    assert len(events(lua))==2
+
+
+@pytest.mark.parametrize('result',[{'submitted':False,'dispatchError':'failed'}, {'submitted':True,'callbackAccepted':False}])
+def test_rejected_dispatch_is_not_accepted(result):
+    async def run():
+        sent=[]
+        async def call(cmd,**args):
+            if cmd=='get_subventions':return dict(activeCount=4,tasks=[proposed(uid=1),proposed(uid=2)])
+            sent.append(args['uid']);return result
+        auto=SubventionAutoAccept(call);auto.dry_run=False
+        first=await auto.run_once()
+        assert first['accepted']==[] and first['submitted']==[] and first['failed']==[1]
+        assert (await auto.run_once())['pending']==[1]
+        assert sent==[1]
+    asyncio.run(run())
+
+
+def test_pending_at_limit_and_concurrent_passes():
+    async def run():
+        sent=[];tasks=[proposed(uid=1),proposed(uid=2)]
+        async def call(cmd,**args):
+            await asyncio.sleep(0)
+            if cmd=='get_subventions':return dict(activeCount=4+sum(t['status']=='Active' for t in tasks),tasks=tasks)
+            sent.append(args['uid']);return dict(submitted=True,callbackAccepted=True)
+        auto=SubventionAutoAccept(call);auto.dry_run=False
+        await asyncio.gather(auto.run_once(),auto.run_once())
+        assert sent==[1]
+        tasks[0]['status']='Active'
+        r=await auto.run_once()
+        assert r['accepted']==[1] and sent==[1]
+    asyncio.run(run())

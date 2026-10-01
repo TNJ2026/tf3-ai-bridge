@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.12.0"
+local BRIDGE_VERSION = "0.12.1"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -3017,7 +3017,12 @@ do
 					local stop = {index=i - 1, station=station, terminal=s.terminal}
 					local set = catchables(station)
 					local loads = not custom or tryField(function() return s.stopConfig.load[cargo + 1] end) == true
-					if loads then
+					local fraction = 1
+					if custom then fraction = tryField(function() return s.stopConfig.maxLoad[cargo + 1] end) end
+					-- Missing/invalid custom limits are unknown, never unrestricted capacity.
+					if type(fraction) ~= "number" or fraction ~= fraction or fraction < 0 or fraction > 1 then fraction = 0 end
+					stop.maxLoadFraction = fraction
+					if loads and fraction > 0 then
 						stop.sources = sourcesIn(set, cargo)
 						if #stop.sources > 0 then loading[#loading + 1] = stop end
 					end
@@ -3032,8 +3037,9 @@ do
 			end end
 			if a then
 				local count, cap, speed, carrier = fleet(line)
+				cap = cap * a.maxLoadFraction
 				local r = {line=line, name=entityName(line), loadStop=a.index, unloadStop=b.index, vehicles=count,
-					capacityPerTrip=cap, topSpeed=speed, sources=a.sources}
+					capacityPerTrip=cap, maxLoadFraction=a.maxLoadFraction, topSpeed=speed, sources=a.sources}
 				local mode = MODES[carrier or ""]
 				local modeId = mode and tryField(function() return api.type.enum.TransportMode[mode] end)
 				local na, nb = terminalNode(a.station, a.terminal), terminalNode(b.station, b.terminal)
@@ -3060,7 +3066,7 @@ do
 		out.capacityPerYear, out.supplyActualPerYear, out.supplyMaxPerYear = capacity, supplyActual, supplyMax
 		out.estimatedPerYear = math.min(capacity, supplyActual)
 		if row.requiredPerYear and row.requiredPerYear > 0 then out.margin = out.estimatedPerYear / row.requiredPerYear end
-		out.basis = "full vehicle capacity, pathfinding round trip, actual source output; estimates only"
+		out.basis = "load-limited vehicle capacity, pathfinding round trip, actual source output; estimates only"
 		return out
 	end
 
@@ -3087,6 +3093,15 @@ do
 		if type(uid) ~= "number" or uid % 1 ~= 0 then error("uid must be an integer from get_subventions", 0) end
 		if submitted[uid] then error("accept already submitted for this uid; inspect get_subventions and never resend", 0) end
 		local state = readState()
+		-- One outstanding native event at a time, also for manual callers.
+		local confirmed = {}
+		for _, key in ipairs({"activeSubventions", "completedSubventions", "failedSubventions"}) do
+			for _, v in ipairs(listOf(state[key])) do confirmed[v.uid] = true end
+		end
+		for previous, op in pairs(submitted) do
+			if confirmed[previous] then op.resolved = true end
+			if not op.resolved then error("previous subvention accept requires reconciliation; query state and never resend", 0) end
+		end
 		local t = now()
 		local found
 		for _, v in ipairs(listOf(state.proposedSubventions)) do if v.uid == uid then found = v end end

@@ -91,6 +91,7 @@ class SubventionAutoAccept:
         self.log: list[dict] = []
         self.error = None
         self.last_run = None
+        self.run_lock = asyncio.Lock()
 
     def _record(self, entry):
         entry["time"] = time.time()
@@ -105,9 +106,31 @@ class SubventionAutoAccept:
             os.replace(tmp, path)
 
     async def run_once(self) -> dict:
+        async with self.run_lock:
+            return await self._run_once()
+
+    async def _run_once(self) -> dict:
         state = await self.call("get_subventions", assess=True)
         active = state.get("activeCount", 0)
-        summary = {"gameTime": state.get("gameTime"), "activeCount": active, "decisions": [], "accepted": []}
+        summary = {"gameTime": state.get("gameTime"), "activeCount": active, "decisions": [],
+                   "accepted": [], "submitted": [], "pending": [], "failed": []}
+        native = {t["uid"]: t for t in state.get("tasks", [])}
+        for uid, attempt in self.attempted.items():
+            if attempt.get("confirmed"):
+                continue
+            status = native.get(uid, {}).get("status")
+            if status in {"Active", "Complete", "Failed"}:
+                attempt.update(confirmed=True, nativeStatus=status)
+                summary["accepted"].append(uid)
+                self._record(dict(attempt, result="native_confirmed"))
+            else:
+                summary["pending"].append(uid)
+        # Proposed/missing records cannot prove rejection after an asynchronous send.
+        # Even a dispatch error may have happened after enqueueing; never release its slot blindly.
+        if summary["pending"]:
+            summary["blocked"] = "previous_accept_requires_reconciliation"
+            self.last_run = time.time()
+            return summary
         for task in state.get("tasks", []):
             uid = task.get("uid")
             if task.get("status") != "Proposed" or uid in self.attempted:
@@ -132,10 +155,15 @@ class SubventionAutoAccept:
             try:
                 result = await self.call("accept_subvention", uid=uid, expect=expectation(task))
                 attempt["result"] = {k: result.get(k) for k in ("submitted", "callbackAccepted", "dispatchError")}
-                summary["accepted"].append(uid)
-                active += 1
+                summary["pending"].append(uid)
+                if result.get("submitted") is True and not result.get("dispatchError") and result.get("callbackAccepted") is not False:
+                    summary["submitted"].append(uid)
+                else:
+                    summary["failed"].append(uid)
             except Exception as exc:  # never resend; the uid stays in attempted
                 attempt["result"] = {"error": str(exc)}
+                summary["failed"].append(uid)
+                summary["pending"].append(uid)
             self._record(attempt)
             break  # one accept per pass; the next pass reads fresh native state
         self.last_run = time.time()
@@ -173,4 +201,5 @@ class SubventionAutoAccept:
                     intervalSeconds=self.interval, policy=self.policy, error=self.error,
                     lastRunAgeSeconds=round(time.time() - self.last_run, 1) if self.last_run else None,
                     attempted=list(self.attempted.values())[-20:], recentLog=self.log[-20:],
+                    pending=[uid for uid, attempt in self.attempted.items() if not attempt.get("confirmed")],
                     scope="runs only while this MCP server process is alive")

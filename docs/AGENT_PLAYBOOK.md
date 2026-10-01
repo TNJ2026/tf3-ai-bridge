@@ -178,6 +178,10 @@ line.customFilters=true
 - 通知中的"任务"是原生补贴（`::/game_mechanics/subventions/subventions.gs` 的游戏脚本状态），通知历史只存编号。用 `get_subventions` 读取；不要直接改写脚本状态。
 - 接受补贴会立即获得预付款，超时失败按 `failure` 扣款（可能包括退回预付款和额外罚款）。接受属于需授权的写操作；`accept_subvention` 只发送一次原生 `Subvention/onAccept` 事件，原生脚本在自身更新时处理，用 `get_subventions` 确认状态变为 Active，不重发。
 - 自动接受只能在 MCP 服务进程内轮询（`subvention_autoaccept`）。不要在 mod 的 `update()` 中实现：引擎 update 在多个互不共享状态的 Lua 状态中运行，可能重复接受。默认 `dry_run=True`；用户明确授权后才以 `dry_run=False` 启动。
+
+- 0.12.1：自定义线路按目标货物 `maxLoad` 比例折算运力，零、缺失或无效限制不计入可用运力。该估算仍不保证车辆货类适配、实际周转或共享资源充足。
+- 自动接取结果区分 `submitted`（已发送）、`pending`（待原生确认）、`failed`（发送失败或异常）与 `accepted`（本轮首次确认已进入原生 Active/Complete/Failed 历史）。`accepted` 不表示任务已经完成；查看原生状态判断结果。
+- 有待确认操作时，自动轮询不再发送其他接取；桥接也会拦截不同 uid 的后续手动接取，防止异步更新期间突破上限。超时、异常、记录消失都不能当作未接取；先核对原生状态，禁止通过重载绕过。自动轮询与手动 run_once 在同一进程内串行。
 - 评估是估算：整车容量、寻路往返时间加 30% 余量与装卸时间、货源实际年产量。货运补贴以外的类型（运输工人、旅客）不自动接受。高速运行时补贴报价窗口约 5–6 个游戏月，人工确认往往来不及。
 
 ## 9. 保存与重载
