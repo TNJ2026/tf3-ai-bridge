@@ -152,6 +152,8 @@ upgrade_road(edge=8778, street_type="town/town_old_medium", preview=False,
 新建通过复制现有设施布局实现。配置默认仅结构预览，单独的一次性令牌提交才施工。
 完整覆盖表、原生模板与模块拆除限制、测试状态见 [设施接口说明](docs/reference/FACILITY_SUPPORT.md)。
 
+桥接 0.12.2 增加 `build_headquarters(town, x, y, z, rotation=0, name="")`：使用原生总部主楼模板，只读预览后通过 `commit_facility` 单次提交。检查公司建造权限、重复总部、当前城镇与碰撞；支持总部查询，暂不支持扩建或搬迁。首次实机新建仍须在隔离测试存档验证。
+
 ### 货运火车站（桥接版本 0.7.0）
 
 `build_rail_station` 新建贯通式货运站，使用非电气化基础轨道，站台按游戏年代选择外观。

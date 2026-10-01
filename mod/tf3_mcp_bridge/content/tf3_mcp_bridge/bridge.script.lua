@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.12.1"
+local BRIDGE_VERSION = "0.12.2"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -2466,6 +2466,7 @@ do
   return r
  end
  local function category(name,d)
+  if name=="::/landmarks/hq/headquarter.con" then return "headquarters",false end
   if field(d,"isIndustry")==true then return "industry",false end
   if name:find("/small_stops/",1,true) then return "street_stop",false end
   if name:find("/warehouses/",1,true) then return "warehouse",true end
@@ -2483,7 +2484,7 @@ do
     local desc=field(d,"description")
     local row={id=id,resource=name,name=desc and field(desc,"name"),category=cat,available=available(d),
      parameters=definitions(d),module_type=field(d,"type"),
-     construction_support=kind=="construction" and supported and "clone_existing_layout" or "dedicated_or_unsupported",
+     construction_support=cat=="headquarters" and "build_headquarters" or (kind=="construction" and supported and "clone_existing_layout" or "dedicated_or_unsupported"),
      template_script=field(field(d,"createTemplateScript"),"fileName")}
     rows[#rows+1]=row
    end
@@ -2544,7 +2545,7 @@ do
  commands.list_facilities=function(args)
   local rows={};api.engine.forEachEntityWithComponent(function(id)
    local c=getComponent(id,"CONSTRUCTION");local cat,supported=category(c.fileName,lookup("construction",c.fileName))
-   if supported and (args.mine_only==false or ownerOf(id)==api.engine.util.getPlayer()) then
+   if (supported or cat=="headquarters") and (args.mine_only==false or ownerOf(id)==api.engine.util.getPlayer()) then
     rows[#rows+1]={entity=id,resource=c.fileName,category=cat,position=constructionPosition(id)}
    end
   end,componentTypes().CONSTRUCTION)
@@ -2635,13 +2636,67 @@ do
   if not check.ok or #check.collisions>0 then return {preview=true,blocked=true,check=check} end
   return issue("build",before,params,args,check)
  end
+ -- Dedicated native HQ template; never clone or freely configure permit-gated HQ modules.
+ local HQ="::/landmarks/hq/headquarter.con"
+ local function headquartersState(args)
+  local d=lookup("construction",HQ)
+  if available(d)~=true then error("headquarters resource is unavailable",0) end
+  local town=tonumber(args.town)
+  if not town or not getComponent(town,"TOWN") then error("resolve a current town entity first",0) end
+  local owned={}
+  api.engine.forEachEntityWithComponent(function(id)
+   local c=getComponent(id,"CONSTRUCTION")
+   if c.fileName==HQ and ownerOf(id)==api.engine.util.getPlayer() then owned[#owned+1]=id end
+  end,componentTypes().CONSTRUCTION)
+  if #owned>0 then error("player already owns headquarters; relocation is not supported",0) end
+  local util=ug_require("::/game_mechanics/company/company_util.tl")
+  local cache=util.getConstructionDisableCacheData({{HQ,d.metadata,"Headquarters"}})
+  local disabled=util.getConstructionDisableReason(HQ,d.metadata,cache)
+  if disabled then error("headquarters is locked: "..tostring(disabled.reason),0) end
+  local towns=commands.get_map_info({}).towns
+  local selected,nearest,best
+  for _,t in ipairs(towns) do
+   if t.id==town then selected=t end
+   local distance=dist2d(t.position,args)
+   if not best or distance<best then best=distance;nearest=t.id end
+  end
+  if not selected or nearest~=town or best>1000 then error("site must be within 1000 m of the selected nearest town center",0) end
+  return {entity=town,resource=HQ,world=api.engine.util.getWorld(),player=api.engine.util.getPlayer(),
+   town_name=selected.name,position=selected.position},d
+ end
+ commands.build_headquarters=function(args)
+  for _,k in ipairs({"x","y","z"}) do roadNumber(args[k],k) end
+  roadNumber(args.rotation or 0,"rotation")
+  if not api.engine.terrain.isValidCoordinate(V2(args.x,args.y)) then error("headquarters is outside the map",0) end
+  local before,d=headquartersState(args)
+  local template=field(d,"createTemplateScript")
+  if not template or template.fileName~="::/landmarks/hq/headquarter.script@createTemplateFn" then error("unrecognized headquarters native template",0) end
+  local factory=ug_require("::/landmarks/hq/headquarter.script.tl")
+  local native=factory.createTemplateFn(copy(template.params or {}),{})
+  local modules={};local count=0
+  for slot,name in pairs(native) do
+   if type(slot)~="number" or name~="::/landmarks/hq/modules/hq_main.module" then error("unrecognized headquarters root module",0) end
+   local md=lookup("module",name)
+   modules[slot]={name=name,variant=0,metadata=md.metadata,updateScript={fileName=md.updateScript.fileName,params=md.updateScript.params}}
+   count=count+1
+  end
+  if count~=1 then error("headquarters template must contain exactly one main module",0) end
+  local params={seed=1,year=currentYear(),modules=modules}
+  local check=facilityPreview(buildProposal({resource=HQ,params=params,args=args}))
+  if not check.ok or #check.collisions>0 then return {preview=true,blocked=true,check=check} end
+  local out=issue("headquarters",before,params,args,check)
+  out.resource=HQ;out.town=before.entity
+  out.expansion={basis="native main module: 48 x 40 m ground texture; side slots at +/-24 m; reserve at least 100 x 100 m including access (estimate, not native validation)",automatic=false}
+  return out
+ end
  commands.commit_facility=function(args)
   local t=tickets[args.preview_token];tickets[args.preview_token]=nil
   if not t then error("preview expired, already consumed, or bridge reloaded; preview again",0) end
   if wallClock()-t.created>60 or wallClock()<t.created then error("preview expired",0) end
   local gameTime=commands.get_game_state().gameTime
   if currentYear()~=t.year or (t.game_time and gameTime and gameTime<t.game_time) then error("game date/session changed; preview again",0) end
-  local before=inspect(t.entity)
+  local before
+  if t.mode=="headquarters" then before=headquartersState(t.args) else before=inspect(t.entity) end
   if canonical(before)~=t.snapshot then error("facility changed since preview; inspect and preview again",0) end
   local proposal;local existing={}
   api.engine.forEachEntityWithComponent(function(id)existing[id]=true end,componentTypes().CONSTRUCTION)
@@ -2666,12 +2721,16 @@ do
    end
    for k,v in pairs(t.params) do if k~="modules" and canonical(after.params[k])~=canonical(v) then matches=false end end
    for slot in pairs(after.params.modules or {}) do if not (t.params.modules or {})[slot] then matches=false end end
-   out.verified=matches and math.abs(after.position.x-pos.x)<0.1 and math.abs(after.position.y-pos.y)<0.1 and math.abs(after.position.z-pos.z)<0.1
+   out.verified=matches and after.owner==api.engine.util.getPlayer() and math.abs(after.position.x-pos.x)<0.1 and math.abs(after.position.y-pos.y)<0.1 and math.abs(after.position.z-pos.z)<0.1
+   if t.mode=="headquarters" then
+    out.town=tryField(function()return api.engine.system.streetConnectorSystem.getConstructionClosestTown(id) end)
+    out.verified=out.verified and out.town==t.entity
+   end
   end
   out.verification="configuration_only; connectivity and long-term simulation must be checked separately"
   return out
  end
- for _,name in ipairs({"list_facility_resources","list_facilities","get_facility_config","configure_facility","build_facility","commit_facility"}) do ENGINE_COMMANDS[name]=true end
+ for _,name in ipairs({"list_facility_resources","list_facilities","get_facility_config","configure_facility","build_facility","build_headquarters","commit_facility"}) do ENGINE_COMMANDS[name]=true end
 end
 
 -- Native loan workflow: previews are local; only commit_loan dispatches an event.

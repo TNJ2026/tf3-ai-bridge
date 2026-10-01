@@ -103,6 +103,17 @@ async def build_facility(source_entity: int, x: float, y: float, z: float, rotat
 
 
 @mcp.tool()
+async def build_headquarters(town: int, x: float, y: float, z: float, rotation: float = 0, name: str = "") -> dict:
+    """Preview the native headquarters main module near a current town (within 1000 m).
+    Checks native permits, duplicate ownership and strict collisions. Does not relocate,
+    expand modules or build roads. Reserve future expansion/access space separately.
+    Apply once with commit_facility(preview_token); on timeout reconcile, never retry.
+    """
+    return await _call("build_headquarters", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       town=town, x=x, y=y, z=z, rotation=rotation, name=name)
+
+
+@mcp.tool()
 async def commit_facility(preview_token: str) -> dict:
     """Apply a facility preview ONCE with strict native error checking and config readback.
     Have a pre-construction save; use an isolated test save for unvalidated replacement layouts.
