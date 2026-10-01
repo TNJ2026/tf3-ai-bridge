@@ -1,6 +1,6 @@
 # Historical roadside-stop investigation — 2026-09-30
 
-> 最新状态：下文保留多个历史阶段，包含后来失效的“apply 禁用”“尚未测试”和旧实体 ID，不能直接作为当前施工指令。当前接口已完成边对象引用、车道/横道映射及终端网络校验；用户从稳定存档重建六处停靠点后报告未闪退，后续线路装载修正后报告正常。旧故障存档的 `MakePersonCapacityData` 根因仍未解决。受控 1 倍速观察已经执行，记录见 `controlled_simulation_trace.json`；因此下文“尚未执行”仅是当时状态。执行流程及证据边界统一见 [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md)，本文件保留为历史诊断依据。
+> 最新状态：下文保留多个历史阶段，包含后来失效的“apply 禁用”“尚未测试”和旧实体 ID，不能直接作为当前施工指令。当前接口已完成边对象引用、车道/横道映射及终端网络校验；用户从稳定存档重建六处停靠点后报告未闪退，后续线路装载修正后报告正常。旧故障存档的 `MakePersonCapacityData` 根因仍未解决。受控 1 倍速观察已经执行，记录见 `controlled_simulation_trace.json`；因此下文“尚未执行”仅是当时状态。执行流程及证据边界统一见 [AGENT_PLAYBOOK.md](docs/guides/AGENT_PLAYBOOK.md)，本文件保留为历史诊断依据。
 
 ## Historical simulation crash investigation — 2026-09-30 22:33 CST
 

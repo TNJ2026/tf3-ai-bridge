@@ -2,7 +2,7 @@
 
 通过 **Agent → MCP → 模组** 控制《狂热运输3》(Transport Fever 3)。
 
-实时规划和建造前请先阅读 [agent 入口](AGENTS.md) 与 [规划、建造及防崩溃执行手册](docs/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
+文档分类入口见 [docs 导航](docs/README.md)，包括发展策略、执行指南、接口参考与历史案例。实时规划和建造前请先阅读 [agent 入口](AGENTS.md) 与 [规划、建造及防崩溃执行手册](docs/guides/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
 
 ```
 Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_bridge (game script) ──> 游戏引擎
@@ -40,11 +40,11 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 
 ## MCP 工具
 
-全局／局部规划及 HTML、PNG、SVG 导出见 [规划工具说明](docs/PLANNING_TOOLS.md)（桥接 0.11.0）。
+全局／局部规划及 HTML、PNG、SVG 导出见 [规划工具说明](docs/reference/PLANNING_TOOLS.md)（桥接 0.11.0）。
 
 规划工具完成后直接显示 MCP Apps 图片卡片（全局全图、局部裁切），支持缩放；完整 HTML 由用户点击卡片链接打开，不自动打开。
 
-贷款接口新增于桥接版本 0.10.0；调用流程、校验及实机验证边界见 [游戏贷款接口](docs/LOAN_SUPPORT.md)。
+贷款接口新增于桥接版本 0.10.0；调用流程、校验及实机验证边界见 [游戏贷款接口](docs/reference/LOAN_SUPPORT.md)。
 
 | 工具 | 说明 |
 |---|---|
@@ -150,7 +150,7 @@ upgrade_road(edge=8778, street_type="town/town_old_medium", preview=False,
 `configure_facility`、`build_facility` 和 `commit_facility`。
 支持现有仓库、港口、各类车站/车库/维护站的原生模块查询与允许的配置修改；
 新建通过复制现有设施布局实现。配置默认仅结构预览，单独的一次性令牌提交才施工。
-完整覆盖表、原生模板与模块拆除限制、测试状态见 [设施接口说明](docs/FACILITY_SUPPORT.md)。
+完整覆盖表、原生模板与模块拆除限制、测试状态见 [设施接口说明](docs/reference/FACILITY_SUPPORT.md)。
 
 ### 货运火车站（桥接版本 0.7.0）
 

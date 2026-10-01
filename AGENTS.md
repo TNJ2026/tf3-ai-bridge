@@ -1,6 +1,6 @@
 # TF3 规划与建造 agent 入口
 
-本项目控制 **Transport Fever 3**，不是 Cities: Skylines。执行实时地图规划、建造、线路或车辆操作前，先读 [AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md)。它记录本次会话验证的流程、崩溃边界和恢复方法。
+本项目控制 **Transport Fever 3**，不是 Cities: Skylines。执行实时地图规划、建造、线路或车辆操作前，先读 [AGENT_PLAYBOOK.md](docs/guides/AGENT_PLAYBOOK.md)。它记录本次会话验证的流程、崩溃边界和恢复方法。
 
 ## 必须遵守
 
