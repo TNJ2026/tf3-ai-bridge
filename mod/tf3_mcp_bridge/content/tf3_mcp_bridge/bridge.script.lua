@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.10.0"
+local BRIDGE_VERSION = "0.11.0"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -3356,11 +3356,14 @@ local bridgeScript = {
 -- One engine read collects the whole planning corridor, including model-only depots.
 commands.get_route_snapshot = function(args)
  local CT=api.type.ComponentType
- local spacing=roadNumber(args.spacing or 100,'spacing',25,250)
+ local spacing=roadNumber(args.spacing or 100,'spacing',25,args.survey_bounds and 2000 or 250)
  local function revision(id) local r=api.engine.getRevision(id);return table.concat({r.num[1],r.num[2],r.num[3]},':') end
  local margin=roadNumber(args.margin or 1500,'margin',250,4000)
  local stations,ignore={},{}
- if args.start_node and args.end_node then
+ if args.survey_bounds then
+  local b=args.survey_bounds
+  stations={{position={x=b.min.x,y=b.min.y},ports={}},{position={x=b.max.x,y=b.max.y},ports={}}}
+ elseif args.start_node and args.end_node then
   for _,n in ipairs({args.start_node,args.end_node}) do
    local links=api.engine.system.streetSystem.getNodeSegments(n)
    if #links<1 then error('road endpoint has no segments',0) end
@@ -3402,6 +3405,7 @@ commands.get_route_snapshot = function(args)
  local x0=math.max(bounds.min.x,math.floor((math.min(a.x,b.x)-margin)/spacing)*spacing)
  local y0=math.max(bounds.min.y,math.floor((math.min(a.y,b.y)-margin)/spacing)*spacing)
  if args.whole_map then x0=bounds.min.x;y0=bounds.min.y;margin=math.max(bounds.max.x-bounds.min.x,bounds.max.y-bounds.min.y)*2 end
+ if args.survey_bounds then x0=a.x;y0=a.y;margin=0 end
  local nx=math.floor((math.min(bounds.max.x,math.max(a.x,b.x)+margin)-x0)/spacing)+1
  local ny=math.floor((math.min(bounds.max.y,math.max(a.y,b.y)+margin)-y0)/spacing)+1
  if nx*ny>100000 then error('corridor exceeds 100000 terrain samples; increase spacing or reduce margin',0) end
@@ -3462,6 +3466,26 @@ commands.get_route_snapshot = function(args)
   consistency='single engine read; revalidate before construction',coverage='bounding boxes and sampled terrain; native preview required'}
 end
 ENGINE_COMMANDS.get_route_snapshot=true
+
+-- Read-only survey independent of existing stations; no entity exclusions or delta reuse.
+commands.get_planning_snapshot = function(args)
+ local map=commands.get_map_info()
+ local bounds=args.bounds or map.bounds
+ for _,axis in ipairs({'x','y'}) do
+  local lo=roadNumber(bounds.min[axis],'bounds.min.'..axis,map.bounds.min[axis],map.bounds.max[axis])
+  local hi=roadNumber(bounds.max[axis],'bounds.max.'..axis,map.bounds.min[axis],map.bounds.max[axis])
+  if hi<=lo then error('survey bounds must have positive area',0) end
+ end
+ local spacing=roadNumber(args.spacing or 250,'spacing',25,2000)
+ if bounds.max.x-bounds.min.x<spacing or bounds.max.y-bounds.min.y<spacing then error('bounds must span at least one grid cell',0) end
+ local result=commands.get_route_snapshot({survey_bounds=bounds,spacing=spacing})
+ result.bridgeVersion=BRIDGE_VERSION
+ result.map=map;result.bounds=bounds;result.scope=args.bounds and 'local' or 'global'
+ result.stations=nil
+ result.coverage='sampled terrain and available bounding volumes; missing bounds and unreadable geometry remain unknown'
+ return result
+end
+ENGINE_COMMANDS.get_planning_snapshot=true
 
 -- exposed for offline tests
 bridgeScript._internal = { json = json, commands = commands, toPlain = toPlain, finishRoadConnections = finishRoadConnections }

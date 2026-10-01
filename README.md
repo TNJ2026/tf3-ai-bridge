@@ -40,10 +40,18 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 
 ## MCP 工具
 
+全局／局部规划及 HTML、PNG、SVG 导出见 [规划工具说明](docs/PLANNING_TOOLS.md)（桥接 0.11.0）。
+
+规划工具完成后直接显示 MCP Apps 图片卡片（全局全图、局部裁切），支持缩放；完整 HTML 由用户点击卡片链接打开，不自动打开。
+
 贷款接口新增于桥接版本 0.10.0；调用流程、校验及实机验证边界见 [游戏贷款接口](docs/LOAN_SUPPORT.md)。
 
 | 工具 | 说明 |
 |---|---|
+| `capture_planning_snapshot` | 无需车站的全图／局部只读调查，保存可复用快照 |
+| `plan_global_development` | 重点城市、邻城候选、产业来源、供给瓶颈及分期发展 |
+| `plan_local_development` | 设施占地、升级预留冲突、陆路候选走廊及仓储核算 |
+| `export_planning_report` | 导出带图层和缩放的 HTML，以及 PNG、SVG、JSON |
 | `bridge_status` | 心跳、连接状态、Lua 环境探测 |
 | `ping` | 走一遍完整的请求/响应链路 |
 | `get_game_state` | 日期、游戏时间、速度、余额、贷款 |

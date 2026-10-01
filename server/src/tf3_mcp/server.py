@@ -10,15 +10,20 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from .bridge import Bridge, BridgeError
 from .map_cache import MapCache
+from .planning_app import apps, TOOL_META, card_result
+from mcp.types import CallToolResult
 
 ALLOW_EVAL = os.environ.get("TF3_MCP_ALLOW_EVAL", "") == "1"
 
 mcp = MCPServer(
     "tf3",
+    extensions=[apps],
     instructions=(
         "Controls a running Transport Fever 3 game through the TF3 MCP Bridge mod. "
         "Call bridge_status first if calls time out: the game must be running a loaded save "
-        "with the mod enabled. Entity ids are integers that stay valid while the entity exists."
+        "with the mod enabled. Entity ids are integers that stay valid while the entity exists. "
+        "Planning tools automatically render an MCP Apps image card. Do not automatically open HTML; "
+        "the user opens it with the card link if desired."
     ),
 )
 
@@ -396,18 +401,106 @@ async def list_street_types(filter: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def capture_planning_snapshot(output_dir: str, bounds: dict | None = None, spacing: float = 250) -> dict:
+    """Read-only full-map or local survey without requiring existing stations; never pauses/builds.
+    bounds={min:{x,y},max:{x,y}} in world metres; omit for whole map. spacing=25..2000,
+    <=100000 samples. Saves terrain, available obstacle bounds, towns/industries and state as JSON.
+    Returns snapshot_path for plan_global_development / plan_local_development.
+    Coarse samples, missing bounds and stale IDs cannot authorize construction. Requires bridge 0.11.0.
+    """
+    from .development_planner import box, number, save_json, validate_snapshot
+    number(spacing, 'spacing', 25)
+    if spacing > 2000:
+        raise ToolError('spacing must be <= 2000')
+    if bounds is not None:
+        box(bounds)
+    snapshot = await _call('get_planning_snapshot', _engine=True, _timeout=30, bounds=bounds, spacing=spacing)
+    validate_snapshot(snapshot)
+    from datetime import datetime, timezone
+    snapshot['capturedAt'] = datetime.now(timezone.utc).isoformat()
+    path = save_json(snapshot, output_dir, 'snapshot')
+    return dict(snapshot_path=path, scope=snapshot['scope'], state=snapshot['state'],
+                terrainSamples=len(snapshot['grid']['heights']), obstacles=len(snapshot['obstacles']),
+                towns=snapshot['map']['towns'], industries=snapshot['map']['industries'],
+                coverage=snapshot['coverage'], consistency=snapshot['consistency'])
+
+
+async def _planning_card(plan, output_dir, summary, width=1600, height=1100):
+    import asyncio
+    from .planning_report import export_report
+    report = await asyncio.to_thread(export_report, plan, output_dir, width, height)
+    return await asyncio.to_thread(card_result, plan, report, summary)
+
+
+@mcp.tool(meta=TOOL_META)
+async def plan_global_development(snapshot_path: str, focus_town: int, output_dir: str,
+                                  neighbor_count: int = 2, supply_chains: list[dict] | None = None) -> CallToolResult:
+    """Offline regional plan: focus city, nearby-city candidates, industry inventory, phases and supply balance.
+    snapshot_path from capture_planning_snapshot. Distances only screen candidates, not passenger demand.
+    Optional supply_chains: [{name,cargo,time_unit,evidence:'measured'|'forecast',demand,production,
+    transport,handling,delivery,batch,delay,storage}]. Rates must share ONE time unit and finished-cargo
+    equivalents; sum all cities sharing a chain. delay uses that unit; batch/storage are cargo quantities.
+    Missing demand is UNKNOWN, not zero. Automatically exports and shows an MCP Apps planning image card; never opens HTML or builds.
+    """
+    import asyncio
+    from .development_planner import plan_global, read_snapshot, save_json
+    plan = await asyncio.to_thread(plan_global, read_snapshot(snapshot_path), focus_town, neighbor_count, supply_chains)
+    path = save_json(plan, output_dir, 'global-plan')
+    summary = dict(plan_path=path, neighbors=plan['neighbors'], supply=plan['supply'], phases=plan['phases'],
+                warnings=plan['warnings'], buildable=None)
+    return await _planning_card(plan, output_dir, summary)
+
+
+@mcp.tool(meta=TOOL_META)
+async def plan_local_development(snapshot_path: str, output_dir: str, sites: list[dict] | None = None,
+                                 corridors: list[dict] | None = None, supply_chains: list[dict] | None = None,
+                                 title: str = '局部布局规划') -> CallToolResult:
+    """Offline local layout validation and road/rail corridor search; never builds or assumes ports connect.
+    sites=[{name,current:{min:{x,y},max:{x,y}},reserved:{min:{x,y},max:{x,y}},basis:'estimate or native dimensions'}].
+    reserved includes current footprint PLUS upgrade/access space. Detects native and proposed overlaps.
+    corridors=[{name,mode:'road'|'rail',start:{x,y},end:{x,y}}]; endpoints must be outside facilities/reserves.
+    Avoids building bounds and reserves; reports water, ground grade and road crossings, not designed grades.
+    supply_chains schema matches plan_global_development. For rail engineering use plan_rail_connection
+    with fresh real construction IDs next. Automatically exports and shows an MCP Apps planning image card; does not open HTML.
+    """
+    import asyncio
+    from .development_planner import plan_local, read_snapshot, save_json
+    plan = await asyncio.to_thread(plan_local, read_snapshot(snapshot_path), sites, corridors, supply_chains, title)
+    path = save_json(plan, output_dir, 'local-plan')
+    summary = dict(plan_path=path, sites=plan['sites'], routes=[{k:v for k,v in r.items() if k!='path'} for r in plan['routes']],
+                supply=plan['supply'], warnings=plan['warnings'], buildable=None)
+    return await _planning_card(plan, output_dir, summary)
+
+
+@mcp.tool(meta=TOOL_META)
+async def export_planning_report(plan_path: str, output_dir: str, width: int = 1600, height: int = 1100) -> CallToolResult:
+    """Show an MCP Apps image card and export a saved global/local plan to self-contained interactive HTML, PNG, SVG and JSON.
+    HTML supports zoom/layer toggles; north is up and coordinates are world metres. No external network/game calls.
+    A loopback-only link opens the report ONLY when the user clicks it; never auto-open HTML.
+    Creates a unique report directory and returns absolute file paths. PNG CJK font can be set with
+    TF3_PLANNING_FONT. Dimensions 800..4096 x 600..4096. Never overwrites earlier reports.
+    """
+    import json
+    from pathlib import Path
+    plan = json.loads(Path(plan_path).read_text(encoding='utf-8'))
+    return await _planning_card(plan, output_dir, dict(plan_path=plan_path), width, height)
+
+
+@mcp.tool(meta=TOOL_META)
 async def plan_rail_connection(
     start_construction: int,
     end_construction: int,
     spacing: float = 100,
     max_candidates: int = 3,
-) -> dict:
+    output_dir: str | None = None,
+) -> CallToolResult:
     """Read-only railway planning between station CONSTRUCTION ids.
     Use revision-cached whole-map data. Start straight, detour around towns/buildings,
     then solve grades and road crossings locally. Cache hits need no game request. Never builds or pauses.
     Returns approximate candidates with sampled path, bridge/tunnel lengths and diagnostics.
     No candidate is a construction approval: native preview and fresh endpoint checks remain required.
     Prefer this to repeated get_terrain/find_nearby calls. Used ports are excluded.
+    Automatically shows the planning image card. output_dir defaults to TF3_PLANNING_DIR or exports/plans.
     """
     from .staged_planner import plan_staged
     if start_construction == end_construction:
@@ -419,7 +512,16 @@ async def plan_rail_connection(
     result = await asyncio.to_thread(plan_staged, snapshot, max_candidates)
     result["cache"] = status
     result["stats"]["bridgeRequests"] = 0 if status["hit"] else 1
-    return result
+    if output_dir is None:
+        output_dir = os.environ.get('TF3_PLANNING_DIR', 'exports/plans')
+    if output_dir is not None:
+        from .development_planner import base_plan, save_json
+        plan = base_plan(snapshot, '铁路连接候选方案', 'rail', [])
+        plan['routes'] = [dict(c, name=f'候选 {i+1}', mode='rail', status='sampled_candidate') for i,c in enumerate(result['candidates'])]
+        plan['phases'] = [dict(name='工程复核', actions=['刷新站端口、曲率、坡度与桥隧条件', '比较候选，执行原生预览'], gate='原生预览及用户建设授权')]
+        plan['warnings'].append(result['limitation'])
+        result['plan_path'] = save_json(plan, output_dir, 'rail-plan')
+    return await _planning_card(plan, output_dir, result)
 
 
 @mcp.tool()

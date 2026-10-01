@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TF3 规划图</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,"Microsoft YaHei",sans-serif;color:var(--color-text-primary,#e5edf2);background:var(--color-background-primary,#14232f)}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px;flex-wrap:wrap}h1{font-size:16px;margin:0;flex:1;min-width:150px}#scope{font-size:12px;color:#8ecaf4}nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:0 16px 12px}
+button,a{font:inherit;color:inherit;background:transparent;border:1px solid #607988;border-radius:6px;padding:6px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}a{margin-left:auto;text-decoration:none}a[aria-disabled=true]{opacity:.4;pointer-events:none}button:focus-visible,a:focus-visible{outline:2px solid #79c7ff;outline-offset:2px}
+#viewport{height:440px;max-height:65vh;min-height:220px;overflow:auto;background:#101e28;touch-action:pan-x pan-y}#image{display:block;max-width:none;height:auto;margin:auto}#status{padding:10px 16px;line-height:1.5;color:var(--color-text-secondary,#afc2cf);font-size:12px;overflow-wrap:anywhere}#zoom{min-width:45px;text-align:center}
+</style></head>
+<body><header><h1 id="title">正在生成规划图…</h1><span id="scope"></span></header>
+<nav aria-label="规划图操作"><button id="minus" aria-label="缩小" disabled>−</button><span id="zoom">100%</span><button id="plus" aria-label="放大" disabled>＋</button><button id="fit" disabled>适应窗口</button><a id="html" href="#" aria-disabled="true">打开 HTML ↗</a></nav>
+<div id="viewport" tabindex="0" aria-label="规划图片；放大后可滚动查看"><img id="image" alt="规划图片" hidden></div>
+<div id="status" role="status">等待规划结果</div>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id), image=$('image'), viewport=$('viewport');
+let scale=1, data=null, nextId=1, ready=false, hostOrigin='*';const pending=new Map();
+function post(message){window.parent.postMessage({jsonrpc:'2.0',...message},hostOrigin);}
+function notify(method,params={}){post({method,params});}
+function request(method,params){return new Promise((resolve,reject)=>{const id=nextId++;const timeout=setTimeout(()=>{pending.delete(id);reject(new Error('宿主响应超时'));},10000);pending.set(id,{resolve,reject,timeout});post({id,method,params});});}
+function resize(){if(ready)notify('ui/notifications/size-changed',{height:document.documentElement.scrollHeight});}
+function zoom(value){scale=Math.max(.25,Math.min(5,value));const fit=Math.min(viewport.clientWidth,viewport.clientHeight*(data?.width||1600)/(data?.height||1100));image.style.width=Math.round(fit*scale)+'px';$('zoom').textContent=Math.round(scale*100)+'%';$('minus').disabled=scale<=.25;$('plus').disabled=scale>=5;}
+function show(result){
+ if(result.isError){$('status').textContent='规划失败，请查看工具返回的错误。';return;}
+ const card=result._meta?.planningCard;if(!card){$('status').textContent='未收到规划图片，请重新调用规划或报告工具。';return;}
+ if(typeof card.image!=='string'||!card.image.startsWith('data:image/png;base64,')){ $('status').textContent='规划图片格式无效';return; }
+ data=card;$('title').textContent=card.title;$('scope').textContent=({global:'全局规划',local:'局部规划',rail:'铁路规划'})[card.scope]||'规划图';
+ image.onload=()=>{image.hidden=false;$('fit').disabled=false;zoom(1);resize();};image.onerror=()=>{$('status').textContent='图片加载失败，请通过 HTML 查看报告。';};image.src=card.image;image.alt=card.title;
+ let url;try{url=new URL(card.htmlUrl);}catch{}
+ if(url&&url.protocol==='http:'&&url.hostname==='127.0.0.1'){$('html').href=url.href;$('html').setAttribute('aria-disabled','false');}
+ $('status').textContent='放大后可滚动查看。规划示意，施工前仍需原生预览。';
+}
+$('plus').onclick=()=>zoom(scale+.25);$('minus').onclick=()=>zoom(scale-.25);$('fit').onclick=()=>{zoom(1);viewport.scrollTo(0,0);};
+viewport.addEventListener('wheel',e=>{if(data&&e.ctrlKey){e.preventDefault();zoom(scale+(e.deltaY<0?.1:-.1));}},{passive:false});
+new ResizeObserver(()=>{if(data)zoom(scale);resize();}).observe(viewport);
+$('html').onclick=async e=>{e.preventDefault();if(!data||$('html').getAttribute('aria-disabled')==='true')return;try{const r=await request('ui/open-link',{url:$('html').href});if(r.isError)throw new Error('宿主拒绝打开链接');}catch(err){$('status').textContent=err.message+'。可复制链接手动打开：'+$('html').href+'；本地文件：'+data.htmlPath;}};
+window.addEventListener('message',e=>{
+ if(e.source!==window.parent||!e.data||e.data.jsonrpc!=='2.0')return;
+ if(hostOrigin!=='*'&&e.origin!==hostOrigin)return;
+ const m=e.data;
+ if(m.id!=null&&pending.has(m.id)&&('result'in m||'error'in m)){const p=pending.get(m.id);pending.delete(m.id);clearTimeout(p.timeout);if(e.origin!=='null')hostOrigin=e.origin;m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);return;}
+ if(m.method==='ui/notifications/tool-result')show(m.params);
+ else if(m.method==='ui/notifications/tool-cancelled')$('status').textContent='规划已取消';
+ else if(m.method==='ping'&&m.id!=null)post({id:m.id,result:{}});
+ else if(m.method==='ui/resource-teardown'&&m.id!=null){post({id:m.id,result:{}});for(const p of pending.values())clearTimeout(p.timeout);pending.clear();}
+});
+request('ui/initialize',{appInfo:{name:'TF3 Planning Card',version:'1.0.0'},appCapabilities:{},protocolVersion:'2026-01-26'}).then(()=>{ready=true;notify('ui/notifications/initialized');resize();}).catch(err=>{$('status').textContent='卡片连接失败：'+err.message;});
+})();
+</script></body></html>
