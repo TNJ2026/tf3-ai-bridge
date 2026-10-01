@@ -1,0 +1,2 @@
+local id=62116;local p=api.type.SimpleProposal.new();local e=api.type.SegmentAndEntity.new();e.entity=-1;e.type=0;e.comp=api.engine.getComponent(id,api.type.ComponentType.BASE_EDGE);e.streetEdge=api.engine.getComponent(id,api.type.ComponentType.BASE_EDGE_STREET);p.streetProposal.edgesToAdd={e};p.streetProposal.edgesToRemove={id}
+local ok,r=pcall(api.engine.util.proposal.makeProposalData,p,nil);return B.json.encode({ok=ok,present=r~=nil,error=not ok and tostring(r) or nil,critical=ok and r and r.errorState.critical})

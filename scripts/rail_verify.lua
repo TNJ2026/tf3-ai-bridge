@@ -1,0 +1,4 @@
+local CT=api.type.ComponentType;local out={ports={},paths={}}
+for _,n in ipairs({121499,117239}) do local o={node=n,edges={},net={}};for _,id in ipairs(api.engine.system.streetSystem.getNodeSegments(n)) do local e=api.engine.getComponent(id,CT.BASE_EDGE);o.edges[#o.edges+1]={id=id,node0=e.node0,node1=e.node1};local tn=api.engine.getComponent(id,CT.TRANSPORT_NETWORK);if tn then for i,v in ipairs(tn.edges) do o.net[#o.net+1]={id=id,index=i-1,modes=B.toPlain(v.transportModes),conns=B.toPlain(v.conns)} end end end;out.ports[#out.ports+1]=o end
+for _,pair in ipairs({{121499,117239},{117239,121499}}) do local p=api.engine.util.pathfinding.findPathNodeToNode({api.type.NodeId.new(pair[1],0)},{api.type.NodeId.new(pair[2],0)},{api.type.enum.TransportMode.TRAIN});out.paths[#out.paths+1]={from=pair[1],to=pair[2],count=#p} end
+return B.json.encode(out)

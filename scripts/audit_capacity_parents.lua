@@ -1,0 +1,3 @@
+local CT=api.type.ComponentType;local out={empty={},unmapped={},badConstructions={}};local map=api.engine.system.townBuildingSystem.getPersonCapacity2townBuildingMap()
+for pc,bid in pairs(map) do local c=api.engine.getComponent(pc,CT.PERSON_CAPACITY);if #c.personNodes==0 then out.empty[#out.empty+1]={capacity=pc,building=bid,people=c.capacity} end;local b=api.engine.getComponent(bid,CT.TOWN_BUILDING);if not api.engine.entityExists(b.construction) or not api.engine.getComponent(b.construction,CT.CONSTRUCTION) then out.badConstructions[#out.badConstructions+1]={capacity=pc,building=bid,construction=b.construction} end end
+return B.json.encode(out)

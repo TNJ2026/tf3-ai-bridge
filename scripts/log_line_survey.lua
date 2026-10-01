@@ -1,0 +1,3 @@
+local CT=api.type.ComponentType;local out={stations=B.commands.list_stations({}),lines=B.commands.list_lines({}),cargoTypes=B.toPlain(api.res.cargoTypeRep.getAll(true)),terminals={}}
+for _,g in ipairs(out.stations.stationGroups) do if g.position.y<-1000 then local row={group=g.id,name=g.name,stations={}};for j,id in ipairs(g.stations) do local s=api.engine.getComponent(id,CT.STATION);local r={index=j-1,id=id,terminals={}};for k,t in ipairs(s.terminals) do r.terminals[#r.terminals+1]={index=k-1,cargoLoad=t.cargoLoad,cargoUnload=t.cargoUnload,vehicleNode={entity=t.vehicleNodeId.entity,index=t.vehicleNodeId.index},modes=B.toPlain(t.transportModes)} end;row.stations[#row.stations+1]=r end;out.terminals[#out.terminals+1]=row end end
+return B.json.encode(out)

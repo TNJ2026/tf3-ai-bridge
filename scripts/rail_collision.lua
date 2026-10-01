@@ -1,0 +1,1 @@
+local c=api.engine.getComponent(83407,api.type.ComponentType.MODEL_INSTANCE_LIST);local v=c.fatInstances[1];local b=api.engine.getComponent(83407,api.type.ComponentType.BOUNDING_VOLUME);return B.json.encode({transform=B.toPlain(v.transf),bound={min=B.toPlain(b.min),max=B.toPlain(b.max)}})

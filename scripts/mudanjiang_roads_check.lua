@@ -1,0 +1,2 @@
+local out={state=B.commands.get_game_state({}),ring=B.commands.find_nearby({x=168,y=-1244,radius=15,limit=5}),spur=B.commands.build_road({start={node=59863},['end']={node=75682},street_type='country/country_new_medium',preview=true}),main=B.commands.build_road({start={x=168,y=-1244},['end']={node=48615},via={{x=332,y=-3168},{x=-868,y=-4168}},street_type='country/country_new_medium',preview=true})}
+return B.json.encode(out)

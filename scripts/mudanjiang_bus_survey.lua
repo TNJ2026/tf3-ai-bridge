@@ -1,0 +1,5 @@
+local CT=api.type.ComponentType;local out={buildings={},roads={},centers={},state=B.commands.get_game_state({})}
+for k=1,3 do local ok,p=pcall(api.engine.util.town.getTownDistrictCenter,48457,k);if ok then out.centers[tostring(k)]={x=p.x,y=p.y,z=p.z} end end
+for _,id in ipairs(api.engine.util.octree.findEntitiesInCircle(api.type.Vec2f.new(868,-244),1800,CT.TOWN_BUILDING)) do local b=api.engine.getComponent(id,CT.TOWN_BUILDING);if b.town==48457 then local c=api.engine.getComponent(b.personCapacity,CT.PERSON_CAPACITY);local bv=api.engine.getComponent(id,CT.BOUNDING_VOLUME);out.buildings[#out.buildings+1]={id=id,kind=c.type,capacity=c.capacity,x=(bv.bbox.min.x+bv.bbox.max.x)/2,y=(bv.bbox.min.y+bv.bbox.max.y)/2} end end
+for _,id in ipairs(api.engine.util.octree.findEntitiesInCircle(api.type.Vec2f.new(868,-244),1500,CT.BASE_EDGE)) do local e=api.engine.getComponent(id,CT.BASE_EDGE);out.roads[#out.roads+1]={id=id,node0=e.node0,node1=e.node1,p0=B.toPlain(e.position0),p1=B.toPlain(e.position1),t0=B.toPlain(e.tangent0),t1=B.toPlain(e.tangent1),template=e.roadTemplate} end
+return B.json.encode(out)
