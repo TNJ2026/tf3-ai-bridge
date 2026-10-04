@@ -477,11 +477,14 @@ async def list_street_types(filter: str | None = None) -> dict:
 
 
 @mcp.tool()
-async def capture_planning_snapshot(output_dir: str, bounds: dict | None = None, spacing: float = 250) -> dict:
+async def capture_planning_snapshot(output_dir: str, bounds: dict | None = None, spacing: float = 250,
+                                    include_flat_areas: bool = True) -> dict:
     """Read-only full-map or local survey without requiring existing stations; never pauses/builds.
     bounds={min:{x,y},max:{x,y}} in world metres; omit for whole map. spacing=25..2000,
     <=100000 samples. Saves terrain, available obstacle bounds, towns/industries and state as JSON.
     Returns snapshot_path for plan_global_development / plan_local_development.
+    By default also derives flat_areas_path locally from the same samples: connected dry,
+    gentle terrain cells, not obstacle-free/buildable land. No extra game query or card.
     Coarse samples, missing bounds and stale IDs cannot authorize construction. Requires bridge 0.11.0.
     """
     from .development_planner import box, number, save_json, validate_snapshot
@@ -495,10 +498,24 @@ async def capture_planning_snapshot(output_dir: str, bounds: dict | None = None,
     from datetime import datetime, timezone
     snapshot['capturedAt'] = datetime.now(timezone.utc).isoformat()
     path = save_json(snapshot, output_dir, 'snapshot')
+    flat = {}
+    if include_flat_areas:
+        import asyncio
+        from .flat_areas import FlatTerrain
+        report = await asyncio.to_thread(lambda: FlatTerrain(snapshot['grid']).report())
+        flat = dict(flat_areas_path=save_json(report, output_dir, 'flat-areas'),
+                    flat_areas_summary=report['summary'],flat_areas_refinement=report['refinement'])
     return dict(snapshot_path=path, scope=snapshot['scope'], state=snapshot['state'],
                 terrainSamples=len(snapshot['grid']['heights']), obstacles=len(snapshot['obstacles']),
                 towns=snapshot['map']['towns'], industries=snapshot['map']['industries'],
-                coverage=snapshot['coverage'], consistency=snapshot['consistency'])
+                coverage=snapshot['coverage'], consistency=snapshot['consistency'], **flat)
+
+
+def _planning_result(plan, summary):
+    from mcp.types import TextContent
+    import json
+    result = dict(summary, scope=plan['scope'], display='data only; call export_planning_report once after all planning is complete')
+    return CallToolResult(content=[TextContent(type='text', text=json.dumps(result, ensure_ascii=False))], structured_content=result)
 
 
 async def _planning_card(plan, output_dir, summary, width=1600, height=1100):
@@ -546,6 +563,38 @@ async def plan_local_development(snapshot_path: str, output_dir: str, sites: lis
     summary = dict(plan_path=path, sites=plan['sites'], routes=[{k:v for k,v in r.items() if k!='path'} for r in plan['routes']],
                 supply=plan['supply'], warnings=plan['warnings'], buildable=None)
     return await _planning_card(plan, output_dir, summary)
+
+
+@mcp.tool()
+async def find_facility_sites(snapshot_path: str, output_dir: str, requests: list[dict],
+                              max_candidates: int = 3, max_evaluations: int = 10000,
+                              reserved_areas: list[dict] | None = None) -> CallToolResult:
+    """Fast offline batch siting on ONE planning snapshot; no live queries, previews or construction.
+    requests (1..20): [{name,kind:'facility'|'street_stop',target:{x,y},radius:300,
+      current:{min:{x,y},max:{x,y}},reserved:{min:{x,y},max:{x,y}},basis:'dimensions source',
+      step:25,rotations:[0,90],max_height_range:5,min_separation:50,ranking:'flat_first'}].
+    Footprint boxes are LOCAL offsets from placement origin; reserved must include current plus upgrade/access.
+    street_stop requires edges:[snapshot edge IDs known to be streets]; searches param .25/.5/.75,
+    local X along road tangent; ignores only its supporting edge, requires live street/terminal validation.
+    reserved_areas are WORLD boxes already committed in other plans, never ignored as host edges.
+    Screens sampled land, height range, obstacle/upgrade bounds; defaults to flat-ground-first
+    ranking (sampled ground grade, height range, then distance). ranking='distance_height'
+    explicitly retains distance + 20*heightRange. Ground grade is not a native build limit.
+    Returns up to 1..10 spatially separated ALTERNATIVES per request, not a simultaneous layout.
+    Budget 1..20000 evaluations; narrow range/increase step if exceeded. Water facilities not supported.
+    Saves candidate plan JSON and returns data only; no intermediate card. Export only the final plan using export_planning_report. Fresh entities and native
+    previews are still mandatory for shortlisted sites; no candidate is a construction approval.
+    """
+    import asyncio
+    from .development_planner import read_snapshot, save_json
+    from .site_planner import search_sites
+    def prepare():
+        plan = search_sites(read_snapshot(snapshot_path), requests, max_candidates, max_evaluations, reserved_areas)
+        path = save_json(plan, output_dir, 'site-search')
+        return plan, path
+    plan, path = await asyncio.to_thread(prepare)
+    return _planning_result(plan, dict(plan_path=path, searches=plan['searches'],
+                               metrics=plan['metrics'], warnings=plan['warnings'], buildable=None))
 
 
 @mcp.tool(meta=TOOL_META)

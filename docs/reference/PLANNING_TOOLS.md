@@ -4,8 +4,10 @@
 
 ## Agent 工作顺序
 
+需要自动生成停靠点、仓库、车站等陆地设施候选位置时，先用 [find_facility_sites 批量选址](SITE_SELECTION.md) 复用快照在本地筛选，再把选定位置交给局部布局工具。无需为每个试探位置重新调查或原生预览。
+
 1. 先 `bridge_status` 和 `get_game_state` 确认当前存档；不要沿用上次地图的城镇编号。
-2. `capture_planning_snapshot(output_dir, spacing=250)` 调查全图，无需先建车站。返回 `snapshot_path`、当前城镇/产业清单、状态和覆盖说明。全图建议 250～500 米采样；局部改用 25～100 米。
+2. `capture_planning_snapshot(output_dir, spacing=250)` 调查全图，无需先建车站。返回 `snapshot_path`、当前城镇/产业清单、状态和覆盖说明，默认还在本地生成 `flat_areas_path`、平整区域摘要及局部精查提示，不增加游戏查询或卡片。全图按地图大小和采样上限选择间距，优先以100～250米识别平缓区域；优选集合及接路改用局部25米采样，端口仍须原生检查。派生分析可用 `include_flat_areas=false` 关闭。
 3. 在返回清单中解析重点城市 ID，调用 `plan_global_development(snapshot_path, focus_town, output_dir)`。得到邻城候选、产业距离清单、分期行动及待调查项。近邻按直线距离初筛，不代表有客流或盈利；图中联系线不是施工路线。
 4. 根据全局方案确定城区、产业园或站场范围，再调用 `capture_planning_snapshot`，传 `bounds={"min":{"x":0,"y":0},"max":{"x":2000,"y":2000}}` 等当前有效范围。局部调查也保存全图城镇/产业目录，但地形与障碍仅覆盖指定区域。
 5. Agent 依据实际需求、配方、设施模块及交通调查提出位置与功能分区，调用 `plan_local_development` 比较并修订选址和走廊；工具负责几何冲突与流量核算，不代替需求调查。用不同参数调用可保存多个方案，不覆盖旧方案。
@@ -30,6 +32,7 @@
 | 工具 | 关键输入 | 产物与用途 | 后续限制 |
 |---|---|---|---|
 | `capture_planning_snapshot` | 输出目录、调查范围、采样间距 | 当前地图的离线快照与覆盖说明 | 有缺失或采样不足时补查，不能推定空地 |
+| `find_facility_sites` | 同一快照、占地与预留框、排序策略 | 平整地面优先的批量候选与方案 JSON | 只返回数据；优选位置仍须局部精查与原生预览 |
 | `plan_global_development` | 全局快照、当前重点城市、邻城数量、可选供给链 | 区域联系、分期建议、全局报告与卡片 | 近邻及距离初筛不证明需求、盈利或施工可行 |
 | `plan_local_development` | 快照、当前及升级占地、候选走廊、可选供给链 | 局部冲突、供给核算、局部报告与卡片 | 选址来自 agent 调查，地表走廊还须工程设计 |
 | `plan_rail_connection` | 两个当前车站 CONSTRUCTION ID | 真实端口之间的工程候选及卡片 | 原生预览与单次建设另行执行 |

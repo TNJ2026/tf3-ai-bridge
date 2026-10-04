@@ -38,6 +38,10 @@ server/.venv/Scripts/python.exe scripts/rail_eval.py scripts/<已审查的任务
 
 全局与局部布局优先使用 `capture_planning_snapshot` → `plan_global_development` / `plan_local_development`，自动形成可复用 JSON 及 HTML、PNG、SVG，并显示 MCP Apps 图片卡片。仅重新导出或显示已有方案时调用 `export_planning_report`；不自动打开 HTML。参数和边界见 [规划工具说明](../reference/PLANNING_TOOLS.md)。全局联系线与局部地表走廊不能直接用于施工；进入工程设计时继续使用下述流程。
 
+2026-10-04 用户新增：集合选址优先寻找连续、平整的地面。检查整组旋转占地、组内及外接道路、升级预留范围的高差与局部坡度，特别核对实际道路端口的高度衔接；在满足退距、覆盖及通达等要求的候选中优先选地势平缓的位置。地形初筛不能替代原生设施与接路预览，不仅凭自由端预览宣布实际固定端口可接路；详见[平整地面优先规则](GROUPED_CONSTRUCTION_WORKFLOW.md#集合选址优先平整地面)。
+
+地图采集时先查看同一快照派生的平整区域；`capture_planning_snapshot` 默认返回区域文件，离线流水线先生成平整图层，再按整组及接路地形排序。对优选区域补采局部地形，粗采样方案保留精查提示；详见[平整区域准备流程](PLANNING_WORKFLOW.md#先获取平整区域再选择集合2026-10-04)。
+
 ### 3.1 先用缓存和局部走廊
 
 按以下顺序规划，不逐点反复向游戏请求：
