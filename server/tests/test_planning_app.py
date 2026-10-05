@@ -1,6 +1,9 @@
 import asyncio
 import base64
 import json
+import io
+
+from PIL import Image
 import os
 import sys
 from pathlib import Path
@@ -50,8 +53,9 @@ def test_actual_mcp_card_resource_and_result(tmp_path,apps_enabled):
                 # Resource/tool metadata remains available to both UI and text-only clients.
                 assert init.server_info.name=='tf3'
                 definitions={t.name:t for t in (await session.list_tools()).tools}
-                for name in ('plan_global_development','plan_local_development','plan_rail_connection','export_planning_report'):
-                    assert definitions[name].meta['ui']['resourceUri']==RESOURCE_URI
+                for name in ('plan_global_development','plan_local_development','plan_rail_connection','find_facility_sites'):
+                    assert not (definitions[name].meta or {}).get('ui')
+                assert definitions['export_planning_report'].meta['ui']['resourceUri']==RESOURCE_URI
                 resource=(await session.read_resource(RESOURCE_URI)).contents[0]
                 assert resource.mime_type=='text/html;profile=mcp-app'
                 assert 'ui/notifications/tool-result' in resource.text
@@ -59,8 +63,17 @@ def test_actual_mcp_card_resource_and_result(tmp_path,apps_enabled):
                 r=await session.call_tool('plan_local_development',dict(snapshot_path=path,output_dir=str(tmp_path),sites=[site()]))
                 assert not r.is_error
                 assert r.structured_content['scope']=='local'
+                assert not (r.meta or {}).get('planningCard')
+                assert not list(tmp_path.glob('report-*'))
+                r=await session.call_tool('export_planning_report',dict(plan_path=r.structured_content['plan_path'],output_dir=str(tmp_path)))
+                assert not r.is_error
                 card=r.meta['planningCard']
-                assert base64.b64decode(card['image'].split(',',1)[1]).startswith(b'\x89PNG')
+                image_data=base64.b64decode(card['image'].split(',',1)[1])
+                assert image_data.startswith(b'\x89PNG')
+                decoded=Image.open(io.BytesIO(image_data))
+                assert decoded.size==(1600,920)
+                assert decoded.mode=='RGBA' and decoded.getpixel((0,0))[3]==0
+                assert (card['width'],card['height'])==(1600,920)
                 assert 'base64' not in r.content[0].text
                 assert 'do not automatically open' in r.structured_content['display']
                 body=await asyncio.to_thread(lambda:urlopen(card['htmlUrl']).read())

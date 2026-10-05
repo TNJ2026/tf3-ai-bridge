@@ -1,15 +1,22 @@
 # TF3 文档导航
 
+全图规划与恢复经验：[三门峡规划施工复盘（2026-10-03）](guides/SANMENXIA_PLANNING_REVIEW_20261003.md)。包含联合选址、小批运输链验证、崩溃检查遗漏、存档隔离和验收分层。
+
 本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-01。
 
 ## 按任务阅读
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 判断交通设施是否需要仓库、货站或客运接驳 | [配套矩阵与完整运输链](strategy/TRANSPORT_CARGO_CONNECTIONS.md#各类建筑配套矩阵) | 运输任务判断、配套数量与验收清单 |
+| 比较各类交通建筑的站址、接驳和维护布局 | [交通设施选址指南](strategy/TRANSPORT_FACILITY_SITING.md) | [执行手册](guides/AGENT_PLAYBOOK.md)、[批量选址](reference/SITE_SELECTION.md) |
 | 为一个城市制定分期发展计划 | [城市发展策略](strategy/city-development-strategy.md) | [发展方案模板](strategy/DEVELOPMENT_PLAN_TEMPLATE.md) |
 | 调查地图、输出全局或局部规划图 | [执行手册](guides/AGENT_PLAYBOOK.md)第 2～3 节 | [规划与可视化接口](reference/PLANNING_TOOLS.md) |
 | 建造、改路、建线路或购车 | [项目执行规则](../AGENTS.md)、[执行手册](guides/AGENT_PLAYBOOK.md) | 对应接口说明与[操作协调](guides/OPERATION_COORDINATION.md) |
 | 扩建仓库、港口或其他设施 | [设施接口](reference/FACILITY_SUPPORT.md) | 策略中的升级预留要求 |
+| 天然平地不足时平整局部用地 | [地形平整接口](reference/TERRAIN_FLATTEN.md) | [规划与前置工序](guides/PLANNING_WORKFLOW.md#找不到天然平地时的地形平整) |
+| 快速比较停靠点、仓库或车站的位置 | [批量选址](reference/SITE_SELECTION.md) | [局部布局与卡片](reference/PLANNING_TOOLS.md) |
+| 编辑城市需求货物种类 | [城市货物需求接口](reference/TOWN_CARGO_NEEDS.md) | 原生参数、读回和验证边界 |
 | 查询或办理游戏贷款 | [贷款接口](reference/LOAN_SUPPORT.md) | 发展方案中的资金安排 |
 | 接取通知中的机遇任务 | [补贴任务接口](reference/SUBVENTIONS.md) | [操作协调](guides/OPERATION_COORDINATION.md) |
 | 调查停靠点崩溃、部分施工或超时 | 执行手册第 4、6、9、10 节 | [停靠点历史诊断](../STREET_STOP_INTERFACE.md) |

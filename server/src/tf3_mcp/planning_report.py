@@ -49,7 +49,7 @@ def export_report(plan, output_dir, width=1600, height=1100):
     ox, oy = (width-dx*scale)/2, 100+(height-190-dy*scale)/2
     def project(p):
         return ox+(p['x']-bounds['min']['x'])*scale, oy+(bounds['max']['y']-p['y'])*scale
-    image = Image.new('RGB', (width,height), '#101e28')
+    image = Image.new('RGBA', (width,height), (0,0,0,0))
     draw = ImageDraw.Draw(image)
     font_paths = [os.environ.get('TF3_PLANNING_FONT', ''), 'C:/Windows/Fonts/msyh.ttc',
                   '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
@@ -139,7 +139,12 @@ def export_report(plan, output_dir, width=1600, height=1100):
     folder.mkdir(parents=True,exist_ok=False)
     # Unique directories keep previous reports intact; manifest is returned only after all writes succeed.
     (folder/'plan.svg').write_text(svg,encoding='utf-8')
-    image.save(folder/'plan.png')
+    report_image = Image.new('RGBA', image.size, '#101e28')
+    report_image.alpha_composite(image)
+    report_image.convert('RGB').save(folder/'plan.png')
+    # Card title is HTML; omit report captions, legend and sampling notes from its image.
+    image.crop((0, 90, width, height-90)).save(folder/'card.png')
     (folder/'plan.html').write_text(content,encoding='utf-8')
     (folder/'plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
-    return dict(files={ext:str(folder/f'plan.{ext}') for ext in ('html','png','svg','json')}, warnings=warnings, width=width,height=height)
+    return dict(files={ext:str(folder/f'plan.{ext}') for ext in ('html','png','svg','json')}, warnings=warnings, width=width,height=height,
+                cardImage=str(folder/'card.png'), cardWidth=width, cardHeight=height-180)

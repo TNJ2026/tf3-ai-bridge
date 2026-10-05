@@ -89,6 +89,12 @@ def check_map(plan, snapshot, manifest):
 
 
 def structure(plan, manifest):
+    if plan.get('collection_quantity_decisions'):
+        from planning_shared_hubs import validate_fishing_assignments
+        assignments=validate_fishing_assignments(plan.get('ports',[]),{i['id']:i for i in plan.get('industries',[])})
+        declared=plan['collection_quantity_decisions'].get('fish_field_to_port',{})
+        if declared!={str(k):p['id']for k,p in assignments.items()}:
+            raise ValueError('Fishing port service mapping does not match quantity decision')
     facilities = plan.get('facilities', [])+plan.get('ports', [])
     sections = [('facility', facilities), ('road', plan.get('roads', [])),
                 ('stop', plan.get('city_stops', plan.get('stops', []))), ('line', plan.get('line_specs', []))]
@@ -111,9 +117,12 @@ def structure(plan, manifest):
         if set(hub['facilities'].values())-facility_ids:
             raise ValueError('unknown hub facility: '+str(hub.get('owner')))
     for port in plan.get('ports', []):
-        for key in ('warehouse', 'truck'):
+        air_port=port.get('transfer_mode')=='HELICOPTER'
+        for key in (('warehouse','helipad','helipad2') if air_port else ('warehouse','truck')):
             if port.get(key) not in facility_ids:
                 raise ValueError('unknown port transfer facility: '+port['id'])
+        if air_port and (port['helipad']==port['helipad2'] or port.get('truck')):
+            raise ValueError('air port requires distinct pads and no truck transfer: '+port['id'])
     planned = {row['id']:row for _,rows in sections for row in rows}
     represented = {j['id'] for j in manifest['jobs'] if j.get('stage') in ('facility','road','street_stop','line')}
     if represented != set(planned):
@@ -213,6 +222,7 @@ def workflow(plan, snapshot, manifest, baseline=None, timer=None):
                               roads=len(roads), jobs=len(manifest['jobs']),
                               road_cache_hits=hits, road_recomputed=len(roads)-hits),
                 requires_attention=bool(missing_identity or layout['footprint_conflicts'] or layout['reservation_conflicts']
+                    or layout['upgrade_existing_conflicts']
                     or layout['missing_geometry'] or any(not r['candidates'] for r in roads)
                     or any(g['issues'] for g in hub_sets)),
                 limitations=['Read-only coarse geometry cannot certify endpoints, inventory sharing or native paths.',

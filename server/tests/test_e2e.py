@@ -499,7 +499,7 @@ def test_network_queries(bridge_dir):
         assert st["stationGroups"][1]["position"] == {"x": 900, "y": 40, "z": 7}
 
         depots = run(b.call("list_depots"))["depots"]
-        assert depots == [{"id": 300, "carrier": "ROAD", "transportModes": ["BUS", "TRUCK"],
+        assert depots == [{"id": 300, "construction": 320, "carrier": "ROAD", "transportModes": ["BUS", "TRUCK"],
                            "position": {"x": 15, "y": 25, "z": 5}, "vehiclesInDepot": []}]
 
         assert run(b.call("list_lines"))["count"] == 0  # the AI line is hidden

@@ -89,5 +89,26 @@ class WorkflowTests(unittest.TestCase):
         p,s,m=inputs();m['jobs']=[]
         with self.assertRaisesRegex(ValueError,'coverage'):workflow(p,s,m)
 
+    def test_existing_building_overlap_requires_attention(self):
+        p,s,m=inputs();p['roads']=[]
+        f=facility('A');p['facilities']=[f];m['jobs']=[dict(f,stage='facility')]
+        s['obstacles']=[dict(entity=99,kind='TOWN_BUILDING',min=dict(x=-3,y=-3),max=dict(x=3,y=3))]
+        result=workflow(p,s,m)
+        self.assertEqual(result['geometry']['upgrade_existing_conflicts'],{'A':[99]})
+        self.assertTrue(result['requires_attention'])
+
+    def test_existing_conflict_blocks_hub_preview_queue(self):
+        from fullmap_hub_sets import compile_hub_sets
+        p={'facilities':[dict(id=r,kind=r)for r in ('heliport','warehouse','truck')],
+           'hubs':[dict(owner='T1',kind='city',facilities={r:r for r in ('heliport','warehouse','truck')})],
+           'roads':[dict(id='access',from_facility='truck',to_facility='heliport')]}
+        reviews=[dict(id='access',candidates=[{}])]
+        clear=compile_hub_sets(p,reviews,{})[0]
+        self.assertEqual(clear['status'],'joint_native_preview_required')
+        blocked=compile_hub_sets(p,reviews,{'upgrade_existing_conflicts':{'warehouse':[99]}})[0]
+        self.assertEqual(blocked['status'],'needs_design')
+        self.assertEqual(blocked['previewQueue'],[])
+        self.assertEqual(blocked['issues'],[dict(kind='upgrade_existing_conflicts',subject='warehouse',entities=[99])])
+
 
 if __name__=='__main__':unittest.main()

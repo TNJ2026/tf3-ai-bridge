@@ -181,6 +181,28 @@ def test_unexpected_demolition_blocks_clone(game):
     assert lua.globals().SUBMISSIONS is None
 
 
+@pytest.mark.parametrize('asset,allowed', [
+    ('::/assets/vegetation/trees/brleaf_02/brleaf_02.mdl', True),
+    ('::/depots/road/depot.mdl', False),
+    ('::/assets/vegetation/trees_fake/tree.mdl', False),
+])
+def test_auto_removal_only_allows_identified_tree_lists(game, asset, allowed):
+    lua, call = game
+    lua.globals().ASSET_NAME = asset
+    lua.execute('''
+    api.type.ComponentType.MODEL_INSTANCE_LIST='MODEL_INSTANCE_LIST'
+    api.res.modelRep=api.res.modelRep or {}
+    components[9000]={[api.type.ComponentType.MODEL_INSTANCE_LIST]={thinInstances={{modelId=7}},fatInstances={}}}
+    api.res.modelRep.getName=function()return ASSET_NAME end
+    api.engine.util.proposal.makeProposalData=function()
+      return {errorState={critical=false,messages={},warnings={}},collisionInfo={collisionEntities={},autoRemovalEntity2models={[9000]={{0,0}}}}}
+    end
+    ''')
+    p = call('build_facility', source_entity=8000, x=700, y=700, z=2)
+    assert bool(p.get('preview_token')) == allowed
+    assert lua.globals().SUBMISSIONS is None
+
+
 def test_server_tools_route_and_cache_invalidation(monkeypatch):
     import asyncio
     from tf3_mcp import server

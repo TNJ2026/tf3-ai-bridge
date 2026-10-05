@@ -9,7 +9,12 @@ def compile_hub_sets(plan, road_reviews, geometry):
         members = set(hub['facilities'].values())
         if members - facilities.keys():
             raise ValueError('Unknown hub facility: '+str(members-facilities.keys()))
-        required = ('helipad','helipad2','warehouse','truck') if hub.get('kind') == 'production' else ('heliport','warehouse','truck')
+        if hub.get('kind') == 'production':
+            required = ('heliport','warehouse','truck','bus','road_depot','road_maintenance') if 'heliport' in hub['facilities'] else ('helipad','helipad2','warehouse','truck')
+        else:
+            # Previously captured city groups may lack the new optional roles.
+            # Current default templates are independently checked before planning.
+            required = ('heliport','warehouse','truck')
         groups.append(dict(owners={str(hub['owner'])}, members=members,
                            missingRoles=set(required)-hub['facilities'].keys()))
     # Shared hubs become a single execution group, including transitive sharing.
@@ -44,6 +49,9 @@ def compile_hub_sets(plan, road_reviews, geometry):
         for fid in geometry.get('missing_geometry', []):
             if fid in members:
                 issues.append(dict(kind='missing_geometry', subject=fid))
+        for fid, entities in geometry.get('upgrade_existing_conflicts', {}).items():
+            if fid in members:
+                issues.append(dict(kind='upgrade_existing_conflicts', subject=fid, entities=entities))
         queue = [] if issues else [dict(road=r['id'], candidateIndexes=list(range(min(3, len(reviews[r['id']]['candidates'])))),
                                        maxNativePreviews=3, onKnownRejection='next_candidate',
                                        onUnknownResult='stop_and_reconcile') for r in roads]

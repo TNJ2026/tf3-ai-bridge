@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "name": "fish_port_air",
+  "experimental": true,
+  "constructionAuthorized": false,
+  "cargoPolicy": {
+    "allowed": [
+      "fish"
+    ],
+    "oil": "helicopter"
+  },
+  "facilities": [
+    {
+      "role": "warehouse",
+      "resource": "::/warehouses/warehouse.con",
+      "localPosition": {
+        "x": 0,
+        "y": 60,
+        "z": 0
+      },
+      "relativeRotation": 90,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {
+          "632502500": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          }
+        }
+      },
+      "heightPolicy": "terrain"
+    },
+    {
+      "role": "water_maintenance",
+      "resource": "::/depots/water/water_maint_station.con",
+      "localPosition": {
+        "x": 130,
+        "y": -60,
+        "z": 0
+      },
+      "relativeRotation": 295,
+      "params": {
+        "seed": 1,
+        "modules": {}
+      },
+      "heightPolicy": "water_surface"
+    },
+    {
+      "role": "harbor",
+      "resource": "::/stations/water/harbor_modular.con",
+      "localPosition": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "relativeRotation": 0,
+      "params": {
+        "seed": 1,
+        "modules": {
+          "100010150": {
+            "name": "::/stations/water/pedestrian_entrance.module",
+            "variant": 0
+          },
+          "99010150": {
+            "name": "::/stations/water/pedestrian_entrance.module",
+            "variant": 0
+          },
+          "99010053": {
+            "name": "::/stations/water/passenger_dock_25_25.module",
+            "variant": 0
+          },
+          "100009804": {
+            "name": "::/stations/water/passenger_dock_50_12.module",
+            "variant": 0
+          },
+          "100009736": {
+            "name": "::/stations/water/small_pier.module",
+            "variant": 0
+          }
+        }
+      },
+      "heightPolicy": "water_surface"
+    },
+    {
+      "role": "helipad",
+      "resource": "::/stations/air/helipad.con",
+      "localPosition": {
+        "x": -50,
+        "y": 110,
+        "z": 0
+      },
+      "relativeRotation": 0,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {}
+      },
+      "heightPolicy": "terrain"
+    },
+    {
+      "role": "helipad2",
+      "resource": "::/stations/air/helipad.con",
+      "localPosition": {
+        "x": 50,
+        "y": 110,
+        "z": 0
+      },
+      "relativeRotation": 0,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {}
+      },
+      "heightPolicy": "terrain"
+    },
+    {
+      "role": "water_depot",
+      "resource": "::/depots/water/water_depot.con",
+      "localPosition": {
+        "x": -200,
+        "y": 210,
+        "z": 0
+      },
+      "relativeRotation": 285.5,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {}
+      },
+      "heightPolicy": "water_surface"
+    }
+  ],
+  "roads": [],
+  "rolePortNodes": {},
+  "externalConnectionNode": null,
+  "requirements": [
+    "Fresh destination shoreline and land survey",
+    "Harbor and BOTH helipads must share the same warehouse inventory",
+    "Only one ship maintenance facility",
+    "Fish only; oil via helicopter",
+    "Air lines must allocate actual pads explicitly; no duplicated inventory",
+    "Ship depot for acquisition plus separate maintenance facility; verify depot-harbor water paths"
+  ],
+  "validation": {
+    "nativeJointPreviewPassed": false,
+    "constructionTested": false,
+    "staticAccepted": false,
+    "incrementalSixRoleConstructionVerified": true,
+    "incrementalEvidence": "exports/fish_port_air_shipyard_20261004/combined_acceptance.json",
+    "scope": "Five-role core built jointly; sixth shipyard added separately. Six-role joint build not yet tested",
+    "evidence": "exports/fish_port_air_shipyard_20261004/",
+    "operationalAccepted": false
+  },
+  "transferMode": "helicopter"
+}

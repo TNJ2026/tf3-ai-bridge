@@ -24,7 +24,7 @@ mcp = MCPServer(
         "Controls a running Transport Fever 3 game through the TF3 MCP Bridge mod. "
         "Call bridge_status first if calls time out: the game must be running a loaded save "
         "with the mod enabled. Entity ids are integers that stay valid while the entity exists. "
-        "Planning tools automatically render an MCP Apps image card. Do not automatically open HTML; "
+        "Planning and siting tools return data only. After completing all planning, call export_planning_report once on the final plan to show its MCP Apps card. Do not automatically open HTML; "
         "the user opens it with the card link if desired."
     ),
 )
@@ -51,7 +51,7 @@ BUILD_TIMEOUT = 30.0  # build commands may try several placements
 
 
 async def _call(cmd: str, _timeout: float | None = None, _engine: bool = False, **args: Any) -> Any:
-    mutation = (cmd.startswith("build_") or cmd in {"upgrade_road", "commit_facility", "bulldoze", "eval"}) and not args.get("preview", False)
+    mutation = (cmd.startswith("build_") or cmd in {"upgrade_road", "commit_facility", "commit_prospection", "commit_flatten_terrain", "bulldoze", "eval"}) and not args.get("preview", False)
     try:
         return await bridge().call(cmd, args, timeout=_timeout, engine=_engine)
     except BridgeError as e:
@@ -60,6 +60,117 @@ async def _call(cmd: str, _timeout: float | None = None, _engine: bool = False, 
     finally:
         if mutation:
             _map_cache.invalidate()
+
+
+@mcp.tool()
+async def get_terrain_operation_capabilities() -> dict:
+    """Read TF3 terrain adapter limits and calibration status. Does not change terrain."""
+    return await _call("get_terrain_operation_capabilities", _engine=True)
+
+
+@mcp.tool()
+async def preview_flatten_terrain(bounds: dict, target_height: float,
+                                 max_height_change: float = 10, max_edge_grade: float = .10,
+                                 transition_width: float = 0) -> dict:
+    """Read-only structural preview of a uniform-height rectangle in world metres.
+    Bounds={min:{x,y},max:{x,y}} expand outward to base-grid vertices. Includes a
+    16m untouched guard band; max 600m per axis, 20000 surveyed vertices. Rejects
+    existing entities, water, terrain alignments, excessive cut/fill and boundary
+    slopes. transition_width>0 adds a smoothstep blend to original ground (metres,
+    at least two base cells, at most 128m), using up to 256 sequential native steps.
+    Any partial failure stops without retry. Zero preserves the hard rectangle.
+    No road construction. Native Proposal preview is unavailable
+    in the tested game binding; explicitly structural_only. Returns a one-use 60s
+    token only if clear. Natural flat land remains preferred. No intermediate card.
+    """
+    return await _call("preview_flatten_terrain", _engine=True, _timeout=30, bounds=bounds,
+                       target_height=target_height, max_height_change=max_height_change,
+                       max_edge_grade=max_edge_grade, transition_width=transition_width)
+
+
+@mcp.tool()
+async def commit_flatten_terrain(preview_token: str) -> dict:
+    """Save an independent native backup, then execute a fresh terrain token ONCE.
+    Requires authorized terrain construction. Waits for a new nonempty stable save
+    file before submitting; an expired/stale token is rejected. Never retries writes.
+    Unknown outcome: get_terrain_operation, refresh terrain, NEVER repeat commit.
+    Always re-survey and re-preview facilities/roads afterwards. Optional smooth
+    transition executes bounded disjoint native steps with readback after each;
+    partial failure stops. No demolition, roads or automatic collection placement.
+    """
+    import asyncio
+    import time
+    import uuid
+    slot = "tf3_terrain_before_" + uuid.uuid4().hex
+    path = bridge().dir.parent / "save" / (slot + ".sav")
+    if path.exists():
+        raise ToolError("Backup slot unexpectedly exists; no terrain submission")
+    await _call("eval", code=f'app.saveGame("{slot}",function() end,false,true);return {{requested=true}}')
+    previous = None
+    stable_since = None
+    for _ in range(60):
+        await asyncio.sleep(.25)
+        try:
+            stat = path.stat()
+            current = (stat.st_size, stat.st_mtime_ns)
+        except FileNotFoundError:
+            current = None
+        if current and current[0] > 0 and current == previous:
+            stable_since = stable_since or time.monotonic()
+            if time.monotonic() - stable_since >= 1:
+                result = await _call("commit_flatten_terrain", _engine=True, _timeout=30,
+                                     preview_token=preview_token, backup_save=slot)
+                result["backup_save"] = slot
+                result["backup_path"] = str(path)
+                return result
+        else:
+            stable_since = None
+        previous = current
+    raise ToolError(f"Backup write not confirmed ({slot}); terrain was not submitted")
+
+
+@mcp.tool()
+async def get_terrain_operation(operation_id: str) -> dict:
+    """Read callback and every sampled modified/guard vertex for a submitted operation.
+    Unknown/reloaded operation needs manual receipt reconciliation, never resubmission.
+    verified is immediate geometry readback, not proof of long-term simulation safety.
+    """
+    return await _call("get_terrain_operation", _engine=True, operation_id=operation_id)
+
+
+@mcp.tool()
+async def list_prospections() -> dict:
+    """List native exploration resources, compatible industry types and current permits/cooldown."""
+    return await _call("list_prospections", _engine=True)
+
+
+@mcp.tool()
+async def get_prospections() -> dict:
+    """Read pending native prospecting progress and available success/failure notification history.
+    Missing history or disappeared tasks do not prove success. Refresh map after a discovery."""
+    return await _call("get_prospections", _engine=True)
+
+
+@mcp.tool()
+async def preview_prospection(town: int, resource: str) -> dict:
+    """Check current town, exact exploration resource from list_prospections, permits and duplicates.
+    Read-only; returns a one-use 60-second token. Native placement and success are not guaranteed."""
+    return await _call("preview_prospection", _engine=True, town=town, resource=resource)
+
+
+@mcp.tool()
+async def commit_prospection(preview_token: str) -> dict:
+    """Start native prospecting ONCE using a fresh preview. Preserve a native save first.
+    Consumes native permit; never bypasses rank/cooldown, even with infinite money.
+    Timeout or unverified result requires readback, NEVER retry. Save operation_id for tracking."""
+    return await _call("commit_prospection", _engine=True, preview_token=preview_token)
+
+
+@mcp.tool()
+async def get_prospection_operation(operation_id: str, tracking_receipt: dict | None = None) -> dict:
+    """Reconcile one submission against native tasks and new result notifications.
+    Pass saved tracking_receipt after an engine Lua state change or reload; never resubmit."""
+    return await _call("get_prospection_operation", _engine=True, operation_id=operation_id, tracking_receipt=tracking_receipt)
 
 
 @mcp.tool()
@@ -97,6 +208,7 @@ async def build_facility(source_entity: int, x: float, y: float, z: float, rotat
     """Preview building a copy of an owned facility's existing native layout (warehouse, harbor,
     airport, station, depot or maintenance station). Explicit elevation z is required.
     Does not connect roads, create lines or buy vehicles. Unknown collisions block the build.
+    Includes check.reputation: native UI penalty in percentage points, or available=false.
     Returns a one-use 60-second token; no game mutation occurs until commit_facility."""
     return await _call("build_facility", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
                        source_entity=source_entity, x=x, y=y, z=z, rotation=rotation, name=name)
@@ -105,12 +217,53 @@ async def build_facility(source_entity: int, x: float, y: float, z: float, rotat
 @mcp.tool()
 async def build_headquarters(town: int, x: float, y: float, z: float, rotation: float = 0, name: str = "") -> dict:
     """Preview the native headquarters main module near a current town (within 1000 m).
+    Includes check.reputation: native UI penalty in percentage points, or available=false.
     Checks native permits, duplicate ownership and strict collisions. Does not relocate,
     expand modules or build roads. Reserve future expansion/access space separately.
     Apply once with commit_facility(preview_token); on timeout reconcile, never retry.
     """
     return await _call("build_headquarters", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
                        town=town, x=x, y=y, z=z, rotation=rotation, name=name)
+
+
+@mcp.tool()
+async def build_warehouse(x: float, y: float, z: float, rotation: float = 0,
+                          name: str = "", module_count: int = 4) -> dict:
+    """Preview a new universal warehouse without an existing template instance.
+    Includes check.reputation: native UI penalty in percentage points, or available=false.
+    Uses the installed native starter layout/slot encoding, with 1 or 4 large modules
+    (500 or 2000 storage). Explicit dry-land elevation and strict collision validation.
+    Apply once with commit_facility. Does not connect roads, build lines, buy vehicles
+    or expand the reserved future footprint. Static readback is not simulation safety.
+    """
+    return await _call("build_warehouse", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       x=x, y=y, z=z, rotation=rotation, name=name, module_count=module_count)
+
+
+@mcp.tool()
+async def build_helipad(x: float, y: float, z: float, rotation: float = 0,
+                        name: str = "") -> dict:
+    """Preview the native passenger/cargo helicopter station on dry land.
+    Includes check.reputation: native UI penalty in percentage points, or available=false.
+    Uses module-free native parameters; apply once with commit_facility.
+    Road, cargo coverage, lines and vehicles require separate verification.
+    """
+    return await _call("build_helipad", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       x=x, y=y, z=z, rotation=rotation, name=name)
+
+
+@mcp.tool()
+async def build_heliport(x: float, y: float, z: float, rotation: float = 0,
+                         name: str = "") -> dict:
+    """Preview a native helicopter station with purchase depot and maintenance.
+    Includes check.reputation: native UI penalty in percentage points, or available=false.
+    Native layout: 5 parking spaces, maintenance pool 4, service radius 800 m.
+    Checks availability, permits, dry land and strict collisions; apply ONCE with
+    commit_facility. No roads, lines or vehicles are created. Reserve expansion
+    and verify cargo transfers separately. First live validation needs a test save.
+    """
+    return await _call("build_heliport", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       x=x, y=y, z=z, rotation=rotation, name=name)
 
 
 @mcp.tool()
@@ -444,6 +597,58 @@ async def set_game_speed(speed: int) -> dict:
     return await _call("set_game_speed", speed=speed)
 
 
+@mcp.tool()
+async def get_town_cargo_needs(town: int) -> dict:
+    """Read current residential/commercial/industrial cargo-kind IDs (not quantities)."""
+    return await _call("get_town_cargo_needs", town=town)
+
+
+@mcp.tool()
+async def preview_town_cargo_needs(
+    town: int,
+    residential: list[int] | None = None,
+    commercial: list[int] | None = None,
+    industrial: list[int] | None = None,
+    update_buildings: bool = False,
+) -> dict:
+    """Validate a city cargo-kind edit without changing the game; returns a 60s token.
+    Omitted districts stay unchanged; each edited district must keep its original
+    number of cargo kinds (no addition or removal). IDs are native
+    zero-based cargo IDs, excluding passengers. At least one district is required.
+    update_buildings=True requests immediate building updates and may affect capacities.
+    This is structural validation, not a native construction preview or simulation test.
+    Does not set annual quantities or guarantee persistence through city growth/reload.
+    """
+    args = dict(town=town, update_buildings=update_buildings)
+    for key, value in (("residential", residential), ("commercial", commercial), ("industrial", industrial)):
+        if value is not None:
+            if any(type(v) is not int or v <= 0 for v in value) or len(value) != len(set(value)):
+                raise ValueError("Cargo IDs must be distinct positive integers")
+            args[key] = value
+    if all(v is None for v in (residential, commercial, industrial)):
+        raise ValueError("Provide at least one district")
+    return await _call("preview_town_cargo_needs", **args)
+
+
+@mcp.tool()
+async def commit_town_cargo_needs(preview_token: str) -> dict:
+    """Submit an authorized cargo-kind edit once after saving a backup.
+    Rejects stale town/session or changed needs. Unknown/partial results require
+    get_town_cargo_operation or fresh readback; never resend the same submission.
+    verified covers town cargo-kind readback, not building capacities or long-term safety.
+    """
+    return await _call("commit_town_cargo_needs", preview_token=preview_token)
+
+
+@mcp.tool()
+async def get_town_cargo_operation(operation_id: str) -> dict:
+    """Read back a submitted city cargo-kind edit without resending it.
+    Tokens/operations are local to the loaded bridge session; after reload read town
+    needs afresh and reconcile against your saved receipt, never blindly retry.
+    """
+    return await _call("get_town_cargo_operation", operation_id=operation_id)
+
+
 # --- construction -------------------------------------------------------------------
 # Coordinates are world metres (x east, y north); heights follow the terrain automatically.
 # Every build tool takes preview=True for a dry run that returns cost and problems. Builds are
@@ -525,7 +730,7 @@ async def _planning_card(plan, output_dir, summary, width=1600, height=1100):
     return await asyncio.to_thread(card_result, plan, report, summary)
 
 
-@mcp.tool(meta=TOOL_META)
+@mcp.tool()
 async def plan_global_development(snapshot_path: str, focus_town: int, output_dir: str,
                                   neighbor_count: int = 2, supply_chains: list[dict] | None = None) -> CallToolResult:
     """Offline regional plan: focus city, nearby-city candidates, industry inventory, phases and supply balance.
@@ -533,7 +738,7 @@ async def plan_global_development(snapshot_path: str, focus_town: int, output_di
     Optional supply_chains: [{name,cargo,time_unit,evidence:'measured'|'forecast',demand,production,
     transport,handling,delivery,batch,delay,storage}]. Rates must share ONE time unit and finished-cargo
     equivalents; sum all cities sharing a chain. delay uses that unit; batch/storage are cargo quantities.
-    Missing demand is UNKNOWN, not zero. Automatically exports and shows an MCP Apps planning image card; never opens HTML or builds.
+    Missing demand is UNKNOWN, not zero. Saves plan JSON and returns data only. Call export_planning_report once after all planning is complete; never builds.
     """
     import asyncio
     from .development_planner import plan_global, read_snapshot, save_json
@@ -541,20 +746,21 @@ async def plan_global_development(snapshot_path: str, focus_town: int, output_di
     path = save_json(plan, output_dir, 'global-plan')
     summary = dict(plan_path=path, neighbors=plan['neighbors'], supply=plan['supply'], phases=plan['phases'],
                 warnings=plan['warnings'], buildable=None)
-    return await _planning_card(plan, output_dir, summary)
+    return _planning_result(plan, summary)
 
 
-@mcp.tool(meta=TOOL_META)
+@mcp.tool()
 async def plan_local_development(snapshot_path: str, output_dir: str, sites: list[dict] | None = None,
                                  corridors: list[dict] | None = None, supply_chains: list[dict] | None = None,
                                  title: str = '局部布局规划') -> CallToolResult:
     """Offline local layout validation and road/rail corridor search; never builds or assumes ports connect.
+    Need candidate positions first? Use find_facility_sites to batch-screen this same snapshot locally.
     sites=[{name,current:{min:{x,y},max:{x,y}},reserved:{min:{x,y},max:{x,y}},basis:'estimate or native dimensions'}].
     reserved includes current footprint PLUS upgrade/access space. Detects native and proposed overlaps.
     corridors=[{name,mode:'road'|'rail',start:{x,y},end:{x,y}}]; endpoints must be outside facilities/reserves.
     Avoids building bounds and reserves; reports water, ground grade and road crossings, not designed grades.
     supply_chains schema matches plan_global_development. For rail engineering use plan_rail_connection
-    with fresh real construction IDs next. Automatically exports and shows an MCP Apps planning image card; does not open HTML.
+    with fresh real construction IDs next. Saves plan JSON and returns data only. Call export_planning_report once on the final plan.
     """
     import asyncio
     from .development_planner import plan_local, read_snapshot, save_json
@@ -562,7 +768,7 @@ async def plan_local_development(snapshot_path: str, output_dir: str, sites: lis
     path = save_json(plan, output_dir, 'local-plan')
     summary = dict(plan_path=path, sites=plan['sites'], routes=[{k:v for k,v in r.items() if k!='path'} for r in plan['routes']],
                 supply=plan['supply'], warnings=plan['warnings'], buildable=None)
-    return await _planning_card(plan, output_dir, summary)
+    return _planning_result(plan, summary)
 
 
 @mcp.tool()
@@ -611,7 +817,7 @@ async def export_planning_report(plan_path: str, output_dir: str, width: int = 1
     return await _planning_card(plan, output_dir, dict(plan_path=plan_path), width, height)
 
 
-@mcp.tool(meta=TOOL_META)
+@mcp.tool()
 async def plan_rail_connection(
     start_construction: int,
     end_construction: int,
@@ -625,7 +831,7 @@ async def plan_rail_connection(
     Returns approximate candidates with sampled path, bridge/tunnel lengths and diagnostics.
     No candidate is a construction approval: native preview and fresh endpoint checks remain required.
     Prefer this to repeated get_terrain/find_nearby calls. Used ports are excluded.
-    Automatically shows the planning image card. output_dir defaults to TF3_PLANNING_DIR or exports/plans.
+    Saves plan JSON and returns data only; export_planning_report shows the final card after planning. output_dir defaults to TF3_PLANNING_DIR or exports/plans.
     """
     from .staged_planner import plan_staged
     if start_construction == end_construction:
@@ -646,7 +852,7 @@ async def plan_rail_connection(
         plan['phases'] = [dict(name='工程复核', actions=['刷新站端口、曲率、坡度与桥隧条件', '比较候选，执行原生预览'], gate='原生预览及用户建设授权')]
         plan['warnings'].append(result['limitation'])
         result['plan_path'] = save_json(plan, output_dir, 'rail-plan')
-    return await _planning_card(plan, output_dir, result)
+    return _planning_result(plan, result)
 
 
 @mcp.tool()
@@ -755,6 +961,7 @@ async def build_street_stop(
     Returns both station IDs, groups, and post-build verification. A failed apply may
     partially change the world: inspect the result before retrying. Collision overrides
     and legacy experimental bypasses are not supported.
+    Use find_facility_sites with explicitly surveyed street edges to shortlist positions offline first.
     """
     args = {"edge": edge, "x": x, "y": y, "param": param, "radius": radius,
             "two_sided": two_sided, "side": side, "kind": kind, "name": name, "preview": preview}
@@ -833,8 +1040,8 @@ async def build_station(
     """Build a street station (bus terminal, or truck station with cargo=True) centred at (x, y) and
     join its entrance to the nearest street, like build_depot. size 1-3 = number of platform pairs.
     Its entrance is 15 m from the centre towards `face_towards`, else `rotation`, else the nearest
-    street node, so place it ~20 m from the street. Returns stationGroup for create_line. (Roadside
-    stops on existing streets can't be built by script yet.)"""
+    street node, so place it ~20 m from the street. Returns stationGroup for create_line.
+    For roadside stops use build_street_stop. For batch site screening use find_facility_sites."""
     args: dict[str, Any] = {"x": x, "y": y, "size": size, "cargo": cargo, "connect": connect,
                             "street_type": street_type, "preview": preview, "allow_collisions": allow_collisions}
     if face_towards:

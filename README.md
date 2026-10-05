@@ -4,6 +4,10 @@
 
 文档分类入口见 [docs 导航](docs/README.md)，包括发展策略、执行指南、接口参考与历史案例。实时规划和建造前请先阅读 [agent 入口](AGENTS.md) 与 [规划、建造及防崩溃执行手册](docs/guides/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
 
+设施选址可使用 [`find_facility_sites`](docs/reference/SITE_SELECTION.md)：一份地图快照批量筛选停靠点、仓库与车站候选，检查升级预留并保存候选方案 JSON，减少逐点查询游戏和原生预览。
+
+0.12.9 新增[局部地形平整](docs/reference/TERRAIN_FLATTEN.md)：`preview_flatten_terrain` → `commit_flatten_terrain` → `get_terrain_operation`。支持有范围、障碍和边缘坡度检查的矩形统一高程，提交前自动保存独立备份；支持可选边坡平滑过渡，逐块验证、异常停批，预览为结构检查，原生 Proposal 预览绑定不可用。
+
 ```
 Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_bridge (game script) ──> 游戏引擎
 ```
@@ -42,7 +46,7 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 
 全局／局部规划及 HTML、PNG、SVG 导出见 [规划工具说明](docs/reference/PLANNING_TOOLS.md)（桥接 0.11.0）。
 
-规划工具完成后直接显示 MCP Apps 图片卡片（全局全图、局部裁切），支持缩放；完整 HTML 由用户点击卡片链接打开，不自动打开。
+规划过程中不显示卡片；最终方案完成后调用一次 `export_planning_report` 显示 MCP Apps 结果卡片（全局全图、局部裁切）。卡片背景透明，图片默认等比例铺满视口，可缩放与拖动；完整 HTML 由用户点击卡片链接打开，不自动打开。
 
 贷款接口新增于桥接版本 0.10.0；调用流程、校验及实机验证边界见 [游戏贷款接口](docs/reference/LOAN_SUPPORT.md)。
 
@@ -80,6 +84,10 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 | `buy_vehicles` | 在车库买车，可直接分配到线路 |
 | `assign_vehicles` | 把车辆分配到线路 |
 | `sell_vehicles` / `send_to_depot` / `set_vehicle_stopped` | 卖车 / 回库（可到库即卖）/ 停车或发车 |
+| `get_town_cargo_needs` | 读取城市住宅、商业、工业需求货品种类 |
+| `preview_town_cargo_needs` | 校验需求编辑并生成一次性令牌，未指定分区保持原样 |
+| `commit_town_cargo_needs` | 单次提交需求货品修改并读回；不直接设置年度数量 |
+| `get_town_cargo_operation` | 查询需求编辑结果，不重发；详见[接口说明](docs/reference/TOWN_CARGO_NEEDS.md) |
 | `set_game_speed` | 设置模拟速度（0 = 暂停） |
 
 | `run_lua` | 在游戏引擎脚本环境里执行 Lua（仅当 `TF3_MCP_ALLOW_EVAL=1`），用于探索 API |
@@ -153,6 +161,10 @@ upgrade_road(edge=8778, street_type="town/town_old_medium", preview=False,
 完整覆盖表、原生模板与模块拆除限制、测试状态见 [设施接口说明](docs/reference/FACILITY_SUPPORT.md)。
 
 桥接 0.12.2 增加 `build_headquarters(town, x, y, z, rotation=0, name="")`：使用原生总部主楼模板，只读预览后通过 `commit_facility` 单次提交。检查公司建造权限、重复总部、当前城镇与碰撞；支持总部查询，暂不支持扩建或搬迁。首次实机新建仍须在隔离测试存档验证。
+
+桥接 0.12.3 增加 `build_warehouse(x, y, z, rotation=0, name="", module_count=4)`：无需现有仓库模板，从零预览新建1或4模块通用仓库（500或2000库容），再由 `commit_facility` 单次提交并核对配置和原生库存容量。不会自动接路、建线路或购车。批量执行及磁盘桥接模式见 [BATCH_WAREHOUSES.md](scripts/BATCH_WAREHOUSES.md)，接口边界见 [FACILITY_SUPPORT.md](docs/reference/FACILITY_SUPPORT.md)。
+
+桥接 0.12.4 增加 `build_helipad` 原生直升机停机坪预览，并通过 `commit_facility` 单次新建。新增 [批量接路与停机坪脚本](scripts/BATCH_CONNECTIONS_HELIPADS.md)，支持 `preview/build/verify`、实时实体解析、施工存档和未知结果停止；停机坪脚本可隔离加载磁盘接口，无需重载游戏。设施、道路与货物运营分别验收。
 
 ### 货运火车站（桥接版本 0.7.0）
 
@@ -339,3 +351,7 @@ server/.venv/Scripts/python.exe scripts/watch_map_cache.py --start 120586 --end 
 `built=true` 仅表示路已存在；`verified=true`、`complete=true` 才表示接入点验证通过。
 若刷新失败或验证不可用，返回连接诊断并保留已建路，禁止重复执行同一次铺路。
 预览不清理配置、不刷新道路。曲线道路脚本也复用此接入处理。
+
+## 资源勘探
+
+桥接0.12.5新增 `list_prospections`、`get_prospections`、`preview_prospection`、`commit_prospection`、`get_prospection_operation`，支持原生许可校验、一次性提交与进度/结果读回。使用流程、加载要求及验证边界见[资源勘探接口](docs/reference/PROSPECTIONS.md)。

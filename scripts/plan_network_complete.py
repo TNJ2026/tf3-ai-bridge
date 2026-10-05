@@ -2,9 +2,10 @@
 import json,math,heapq,collections,time,argparse,sys
 from pathlib import Path
 from tf3_mcp.site_planner import BoxIndex,curve
+from tf3_mcp.planning_geometry import facility_aabb
 from fullmap_workflow import write_json
 from planning_flow import transport
-from planning_shared_hubs import hub_owner,same_hub
+from planning_shared_hubs import hub_owner,same_hub,shared_fishing_port,validate_fishing_assignments,finalize_land_quantities,city_siting_reviews
 ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);a=ap.parse_args();R=a.output;started=time.time()
 L=json.loads((R/'layout_draft.json').read_text('utf8'));SP=Path(L['snapshot']);S=json.loads(SP.read_text('utf8'));D=json.loads((R/'details.json').read_text('utf8'));K=json.loads((R/'capacity.json').read_text('utf8'));G=S['grid']
 T={t['id']:dict(t,demand={}) for t in S['map']['towns']};I={i['id']:dict(i,resource=i['fileName'])for i in S['map']['industries']};C={c['id']:c for c in D['cargos']}
@@ -57,16 +58,17 @@ def link(a,b,c,v,stage):
 def caps(c):return {i['id']:i['outputs'][str(c)]for i in I.values()if str(c)in i['outputs']}
 
 # Core-input demands exclude optional tools/machines/fertilizer boosters.
-recipes={'livestock_farm':(1,7),'saw_mill':(12,13),'cement_plant':(24,15),'oil_refinery':(18,20)}
+recipes={'livestock_farm':(1,7),'saw_mill':(12,13),'cement_plant':(24,15),'oil_refinery':(18,20),'bricks_works':(23,33)}
 processed_cargos={finished for raw,finished in recipes.values()}
 city_cargos={int(c) for t in T.values() for c in t['demand']}
 available={c:caps(c) for c in sorted(city_cargos-processed_cargos)};raw_summary=[]
 for typ,(raw,finished)in recipes.items():
  processors={i['id']:i for i in I.values()if i['resource'].split('/')[-2]==typ}
  sup=caps(raw);needs={k:v['inputs'][str(raw)]for k,v in processors.items()};rawtotal=sum(sup.values());demtotal=sum(needs.values())
- # Allocate scarce grain first to the better conversion, then minimize transport.
- desired={k:0 for k in needs};left=rawtotal
- for k in sorted(needs,key=lambda k:(-processors[k]['outputs'][str(finished)]/needs[k],min(cost(a,k)for a in sup))):desired[k]=min(needs[k],left);left-=desired[k]
+ # Keep every processor in the whole-map service plan under input scarcity.
+ # Equal utilization is a deliberate service policy; rates remain forecasts.
+ utilization=min(1,rawtotal/demtotal) if demtotal else 0
+ desired={k:v*utilization for k,v in needs.items()}
  for a,b,v in transport(sup,desired,cost):link(a,b,raw,v,'input')
  available[finished]={k:sum(x['annual']for x in links if x['destination']==k and x['cargo']==raw)*processors[k]['outputs'][str(finished)]/needs[k]for k in needs}
  raw_summary.append(dict(cargo=raw,available=rawtotal,full_processor_input=demtotal,gap=max(0,demtotal-rawtotal),surplus=max(0,rawtotal-demtotal)))
@@ -74,6 +76,7 @@ supply=[]
 for c,sup in available.items():
  dem={k:t['demand'][str(c)]for k,t in T.items()if str(c)in t['demand']};total=sum(dem.values());avail=sum(sup.values());ratio=min(1,avail/total)if total else 0
  for a,b,v in transport(sup,{k:v*ratio for k,v in dem.items()},cost):link(a,b,c,v,'city_supply')
+ if not total and not avail:continue
  supply.append(dict(cargo=c,name=C[c]['name'],demand=total,available=round(avail,3),allocated=round(min(total,avail),3),gap=round(max(0,total-avail),3)))
 # Co-product fertilizer may improve farms, but its unmeasured production uplift is not counted.
 fs={k:available[20][k]*I[k]['outputs']['3']/I[k]['outputs']['20']for k in available[20]};fd={i['id']:i['inputs']['3']for i in I.values()if '3'in i['inputs']}
@@ -99,12 +102,13 @@ def access(f,n,entrance=None):
  road=dict(id=f['id']+'_access',from_node_hint=n,from_position=a,to_facility=f['id'],path=[a,p],geometry={'type':'straight_or_tangent_hermite','startTangent':v,'endTangent':v},native_verified=False,depends_on=[f['id']],port_selector='resolve actual external BASE_NODE after build; never connect to construction centre',street_type='country/country_new_small',length_m=round(length,2))
  roads.append(road);f['road_anchor']=n;return road
 
-# Preserve the complete five-role city and four-role production templates.
-fac=L['facilities'];roads=L['roads'];hubs={h['owner']:h for h in L['hubs']};reserves=[f['reserved']for f in fac];ports=[]
+# Preserve all facilities from the selected collection templates.
+fac=L['facilities'];roads=L['roads'];hubs={h['owner']:h for h in L['hubs']};reserves=[facility_aabb(f)for f in fac];ports=[]
 for h in hubs.values():
  for fid in h['facilities'].values():
   f=next(f for f in fac if f['id']==fid);f['road_anchor']=h['node']
   if f['kind']=='road_depot':f.update(service_radius=400,maintenance_pool=12)
+  if f['kind']=='road_maintenance':f.update(service_radius=600,maintenance_pool=16)
 watercomponents={};waterparents={}
 for k,w in enumerate(G['water']):
  if not w or k in watercomponents:continue
@@ -129,8 +133,18 @@ def waterpath(a,b):
  path=[];v=kb
  while v is not None:path.append(pt(G['x']+v%G['nx']*G['spacing'],G['y']+v//G['nx']*G['spacing']));v=prev[v]
  return path[::-1]
-for i in I.values():
+fish_annual={i['id']:sum(l['annual']for l in links if l['source']==i['id'])for i in I.values()if 'fishing_grounds'in i['resource']}
+fish_budget=S.get('planning_policy',{}).get('fish_port_annual_handling_budget')
+fish_decisions=[]
+for i in sorted(I.values(),key=lambda i:i['id']):
  if 'fishing_grounds'not in i['resource']:continue
+ if fish_annual[i['id']]<=0:
+  fish_decisions.append(dict(industry=i['id'],decision='no_allocated_flow',native_verified=False));continue
+ shared_port=shared_fishing_port(i,ports,I,waterpath,fish_annual[i['id']],fish_budget)
+ if shared_port:
+  port=shared_port['port'];port['service_industries'].append(i['id']);port['annual_forecast']+=fish_annual[i['id']]
+  port['water_routes_by_industry'][str(i['id'])]=dict(outbound=shared_port['outbound'],inbound=shared_port['inbound'],native_verified=False)
+  fish_decisions.append(dict(industry=i['id'],port=port['id'],decision='shared_pair',native_verified=False));continue
  options=[];sourcecell=cell(i['position']);component=watercomponents.get(sourcecell)
  print('coast '+str(i['id']),flush=True)
  for k,w in enumerate(G['water']):
@@ -142,30 +156,53 @@ for i in I.values():
    if not(0<=xx<G['nx']and 0<=yy<G['ny'])or wk not in watercomponents or watercomponents[wk]!=component:continue
    n=nearest(p);land=pt(p['x']-dx*100,p['y']-dy*100)
    if not clear(box(land,45)):continue
-   options.append((dst(p,i['position'])+dst(p,nodes[n])*1.5,p,dx,dy,n))
+   pad_positions=[pt(p['x']-dx*120-dy*s,p['y']-dy*120+dx*s)for s in (-50,50)]
+   if not all(clear(box(q,25))for q in pad_positions):continue
+   options.append((dst(p,i['position']),p,dx,dy,n))
  if not options:raise ValueError('No fish coast '+str(i['id']))
  _,p,dx,dy,n=min(options,key=lambda x:x[0]);rot=math.degrees(math.atan2(dx,-dy))%360;fid='P'+str(i['id']);shore=pt(p['x']+dx*15,p['y']+dy*15)
  # Fine native coastal adjustment is performed separately; store the full alternative set.
- wh=pt(p['x']-dx*80,p['y']-dy*80);tr=pt(wh['x']-dy*75,wh['y']+dx*75)
- if not clear(box(tr,35)):
-  tr=pt(wh['x']+dy*75,wh['y']-dx*75)
+ wh=pt(p['x']-dx*80,p['y']-dy*80)
  wf=add(fid+'_warehouse','warehouse',wh,rot,'build_warehouse',{'module_count':1},30,owner=fid,road_required=False)
- tf=add(fid+'_truck','truck',tr,rot,'build_station',{'cargo':True,'size':1},35,owner=fid);access(tf,n)
- port=dict(id=fid+'_harbor',kind='harbor',industry=i['id'],position=shore,rotation=rot,water_direction=pt(dx,dy),warehouse=wf['id'],truck=tf['id'],node=n,shoreline_revision='native_small_pier_v1',candidates=[{'position':v,'water_direction':pt(a,b),'node':nn}for _,v,a,b,nn in sorted(options,key=lambda x:x[0])[:80]],waterRoute=waterpath(i['position'],shore),status='requires_fine_coast_preview')
- ports.append(port);reserves.append(box(shore,45));pos[fid]=tr
- for r in []:
-  if r['source']==i['id']:
-   rd,rp=shortest(n,nearest(pos[r['destination']]));r['road_edges']=rp;r['path'][0]=tr;r['mode']='HELICOPTER'if rd is None or rd/11+90>650 else'TRUCK'
-# HQ: central dead end first, aligned along the existing end tangent.
-focus=min(T,key=lambda tid:dst(T[tid]['position'],{'x':(S['bounds']['min']['x']+S['bounds']['max']['x'])/2,'y':(S['bounds']['min']['y']+S['bounds']['max']['y'])/2}));target=T[focus]['position'];hq=None
+ pads=[]
+ for role,s in [('helipad',-50),('helipad2',50)]:
+  q=pt(p['x']-dx*120-dy*s,p['y']-dy*120+dx*s)
+  pads.append(add(fid+'_'+role,role,q,rot,'build_helipad',{},25,owner=fid,road_required=False))
+ port=dict(id=fid+'_harbor',kind='harbor',industry=i['id'],position=shore,rotation=rot,water_direction=pt(dx,dy),warehouse=wf['id'],helipad=pads[0]['id'],helipad2=pads[1]['id'],transfer_mode='HELICOPTER',node=n,shoreline_revision='native_small_pier_v1',candidates=[{'position':v,'water_direction':pt(a,b),'node':nn}for _,v,a,b,nn in sorted(options,key=lambda x:x[0])[:80]],waterRoute=waterpath(i['position'],shore),status='requires_fine_coast_preview')
+ port.update(service_industries=[i['id']],annual_forecast=fish_annual[i['id']],
+  water_routes_by_industry={str(i['id']):dict(outbound=port['waterRoute'],inbound=waterpath(shore,i['position']),native_verified=False)},
+  capacity_review=dict(annual_handling_budget=fish_budget,verified=False,required=['both field round trips and ship type','shipyard round trip','maintenance area','berths fleet and two helipads throughput','shared warehouse inventory']))
+ if not port['waterRoute'] or not port['water_routes_by_industry'][str(i['id'])]['inbound']:raise ValueError('No sampled fishing round trip '+str(i['id']))
+ fish_decisions.append(dict(industry=i['id'],port=port['id'],decision='independent_port',native_verified=False))
+ ports.append(port);reserves.append(box(shore,45));pos[fid]=wh
+# HQ: beside the terminal street segment, never beyond the dead end.
+focus=L['focus_town'];target=T[focus]['position'];hq=None
 for n in sorted((n for n in nodes if len(adj[n])==1 and dst(nodes[n],target)<950),key=lambda n:dst(nodes[n],target)):
- other=adj[n][0][0];a=nodes[n];v=pt(a['x']-nodes[other]['x'],a['y']-nodes[other]['y']);length=math.hypot(v['x'],v['y']);rot=math.degrees(math.atan2(-v['x'],v['y']))%360
- for advance in [65,85,105]:
-  p=pt(a['x']+v['x']/length*advance,a['y']+v['y']/length*advance)
-  if clear(box(p,50)):
-   hq=add('HQ','headquarters',p,rot,'build_headquarters',{'town':focus},50,town_name=T[focus]['name']);access(hq,n);break
+ other,length,eid=adj[n][0];edge=emap[eid]
+ if length<1:continue
+ for setback in [25,45,65]:
+  fraction=min(setback/length,.5);t=fraction if edge['node0']==n else 1-fraction
+  q=curve(edge,t);lo=curve(edge,max(0,t-.01));hi=curve(edge,min(1,t+.01))
+  tx,ty=hi[0]-lo[0],hi[1]-lo[1];norm=math.hypot(tx,ty)
+  if norm<1e-6:continue
+  for offset in [60,70,85]:
+   for side in [1,-1]:
+    away=pt(-ty/norm*side,tx/norm*side)
+    p=pt(q[0]+away['x']*offset,q[1]+away['y']*offset)
+    rot=math.degrees(math.atan2(-away['x'],away['y']))%360
+    if clear(box(p,50)):
+     hq=add('HQ','headquarters',p,rot,'build_headquarters',{'town':focus},50,
+      town_name=T[focus]['name'],road_anchor=n,
+      road_frontage={'edge_hint':eid,'position':pt(q[0],q[1]),'side':side,
+       'placement':'beside_terminal_segment','native_verified':False,
+       'verification_required':'entrance orientation, frontage gap/height and native pedestrian access'},
+      road_basis='fronts existing street; no speculative road to construction centre')
+     break
+   if hq:break
+  if hq:break
  if hq:break
-if not hq:raise ValueError('No HQ road end')
+if not hq:raise ValueError('No HQ roadside site near a central road end')
+
 def service_site(fid,kind,target,radius,command,args,first=True):
  for n in sorted(nodes,key=lambda n:dst(nodes[n],target))[:300]:
   for rot in range(0,360,45):
@@ -195,41 +232,27 @@ for tid,t in T.items():
  bs=townboxes[tid];b={'min':pt(min(x['min']['x']for x in bs),min(x['min']['y']for x in bs)),'max':pt(max(x['max']['x']for x in bs),max(x['max']['y']for x in bs))}
  growth.append(dict(town=tid,built_bounds=b,near_term_envelope={'min':pt(b['min']['x']-200,b['min']['y']-200),'max':pt(b['max']['x']+200,b['max']['y']+200)},long_term_envelope={'min':pt(b['min']['x']-400,b['min']['y']-400),'max':pt(b['max']['x']+400,b['max']['y']+400)},basis='planning buffers only; expansion likely along connected dry gentle roads, constrained by water/terrain; no growth date/radius guarantee'))
 
-# Keep successful read-only coast refinements on the same current map.
-prior=json.loads((R/'refined_baseline.json').read_text('utf8'))if(R/'refined_baseline.json').exists()else None
-if prior:
- assert prior['session']['player']==S['state']['player']
- for port in ports:
-  old=next((x for x in prior['ports']if x['id']==port['id']),None)
-  if old and old.get('native_preview',{}).get('previewPassed'):port.update(old)
-# Small-ship purchase/maintenance at each independent fishing shore.
+# Quantity and endpoint changes invalidate historical coastal previews.
+# Refine this plan's current paired port after network generation.
+# One ship maintenance facility per fishing port; never infer purchase capability.
 for port in ports:
  p=port['position'];dx,dy=port['water_direction']['x'],port['water_direction']['y']
- depotpos=pt(p['x']-dy*110,p['y']+dx*110)
- f=add(port['id']+'_shipyard','water_depot',depotpos,port['rotation'],'native_construction',{},40,owner='P'+str(port['industry']),service_radius=800,maintenance_pool=4)
- if prior:
-  old=next((x for x in prior['facilities']if x['id']==f['id']),None)
-  if old and old.get('native_preview',{}).get('previewPassed'):f.update(old)
- port.update(command='native_construction',args={},footprint=box(p,45),reserved=box(p,60),purchase_base=f['id'])
+ servicepos=pt(p['x']-dy*110,p['y']+dx*110)
+ f=add(port['id']+'_maintenance','water_maintenance',servicepos,port['rotation'],'native_construction',{},40,owner='P'+str(port['industry']),service_radius=1400,maintenance_pool=12)
+ f.update(resource='::/depots/water/water_maint_station.con',road_required=False,status='requires_fine_coast_preview')
+ depotpos=pt(p['x']+dy*220,p['y']-dx*220)
+ depot=add(port['id']+'_shipyard','water_depot',depotpos,port['rotation'],'native_construction',{},60,owner='P'+str(port['industry']),road_required=False)
+ depot.update(resource='::/depots/water/water_depot.con',status='requires_fine_coast_preview')
+ port.update(command='native_construction',args={},footprint=box(p,45),reserved=box(p,60),maintenance_base=f['id'],purchase_base=depot['id'],
+  collection_template='config/planning_templates/fish_port_air.json',collection_status='experimental_requires_joint_native_preview',cargo_policy={'allowed':['fish'],'oil':'helicopter'},purchase_capability_verified=False)
 
 coast=json.loads((R/'coast_layout.json').read_text('utf8'))if(R/'coast_layout.json').exists()else None
 if coast:
- keep={x['industry']for x in coast['ports']};removed={f['id']for f in fac if f['kind']=='water_depot'or(f.get('owner','').startswith('P')and int(f['owner'][1:])not in keep)}
- fac[:]=[f for f in fac if f['id']not in removed];roads[:]=[r for r in roads if r.get('to_facility')not in removed];ports=coast['ports'];fac.append(coast['depot'])
- for port in ports:port['purchase_base']=coast['depot']['id']
-else:
- # One purchase base candidate per connected water body. Native shoreline/path
- # checks still required; avoid three identical shipyards before those checks.
- regional=collections.defaultdict(list)
- for port in ports:regional[watercomponents.get(cell(I[port['industry']]['position']),port['industry'])].append(port)
- retain=set()
- for group in regional.values():
-  chosen=min(group,key=lambda x:sum(dst(x['position'],y['position'])for y in group))['purchase_base'];retain.add(chosen)
-  for port in group:port['purchase_base']=chosen
- fac[:]=[f for f in fac if f['kind']!='water_depot'or f['id']in retain]
-fm={f['id']:f for f in fac};pm={p['industry']:p for p in ports};routes=[]
-if coast:
- for source,target in coast['source_aliases'].items():pm[int(source)]=pm[target]
+ raise ValueError('Legacy coast_layout must be regenerated against current paired-port service assignments')
+for port in ports:
+ port['capacity_review']['forecast_exceeds_budget']=fish_budget is not None and port['annual_forecast']>fish_budget
+fm={f['id']:f for f in fac};pm=validate_fishing_assignments(ports,I);routes=[]
+if set(pm)!={i for i,v in fish_annual.items()if v>0}:raise ValueError('Fishing service coverage lost or duplicated')
 def air(h,second=False):return h['facilities'].get('helipad2'if second else'helipad',h['facilities'].get('heliport'))
 def industry_end(i):return dict(existing_industry=i,resource=I[i]['resource'],position=pos[i],stations_hint=I[i]['stations'])
 def consumer(i):return industry_end(i) if i in I else dict(town=i,unload_stops=next(d['stops']for d in delivery if d['town']==i))
@@ -241,19 +264,23 @@ for j,l in enumerate(links,1):
  if same_hub(ha,hb) and rt is not None and not offshore:mode='TRUCK'
  chain=[];src=industry_end(a);dstend=consumer(b)
  if port:
-  chain.append(dict(mode='SMALL_SHIP',**{'from':src,'to':port['id']},warehouse=port['warehouse']));src=port['truck']
-  if mode=='HELICOPTER':
-   # Reuse the closest production collection that is reachable on the same land graph.
-   choices=[h for h in hubs.values()if shortest(port['node'],h['node'])[0]is not None and not same_hub(h,hb)]
-   if choices:ha=min(choices,key=lambda h:shortest(port['node'],h['node'])[0]);chain.append(dict(mode='TRUCK',**{'from':src,'to':ha['facilities']['truck']},warehouse=ha['facilities']['warehouse']))
-   else:mode='UNRESOLVED_LAND_CONNECTION'
+  chain.append(dict(mode='SMALL_SHIP',**{'from':src,'to':port['id']},warehouse=port['warehouse'],purchase_base=port['purchase_base'],maintenance_base=port['maintenance_base'],planned_water_route=port['water_routes_by_industry'][str(a)],service_industries=port['service_industries']))
+  src=port['helipad'];mode='HELICOPTER'
  if mode=='HELICOPTER':
+  if not hb or (not ha and not port and not offshore):raise ValueError('Required air-transfer collection has no feasible layout for flow '+str(a)+' -> '+str(b))
   if ha and not port:chain.append(dict(mode='TRUCK',**{'from':src,'to':ha['facilities']['truck']},warehouse=ha['facilities']['warehouse']))
-  chain.append(dict(mode='HELICOPTER',**{'from':air(ha)if ha else src,'to':air(hb)},source_second=air(ha,True)if ha else None,destination_second=air(hb,True),warehouse=hb['facilities']['warehouse'],maintenance_base=next(h['facilities']['heliport']for h in hubs.values()if h['kind']=='city')))
+  chain.append(dict(mode='HELICOPTER',**{'from':src if port else air(ha)if ha else src,'to':air(hb)},source_second=port['helipad2']if port else air(ha,True)if ha else None,destination_second=air(hb,True),warehouse=hb['facilities']['warehouse'],maintenance_base=next(h['facilities']['heliport']for h in hubs.values()if h['kind']=='city')))
   chain.append(dict(mode='TRUCK',**{'from':hb['facilities']['truck'],'to':dstend}))
  else:chain.append(dict(mode='TRUCK',**{'from':src,'to':dstend}))
  routes.append(dict(id='R%03d'%j,**l,mode=mode,path=[pa,pb],road_edges=rp,transfer_chain=chain,alternatives={'road_seconds':rt,'air_seconds':at,'basis':'11m/s road;45m/s air;330s transfer estimate'},native_path_verified=False))
 
+hubs,fac,roads,quantity_decisions=finalize_land_quantities(hubs,fac,roads,routes,list(T.values()),list(I.values()))
+quantity_decisions['unused_layout_issues']=L.get('unresolved',[])
+quantity_decisions.update(fishing=fish_decisions,new_fishing_collections=len(ports),
+    fish_field_to_port={str(k):v['id']for k,v in pm.items()})
+for row in delivery:
+ if 'T'+str(row['town'])not in hubs:row.update(start=None,status='direct_road_delivery_in_supply_routes')
+fm={f['id']:f for f in fac}
 # Aggregate identical directional movements, then split high-throughput aviation.
 def key(v):return v if isinstance(v,str)else'I'+str(v['existing_industry'])if'existing_industry'in v else'T'+str(v['town'])
 def location(v):return fm[v]['position']if isinstance(v,str)and v in fm else next(p['position']for p in ports if p['id']==v)if isinstance(v,str)else v['position']if'existing_industry'in v else T[v['town']]['position']
@@ -268,10 +295,10 @@ for m in movements.values():
   src=m.get('source_second')if lane and m.get('source_second')else m['from'];dest=m.get('destination_second')if lane and m.get('destination_second')else m['to'];p0,p1=location(src),location(dest)
   cap=12 if m['mode']=='HELICOPTER'else 30 if m['mode']=='SMALL_SHIP'else 22;speed=45 if m['mode']=='HELICOPTER'else 7 if m['mode']=='SMALL_SHIP'else 9
   forecast=dst(p0,p1)/speed+120;cargo={c:v/count for c,v in m['cargos'].items()};cid=[int(c)for c in cargo]
-  lines.append(dict(id='LINE%03d'%(len(lines)+1),mode=m['mode'],source=src,destination=dest,cargos=cargo,flows=m['flows'],path=[p0,p1],warehouse=m.get('warehouse'),load_at_source=cid,load_at_destination=[],unload_at_destination=cid,cargo_index_offset=1,return_to_source=True,source_terminal_index=lane if src==m['from']and split else 0,destination_terminal_index=lane if dest==m['to']and split else 0,terminal_gate='resolve current station+terminal; distinct pad entities or distinct landing terminals; block if unsupported',parallel_split=count,capacity_forecast=cap,oneway_seconds_forecast=forecast,fleet_forecast=max(1,math.ceil(total/count*1.25*2*forecast/(1460*cap))),vehicle_model='::/vehicle/helicopter/piasecki_h21/piasecki_h21.mdl'if m['mode']=='HELICOPTER'else'::/vehicle/ship/votrans_universal/votrans_universal.mdl'if m['mode']=='SMALL_SHIP'else'::/vehicle/truck/gmc_660_dfm/gmc_660_dfm_univ.mdl',deadline_seconds=min(C[c]['timeToDeliverInSeconds']for c in cid),forecast_only=True))
+  lines.append(dict(id='LINE%03d'%(len(lines)+1),mode=m['mode'],source=src,destination=dest,cargos=cargo,flows=m['flows'],path=[p0,p1],warehouse=m.get('warehouse'),purchase_base=m.get('purchase_base'),maintenance_base=m.get('maintenance_base'),load_at_source=cid,load_at_destination=[],unload_at_destination=cid,cargo_index_offset=1,return_to_source=True,source_terminal_index=lane if src==m['from']and split else 0,destination_terminal_index=lane if dest==m['to']and split else 0,terminal_gate='resolve current station+terminal; distinct pad entities or distinct landing terminals; block if unsupported',parallel_split=count,capacity_forecast=cap,oneway_seconds_forecast=forecast,fleet_forecast=max(1,math.ceil(total/count*1.25*2*forecast/(1460*cap))),vehicle_model='::/vehicle/helicopter/piasecki_h21/piasecki_h21.mdl'if m['mode']=='HELICOPTER'else'::/vehicle/ship/votrans_universal/votrans_universal.mdl'if m['mode']=='SMALL_SHIP'else'::/vehicle/truck/gmc_660_dfm/gmc_660_dfm_univ.mdl',deadline_seconds=min(C[c]['timeToDeliverInSeconds']for c in cid),forecast_only=True))
 
 # Service endpoints, not every metre of road. New fields remain forecasts until readback.
-selected=[f for f in fac if f['kind']=='road_depot'];uncovered=[l for l in lines if l['mode']=='TRUCK'and not any(min(dst(location(l['source']),f['position']),dst(location(l['destination']),f['position']))<350 for f in selected)]
+selected=[f for f in fac if f['kind']in ('road_depot','road_maintenance')];uncovered=[l for l in lines if l['mode']=='TRUCK'and not any(min(dst(location(l['source']),f['position']),dst(location(l['destination']),f['position']))<f.get('service_radius',0)-50 for f in selected)]
 while uncovered:
  l=uncovered[0];target=location(l['destination']);f=service_site('MAINT_%02d'%(1+sum(x['kind']=='road_maintenance'for x in fac)),'road_maintenance',target,24,'native_construction',{})
  f.update(service_radius=600,maintenance_pool=16,road_required=False,road_basis='native maintenance area service; no road port')
@@ -284,7 +311,12 @@ for l in lines:
 
 plan=dict(L,cities=list(T.values()),industries=list(I.values()),supply=supply,raw_supply=raw_summary,facilities=fac,roads=roads,hubs=list(hubs.values()),ports=ports,routes=routes,city_stops=stops,city_delivery=delivery,growth=growth,line_specs=lines,byproducts=[dict(industry=i['id'],cargo=int(c),policy='No current verified demand; no speculative delivery line')for i in I.values()for c in i['outputs']if int(c)not in({1,3,6,7,12,13,15,18,20,24}|city_cargos)],nonselected_modes={'passenger_rail':'No measured passenger OD; collection includes bus facility; passenger line deferred to demand study','cargo_rail':'Current small dispersed annual volumes favor road/air; rail corridor only if sustained bulk demand rises','runway_airport':'11.3km map; helicopter direct paths avoid runway/taxi footprint and transfers'},validation={'native_preview_required':True,'construction_authorized':False,'maintenance_uncovered':[l['id']for l in uncovered]},planning_seconds=time.time()-started)
 plan['shared_hub_capacity_review']=[]
+plan['unresolved']=[]  # Required endpoint failures stopped routing above.
+plan['collection_quantity_decisions']=quantity_decisions
+plan['city_siting_reviews']=city_siting_reviews(plan['hubs'],plan['cities'])
+plan['shared_fishing_ports']={str(k):dict(port=v['id'],service_industries=v['service_industries'],annual_forecast=v['annual_forecast'],capacity_verified=False,native_path_verified=False)for k,v in pm.items()}
 for owner in sorted({v['hub_owner']for v in L.get('shared_industry_hubs',{}).values()}):
+ if owner not in hubs:continue
  h=hubs[owner];members=set(h['facilities'].values());traffic=[]
  for line in lines:
   for end in ('source','destination'):
@@ -293,10 +325,13 @@ for owner in sorted({v['hub_owner']for v in L.get('shared_industry_hubs',{}).val
  plan['shared_hub_capacity_review'].append(dict(owner=owner,industries=[int(i)for i,v in L['shared_industry_hubs'].items()if v['hub_owner']==owner],traffic=traffic,capacity_verified=False,required_checks=['industry round-trip road path','common warehouse stock','aggregate storage and truck terminal throughput','two landing terminals and fleet capacity'],note='Directional handling forecasts; do not sum both ends as additional supply. Expand or restore separate production hub if capacity fails.'))
 fm={f['id']:f for f in fac+ports};known=set(fm)|{r['id']for r in roads}|{st['id']for st in stops}
 jobs=[]
-for f in fac+ports:jobs.append(dict(f,stage='facility',depends_on=[],authorization='not_granted'))
+for f in fac+ports:
+ port=next((p for p in ports if f['id']in {p['id'],p['warehouse'],p['helipad'],p['helipad2'],p['maintenance_base'],p['purchase_base']}),None)
+ extra=dict(collection_owner=port['id'],service_industries=port['service_industries'],requiredNativeChecks=port['capacity_review']['required'])if port else{}
+ jobs.append(dict({**f,**extra},stage='facility',depends_on=[],authorization='not_granted'))
 for stage,rows in [('road',roads),('street_stop',stops),('line',lines)]:
  for row in rows:
-  deps=row.get('depends_on',[])if stage!='line'else sorted({v for v in [row['source'],row['destination'],row.get('warehouse')]if isinstance(v,str)and v in known}|{r['id']for r in roads if r.get('to_facility')in[row['source'],row['destination']]}|{x for v in[row['source'],row['destination']]if isinstance(v,dict)for x in v.get('unload_stops',[])})
+  deps=row.get('depends_on',[])if stage!='line'else sorted({v for v in [row['source'],row['destination'],row.get('warehouse'),row.get('purchase_base'),row.get('maintenance_base')]if isinstance(v,str)and v in known}|{r['id']for r in roads if r.get('to_facility')in[row['source'],row['destination']]}|{x for v in[row['source'],row['destination']]if isinstance(v,dict)for x in v.get('unload_stops',[])})
   jobs.append(dict(id=row['id'],stage=stage,spec=row,depends_on=deps,authorization='not_granted'))
 manifest=dict(schema=1,session={'player':S['state']['player'],'towns':S['map']['towns'],'industries':S['map']['industries']},jobs=jobs,commit_enabled=False,execution_policy='fresh session+late-bound entity/port -> native preview -> single commit after authorization -> bidirectional paths+catchment+inventory -> save')
 write_json(R/'network_plan.json',plan);write_json(R/'execution_manifest.json',manifest)

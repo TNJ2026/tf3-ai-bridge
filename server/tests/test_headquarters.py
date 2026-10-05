@@ -40,7 +40,7 @@ end
 ug_require=function(n)
  if n=="::/game_mechanics/company/company_util.tl" then return {
  getConstructionDisableCacheData=function()return {}end,
- getConstructionDisableReason=function()return LOCKED and {reason="no permit"} or nil end} end
+ getConstructionDisableReason=function()return LOCKED and {reason="no permit"} or {numRemaining=1} end} end
  if n=="::/landmarks/hq/headquarter.script.tl" then return {
  createTemplateFn=function()return {[6432000]="::/landmarks/hq/modules/hq_main.module"}end} end
  error("unexpected native import")
@@ -93,6 +93,15 @@ def test_permission_changes_block_commit(hq_game):
     lua.execute("LOCKED=true")
     with pytest.raises(Exception, match="locked"):
         call("commit_facility", preview_token=p["preview_token"])
+    assert lua.globals().SUBMISSIONS is None
+
+
+def test_remaining_permit_is_allowed_and_native_lock_blocks_preview(hq_game):
+    lua, call = hq_game
+    assert preview(call)["preview_token"]
+    lua.execute("LOCKED=true")
+    with pytest.raises(Exception, match="no permit"):
+        preview(call)
     assert lua.globals().SUBMISSIONS is None
 
 

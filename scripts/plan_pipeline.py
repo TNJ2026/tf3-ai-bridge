@@ -6,22 +6,24 @@ separate fresh read after this inexpensive preparation has completed.
 import argparse,json,subprocess,sys,time,datetime
 from pathlib import Path
 from fullmap_workflow import digest,write_json,atomic_write
-from planning_pipeline_core import validate_inputs,layout_key,prepare_template,strip_native_evidence
+from planning_pipeline_core import validate_inputs,layout_key,load_templates,strip_native_evidence,TEMPLATE_DIR
+from planning_readiness import check as check_readiness
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def run(snapshot_path, details_path, capacity_path, output, baseline=None, redesign=()):
+def run(snapshot_path, details_path, capacity_path, output, baseline=None, redesign=(), *, city_template=TEMPLATE_DIR/'city.json', production_template=TEMPLATE_DIR/'production.json'):
     started=time.perf_counter();started_at=datetime.datetime.now(datetime.timezone.utc).isoformat()
     if output.exists() and any(output.iterdir()):raise ValueError('Output must be empty; preserve previous runs as baselines')
     output.mkdir(parents=True,exist_ok=True);timings=[];cache={};manifest={}
     try:
+        write_json(output/'readiness.json',check_readiness(city_template,production_template))
         snapshot,details,capacity=[json.loads(p.read_text('utf8')) for p in (snapshot_path,details_path,capacity_path)]
         validate_inputs(snapshot,details,capacity)
         write_json(output/'snapshot.json',snapshot);write_json(output/'details.json',details);write_json(output/'capacity.json',capacity)
-        templates={}
-        for kind,path in [('city','exports/hub_template_default.json'),('production','exports/hub_template_production_default.json')]:
-            registry=json.loads((ROOT/path).read_text('utf8'))
-            templates[kind]=prepare_template(json.loads((ROOT/registry['template']).read_text('utf8')),kind)
+        templates=load_templates(city_template,production_template)
+        # Pin the exact normalized templates used for hashing and child processes.
+        for kind,template in templates.items():
+            write_json(output/'templates'/(kind+'.json'),template)
         source_files=['plan_pipeline.py','plan_flat_areas.py','planning_pipeline_core.py','plan_template_map.py','plan_network_complete.py','planning_flow.py','fullmap_workflow.py','fullmap_prepare.py','fullmap_hub_sets.py','fullmap_identity.py']
         source_files.append('planning_shared_hubs.py')
         sources={name:(ROOT/'scripts'/name).read_text('utf8') for name in source_files}
@@ -52,11 +54,14 @@ def run(snapshot_path, details_path, capacity_path, output, baseline=None, redes
         if same and not redesign:
             reuse('layout',['layout_draft.json'])
         else:
-            args=['plan_template_map.py','--snapshot',output/'snapshot.json','--output',output]
+            args=['plan_template_map.py','--snapshot',output/'snapshot.json','--output',output,
+                  '--city-template',(output/'templates/city.json').resolve(),
+                  '--production-template',(output/'templates/production.json').resolve()]
             if same and redesign:args+=['--baseline',baseline/'layout_draft.json','--redesign',*redesign]
             stage('layout',args)
         layout=json.loads((output/'layout_draft.json').read_text('utf8'))
-        if layout.get('unresolved'):raise ValueError('Layout unresolved; bounded candidate search stopped. See layout_draft.json')
+        # A missing optional collection is not a missing transport service.
+        # Network sizing rejects missing REQUIRED transfer endpoints after routing.
         normalized=dict(layout,snapshot='CURRENT_SNAPSHOT')
         nk=digest([code,normalized,details,capacity])
         if prior.get('keys',{}).get('network')==nk and intact(['network_plan.json','execution_manifest.json']) and not redesign:
@@ -73,20 +78,24 @@ def run(snapshot_path, details_path, capacity_path, output, baseline=None, redes
             localTerrainSurveys=refinement,
             maxCandidatesPerFailure=3,onUnknown='stop_and_reconcile',
             sharedHubCapacityChecks=plan.get('shared_hub_capacity_review',[]),
+            citySitingComparisons=plan.get('city_siting_reviews',[]),
+            collectionQuantityDecisions=plan.get('collection_quantity_decisions',{}),
             groups=[{'owner':h['owner'],'facilities':list(h['facilities'].values()),'roads':h['roads']} for h in plan['hubs']],
             standaloneFacilities=[f['id']for f in plan['facilities']+plan['ports']if f['id']not in {v for h in plan['hubs']for v in h['facilities'].values()}],
+            fishPorts=[dict(port=p['id'],maintenance=p.get('maintenance_base'),purchase=p.get('purchase_base'),serviceIndustries=p['service_industries'],waterRoutes=p['water_routes_by_industry'],capacityReview=p['capacity_review'],template=p.get('collection_template'),status='experimental; separate shoreline survey then isolated joint preview',cargo='fish',oil='helicopter',buildAuthorized=False)for p in plan['ports']],
             note='Queue only. Preview groups before per-building diagnostics; never authorize construction from offline cache.')
         write_json(output/'review_queue.json',queue)
+        stage('report',['plan_report.py','--output',output])
         manifest=dict(status='complete',startedAt=started_at,wallSeconds=time.perf_counter()-started,
             timingScope='this offline invocation only; NOT total user planning wall time',
             keys={'layout':lk,'network':nk},stages=timings,counters=review['counters'],
-            requiresAttention=review['requires_attention']or bool(refinement),nativePreviewRequired=True,buildAuthorized=False,
+            requiresAttention=review['requires_attention']or bool(refinement)or bool(plan.get('city_siting_reviews')),nativePreviewRequired=True,buildAuthorized=False,
             flatAreas=flat_report['summary'],
             artifacts={f:digest(json.loads((output/f).read_text('utf8')))for f in ['flat_areas.json','layout_draft.json','network_plan.json','execution_manifest.json']})
         write_json(output/'pipeline.json',manifest)
         atomic_write(output/'README.md','# 规划准备结果\n\n'+
             f"离线流水线 {manifest['wallSeconds']:.3f} 秒；这是候选方案，尚未做当前游戏原生预览。\n\n"+
-            '[平整区域](flat_areas.json) · [地形图层](flat_areas.svg) · [城市供给](preflight/CITIES.md) · [设施坐标](preflight/facilities.csv) · [线路](preflight/ROUTES.md) · [问题](preflight/ISSUES.md) · [阶段计时](pipeline.json) · [原生检查队列](review_queue.json)\n\n'+
+            '[交付索引](DELIVERY.md) · [启动检查](readiness.json) · [平整区域](flat_areas.json) · [地形图层](flat_areas.svg) · [城市供给](preflight/CITIES.md) · [设施坐标](preflight/facilities.csv) · [线路](preflight/ROUTES.md) · [问题](preflight/ISSUES.md) · [阶段计时](pipeline.json) · [原生检查队列](review_queue.json)\n\n'+
             '先处理代表性集合和岸线，再展开全图预览；失败仅诊断受影响集合，最多三个候选。未来施工前必须刷新会话、实体、端口并重新预览。\n')
         return manifest
     except Exception as error:
@@ -96,7 +105,8 @@ def run(snapshot_path, details_path, capacity_path, output, baseline=None, redes
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('snapshot','details','capacity','output'):ap.add_argument('--'+name,type=Path,required=True)
+    for kind in ('city','production'):ap.add_argument('--'+kind+'-template',type=Path,default=TEMPLATE_DIR/(kind+'.json'),help='Portable template; defaults to repository config/planning_templates')
     ap.add_argument('--baseline',type=Path);ap.add_argument('--redesign',nargs='*',type=int,default=[])
-    args=ap.parse_args();r=run(args.snapshot,args.details,args.capacity,args.output,args.baseline,args.redesign)
+    args=ap.parse_args();r=run(args.snapshot,args.details,args.capacity,args.output,args.baseline,args.redesign,city_template=args.city_template,production_template=args.production_template)
     print(json.dumps({k:r[k]for k in ('status','wallSeconds','stages','requiresAttention','buildAuthorized')}))
 if __name__=='__main__':main()

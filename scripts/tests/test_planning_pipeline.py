@@ -9,9 +9,9 @@ ROOT=Path(__file__).resolve().parents[2]
 class PipelineTests(unittest.TestCase):
     def test_captured_city_adaptation_is_idempotent_and_retains_all_roles(self):
         # Preserve the captured shared-port topology without requiring local exports.
-        raw={'facilities':[{'role':r,'localPosition':{'x':0,'y':0},'relativeRotation':0}
+        raw={'facilities':[{'role':r,'resource':r,'params':{},'localPosition':{'x':0,'y':0},'relativeRotation':0}
                            for r in ['heliport','warehouse','truck','bus','road_depot']],
-             'roads':[{'node0':10,'node1':11,'position0':{'x':0,'y':20},'position1':{'x':30,'y':20}}],
+             'roads':[{'roadTemplate':'road','node0':10,'node1':11,'position0':{'x':0,'y':20},'position1':{'x':30,'y':20}}],
              'rolePortNodes':{'road_depot':[10],'truck':[10]}}
         before=copy.deepcopy(raw)
         adapted=prepare_template(raw,'city')

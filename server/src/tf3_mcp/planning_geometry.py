@@ -34,6 +34,13 @@ def facility_polygon(row, key):
     return polygon(local, p, row.get('rotation', 0))
 
 
+def facility_aabb(row, key='reserved'):
+    """World-axis bounds for coarse obstacle indexes, after the facility rotation."""
+    points = facility_polygon(row, key)
+    return {'min': {a: min(p[a] for p in points) for a in ('x', 'y')},
+            'max': {a: max(p[a] for p in points) for a in ('x', 'y')}}
+
+
 def dry_access(terrain, start, end, max_grade=.10, step=10):
     """Cheap same-bank/grade screen before committing to a site; not pathfinding."""
     distance = math.hypot(end['x']-start['x'], end['y']-start['y'])

@@ -16,7 +16,7 @@ RESOURCE_URI = 'ui://tf3/planning-card.html'
 TOOL_META = {'ui': {'resourceUri': RESOURCE_URI}}
 apps = Apps()
 apps.add_html_resource(RESOURCE_URI, Path(__file__).with_name('planning_card.html').read_text(encoding='utf-8'),
-                       title='TF3 规划图', prefers_border=True,
+                       title='TF3 规划图', prefers_border=False,
                        csp=ResourceCsp(connect_domains=[], resource_domains=[]))
 
 
@@ -71,12 +71,12 @@ atexit.register(links.close)
 
 def card_result(plan, report, summary):
     """Image data stays in UI metadata; text-only clients retain useful paths and findings."""
-    png = Path(report['files']['png']).read_bytes()
+    png = Path(report.get('cardImage', report['files']['png'])).read_bytes()
     html_url = links.register(report['files']['html'])
     payload = dict(title=plan['title'], scope=plan['scope'],
                    image='data:image/png;base64,'+base64.b64encode(png).decode('ascii'),
                    htmlUrl=html_url, htmlPath=report['files']['html'],
-                   width=report['width'], height=report['height'])
+                   width=report.get('cardWidth', report['width']), height=report.get('cardHeight', report['height']))
     result = dict(summary, files=report['files'], html_url=html_url,
                   display='MCP Apps card; do not automatically open HTML', scope=plan['scope'])
     return CallToolResult(content=[TextContent(type='text',text=json.dumps(result,ensure_ascii=False))],

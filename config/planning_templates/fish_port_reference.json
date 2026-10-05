@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "kind": "fish_port_reference",
+  "status": "design_reference_only",
+  "executable": false,
+  "constructionAuthorized": false,
+  "sourcePlan": "exports\\newmap_restart_20261004\\final\\network_plan.json",
+  "sourceAnchor": {
+    "planningId": "P10824_harbor",
+    "position": {
+      "x": 1360,
+      "y": -2195,
+      "z": 2
+    },
+    "rotation": 45
+  },
+  "cargoPolicy": {
+    "allowedCargoNames": [
+      "fish"
+    ],
+    "sourceCargoIdHint": 6,
+    "resolveCargoIdsAtDestination": true,
+    "oilTransport": "helicopter; excluded from harbor"
+  },
+  "facilities": [
+    {
+      "role": "warehouse",
+      "localPosition": {
+        "x": -96.874,
+        "y": 95.459
+      },
+      "relativeRotation": 45.0,
+      "sourceDesignZ": 23.650001525879,
+      "heightPolicy": "resurvey_land_platform",
+      "configuration": {
+        "module_count": 1
+      },
+      "sourcePlanningId": "P10824_warehouse"
+    },
+    {
+      "role": "truck",
+      "localPosition": {
+        "x": -149.907,
+        "y": 42.426
+      },
+      "relativeRotation": 45.0,
+      "sourceDesignZ": 32.350006103516,
+      "heightPolicy": "resurvey_land_platform",
+      "configuration": {
+        "cargo": true,
+        "size": 1
+      },
+      "sourcePlanningId": "P10824_truck"
+    },
+    {
+      "role": "water_maintenance",
+      "localPosition": {
+        "x": 141.421,
+        "y": -141.421
+      },
+      "relativeRotation": 240,
+      "sourceDesignZ": 2,
+      "heightPolicy": "water_level_and_native_offset",
+      "configuration": {},
+      "sourcePlanningId": "P10824_harbor_shipyard",
+      "resource": "::/depots/water/water_maint_station.con",
+      "positionStatus": "replacement requires fresh shoreline design"
+    },
+    {
+      "role": "harbor",
+      "localPosition": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "relativeRotation": 0,
+      "sourceDesignZ": 2,
+      "heightPolicy": "water_level_and_native_offset",
+      "configuration": {},
+      "sourcePlanningId": "P10824_harbor"
+    }
+  ],
+  "maintenance": {
+    "role": "water_maintenance",
+    "count": 1,
+    "resource": "::/depots/water/water_maint_station.con",
+    "sourcePositionRequiresNewPreview": true
+  },
+  "layoutPolicy": {
+    "allowIndividualRotation": true,
+    "allowLandPlatformDesign": true,
+    "copySourceElevations": false,
+    "externalRoad": "destination specific; source node IDs excluded"
+  },
+  "atomicPlacement": {
+    "supportedByCurrentExecutor": false,
+    "nativeJointPreviewPassed": false,
+    "requires": [
+      "current shoreline acceptance",
+      "joint native preview",
+      "stock and transport readback"
+    ],
+    "terrainPhase": "separate before placement; refresh geometry afterwards",
+    "implementation": "scripts/hub_joint_prototype.py; experimental fish_port roles"
+  }
+}

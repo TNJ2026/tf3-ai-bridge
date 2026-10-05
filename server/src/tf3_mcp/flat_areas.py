@@ -8,7 +8,7 @@ from collections import deque
 
 from .development_planner import grid_bounds, number, validate_snapshot
 
-POLICY_VERSION = 'flat-ground-first-v1'
+POLICY_VERSION = 'flat-ground-city-service-balanced-v2'
 DEFAULT_MAX_GRADE = .05
 DEFAULT_MAX_HEIGHT_RANGE = 5.0
 RESERVE_MARGIN_M = 20.0  # Planning allowance, not a verified native upgrade size.
@@ -26,6 +26,19 @@ def preference_key(profile, access_profile, distance):
     return (not flat, not (available and access_available),
             max(profile['maxGroundGrade'] or 0, access_profile['maxGroundGrade'] or 0),
             profile['heightRangeM'] if available else math.inf, distance)
+
+
+def city_preference_key(profile, access_profile, service_distance):
+    """Non-monetary heuristic: small terrain improvements cannot dominate distance.
+
+    Native safety, setbacks and collision checks remain separate hard gates.
+    The score is an estimated distance equivalent, not a construction cost.
+    """
+    unavailable = any(p['outsideSurvey'] or not p['dry'] for p in (profile, access_profile))
+    grade = max(p['maxGroundGrade'] or 0 for p in (profile, access_profile))
+    height = max(p['heightRangeM'] or 0 for p in (profile, access_profile))
+    return (unavailable, service_distance + 10000*max(0, grade-.05) + 30*height,
+            service_distance, grade, height)
 
 
 class FlatTerrain:

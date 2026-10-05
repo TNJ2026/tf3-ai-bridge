@@ -16,6 +16,7 @@ api.engine.getComponent=function(id,ct)
   return {edges={{transportModes={[2]=true,[4]=true},conns={n(e.node0,0),n(e.node1,0)}},
                 {transportModes={[2]=true,[4]=true},conns={n(e.node1,1),n(e.node0,1)}}}}
  end
+ if ct==108 and components[id] and components[id][CT.BASE_NODE] then return {nodes={},edges={}}end
  return get(id,ct)
 end
 api.engine.util.pathfinding={findPathNodeToNode=function(from,to,modes)
@@ -84,3 +85,33 @@ def test_healthy_junction_does_not_rebuild(bridge_dir):
         g.lua.execute(NETWORK+'\nrefreshed[STREET_C]=true')
         r=build(Bridge(bridge_dir,timeout=5),g)
         assert r['complete'] and list(g.lua.globals().phases.values())==['build']
+
+
+@pytest.mark.parametrize('preview', [True, False])
+def test_frozen_internal_node_rejected_before_native_proposal(bridge_dir, preview):
+    from tf3_mcp.bridge import BridgeError
+    with FakeGame(bridge_dir) as g:
+        g.lua.execute(NETWORK + '''
+frozen[EDGE_BC]=9000
+components[9000]={[api.type.ComponentType.CONSTRUCTION]={frozenNodes={STREET_C}}}
+api.engine.util.proposal.makeProposalData=function() error('native preview must not run') end
+''')
+        with pytest.raises(BridgeError, match='frozen construction node'):
+            build(Bridge(bridge_dir,timeout=5), g, preview=preview)
+        assert not list(g.lua.globals().phases.values())
+
+
+@pytest.mark.parametrize('target', ['node', 'edge'])
+def test_missing_transport_network_rejected_before_native_preview(bridge_dir, target):
+    from tf3_mcp.bridge import BridgeError
+    with FakeGame(bridge_dir) as g:
+        g.lua.execute(NETWORK)
+        g.lua.execute('''
+local prior=api.engine.getComponent
+local broken=''' + ('STREET_C' if target=='node' else 'EDGE_BC') + '''
+api.engine.getComponent=function(id,ct)if id==broken and ct==108 then return nil end;return prior(id,ct)end
+api.engine.util.proposal.makeProposalData=function()error('native preview must not run')end
+''')
+        with pytest.raises(BridgeError,match='missing TRANSPORT_NETWORK'):
+            build(Bridge(bridge_dir,timeout=5),g,preview=True)
+        assert not list(g.lua.globals().phases.values())

@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "name": "fish_port",
+  "experimental": true,
+  "constructionAuthorized": false,
+  "cargoPolicy": {
+    "allowed": [
+      "fish"
+    ],
+    "oil": "helicopter"
+  },
+  "facilities": [
+    {
+      "role": "warehouse",
+      "resource": "::/warehouses/warehouse.con",
+      "localPosition": {
+        "x": -96.874,
+        "y": 95.459,
+        "z": 0
+      },
+      "relativeRotation": 45.0,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {
+          "632502500": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          }
+        }
+      },
+      "heightPolicy": "terrain"
+    },
+    {
+      "role": "truck",
+      "resource": "::/stations/street/modular_street_station/modular_terminal.con",
+      "localPosition": {
+        "x": -149.907,
+        "y": 42.426,
+        "z": 0
+      },
+      "relativeRotation": 45.0,
+      "params": {
+        "seed": 1,
+        "year": 1960,
+        "modules": {
+          "20010001": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20210001": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20009901": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20209901": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20015503": {
+            "name": "::/stations/street/modular_street_station/entrance_exit.module",
+            "variant": 0
+          }
+        }
+      },
+      "heightPolicy": "terrain"
+    },
+    {
+      "role": "water_maintenance",
+      "resource": "::/depots/water/water_maint_station.con",
+      "localPosition": {
+        "x": 154.7267428690732,
+        "y": -144.36184410495886,
+        "z": 0
+      },
+      "relativeRotation": 254.24900000000002,
+      "params": {
+        "seed": 1,
+        "modules": {}
+      },
+      "heightPolicy": "water_surface"
+    },
+    {
+      "role": "harbor",
+      "resource": "::/stations/water/harbor_modular.con",
+      "localPosition": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0
+      },
+      "relativeRotation": 0,
+      "params": {
+        "seed": 1,
+        "modules": {
+          "100010150": {
+            "name": "::/stations/water/pedestrian_entrance.module",
+            "variant": 0
+          },
+          "99010150": {
+            "name": "::/stations/water/pedestrian_entrance.module",
+            "variant": 0
+          },
+          "99010053": {
+            "name": "::/stations/water/passenger_dock_25_25.module",
+            "variant": 0
+          },
+          "100009804": {
+            "name": "::/stations/water/passenger_dock_50_12.module",
+            "variant": 0
+          },
+          "100009736": {
+            "name": "::/stations/water/small_pier.module",
+            "variant": 0
+          }
+        }
+      },
+      "heightPolicy": "water_surface"
+    }
+  ],
+  "roads": [
+    {
+      "node0": "ACCESS",
+      "node1": "TRUCK_PORT",
+      "position0": {
+        "x": -96.87399141100894,
+        "y": -10.607008588991064,
+        "z": 0
+      },
+      "position1": {
+        "x": -139.3003982822018,
+        "y": 31.81939828220179,
+        "z": 0
+      },
+      "tangent0": {
+        "x": -42.42640687119285,
+        "y": 42.42640687119285,
+        "z": 0
+      },
+      "tangent1": {
+        "x": -42.42640687119285,
+        "y": 42.42640687119285,
+        "z": 0
+      },
+      "roadTemplate": "country/country_new_small",
+      "roadStyle": ""
+    }
+  ],
+  "rolePortNodes": {
+    "truck": [
+      "TRUCK_PORT"
+    ]
+  },
+  "externalConnectionNode": "ACCESS",
+  "requirements": [
+    "Fresh destination shoreline and land survey",
+    "Maintenance shore offset and orientation must be adapted per destination; never reuse old water_depot position",
+    "Public road connection designed separately",
+    "No automatic terrain editing",
+    "Ship acquisition is not assumed from maintenance capability"
+  ],
+  "validation": {
+    "nativeJointPreviewPassed": true,
+    "scope": "Haikou test save only, origin 1360,-2195, rotation 45; fresh preview required at every destination",
+    "evidence": "exports/fish_port_shore_revision_20261004/joint_paths/preview.json",
+    "truckInternalPathsVerified": true,
+    "constructionTested": false,
+    "operationalAccepted": false,
+    "externalRoadConnectionVerified": false,
+    "sourceCoordinatesNotBuildableProof": true
+  }
+}
