@@ -10,7 +10,7 @@ def compile_spec(template):
     roles={f['role'] for f in template['facilities']}
     marine_air=roles in ({'harbor','water_maintenance','helipad','helipad2','warehouse'},{'harbor','water_maintenance','water_depot','helipad','helipad2','warehouse'})
     marine=marine_air or roles=={'harbor','water_maintenance','truck','warehouse'}
-    if not marine and roles not in ({'bus','truck','warehouse','heliport'},{'bus','truck','warehouse','heliport','road_depot'},{'bus','truck','warehouse','heliport','road_depot','road_maintenance'},{'helipad','truck','warehouse'},{'helipad','helipad2','truck','warehouse'}) or len(template['facilities'])!=len(roles):
+    if not marine and roles not in ({'heliport','truck','warehouse','road_maintenance'},{'bus','truck','warehouse','heliport'},{'bus','truck','warehouse','heliport','road_depot'},{'bus','truck','warehouse','heliport','road_depot','road_maintenance'},{'helipad','truck','warehouse'},{'helipad','helipad2','truck','warehouse'}) or len(template['facilities'])!=len(roles):
         raise ValueError('Expected city hub or production helipad hub roles')
     for f in template['facilities']:
         if f['role']=='road_maintenance':
@@ -67,6 +67,8 @@ def compile_spec(template):
             'nativeJointPreviewPassed':False,'connectionsVerified':False,
             'facilities':copy.deepcopy(template['facilities']),
             'requiresNativePortRefresh':template.get('requiresNativePortRefresh',False),
+            'hydrateModules':template.get('hydrateModules',False),
+            'requireWalkingPreview':template.get('requireWalkingPreview',False),
             'configuration':copy.deepcopy(template.get('configuration')),
             'nodes':[{'name':n,'entity':ids[n],'position':p}for n,p in sorted(nodes.items())],
             'roads':roads,'portBindings':bindings,
@@ -123,7 +125,7 @@ local proposal=api.type.SimpleProposal.new();local constructions={};local nodes=
 for _,f in ipairs(spec.facilities)do
  local c=api.type.SimpleProposal.ConstructionEntity.new();local p=point(f.localPosition,f.heightPolicy)
  local modules={};for slot,m in pairs(f.params.modules or{})do local id=assert(tonumber(slot),'Module slot must be numeric');assert(id%1==0,'Module slot must be integral')
- if spec.collectionKind=='fish_port' then
+ if spec.collectionKind=='fish_port' or spec.hydrateModules then
   local rid=api.res.moduleRep.find(m.name);assert(rid>=0,'Missing module '..m.name);local d=api.res.moduleRep.get(rid)
   m={name=m.name,variant=m.variant or 0,metadata=d.metadata,updateScript={fileName=d.updateScript.fileName,params=d.updateScript.params}}
  end;modules[id]=m end;f.params.modules=modules

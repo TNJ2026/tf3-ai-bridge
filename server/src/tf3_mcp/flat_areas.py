@@ -8,7 +8,7 @@ from collections import deque
 
 from .development_planner import grid_bounds, number, validate_snapshot
 
-POLICY_VERSION = 'flat-ground-city-service-balanced-v2'
+POLICY_VERSION = 'flat-ground-production-nearest-feasible-v3'
 DEFAULT_MAX_GRADE = .05
 DEFAULT_MAX_HEIGHT_RANGE = 5.0
 RESERVE_MARGIN_M = 20.0  # Planning allowance, not a verified native upgrade size.
@@ -39,6 +39,16 @@ def city_preference_key(profile, access_profile, service_distance):
     height = max(p['heightRangeM'] or 0 for p in (profile, access_profile))
     return (unavailable, service_distance + 10000*max(0, grade-.05) + 30*height,
             service_distance, grade, height)
+
+
+def production_preference_key(profile, access_profile, service_distance, direct_distance):
+    """Prefer near production sites within the same terrain feasibility class.
+
+    This is a coarse ranking only; collision, access and native checks still gate
+    selection. Minor slope differences do not justify a longer collection trip.
+    """
+    terrain = preference_key(profile, access_profile, service_distance)
+    return (*terrain[:2], service_distance, direct_distance, *terrain[2:4])
 
 
 class FlatTerrain:

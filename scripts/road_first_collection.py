@@ -5,7 +5,7 @@ from fullmap_batch import Batch, StopBatch, batch_lock, quote, unfinished, write
 from build_joint_collection import prepare
 from hub_joint_prototype import probe
 from commit_joint_test import GUARD
-from verify_joint_test import AUDIT, acceptance
+from verify_joint_test import AUDIT, acceptance, expected_roadside_offsets
 
 WALK = Path(__file__).with_name('road_first_walk.lua').read_text('utf8')
 SNAP_HEIGHT = Path(__file__).with_name('road_snap_height.lua').read_text('utf8')
@@ -107,6 +107,7 @@ async def facility_readback(b,hub,spec,commit,road_commit):
     ids=copy.deepcopy(commit['added']);ids['edges']+=road_commit['added']['edges']
     by_id={f['id']:f for f in b.p['facilities']}
     expected={role:by_id[fid]['position']for role,fid in hub['facilities'].items()}
+    expected=expected_roadside_offsets(expected,spec)
     tasks=[by_id[fid]for fid in hub['facilities'].values()]
     current=await b.read_facilities(tasks,'verify',with_session=True)
     if not all(r['result'].get('audit',{}).get('staticVerified')for r in current):raise StopBatch('Facility pose/resource readback failed')
@@ -155,7 +156,7 @@ end;return B.json.encode(out)'''
         if planned!=actual:audit['moduleDifferences'][f['role']]={
             'added':sorted(set(actual)-set(planned)), 'removed':sorted(set(planned)-set(actual)),
             'changed':sorted(k for k in set(actual)&set(planned)if actual[k]!=planned[k])}
-    audit['staticAccepted']=acceptance(audit,False);audit['operationalAccepted']=False
+    audit['staticAccepted']=acceptance(audit,False,spec);audit['operationalAccepted']=False
     if snaps and not all(r['verified'] for r in audit['roadsideAlignment'].values()):
         audit['staticAccepted']=False;audit['placementAccepted']=False
     write_json(evidence_dir(b,hub['owner'])/'verification.json',audit)

@@ -60,7 +60,8 @@ if f.road_maintenance then
    if l>0 then local u=((snap.x-a.x)*dx+(snap.y-a.y)*dy)/l;if u>=0 and u<=1 then nearest=math.min(nearest,math.sqrt((snap.x-a.x-u*dx)^2+(snap.y-a.y-u*dy)^2))end end
   end
  end
- out.maintenance={serviceVerified=service,roadsideDistance=nearest<math.huge and nearest or nil,roadsideVerified=math.abs(nearest-7)<.5}
+ local expectedOffset=(expected.road_maintenance or{}).roadsideOffsetM or 7
+ out.maintenance={serviceVerified=service,roadsideDistance=nearest<math.huge and nearest or nil,expectedRoadsideOffset=expectedOffset,roadsideVerified=math.abs(nearest-expectedOffset)<.5}
 end
 if f.bus then local a,b=nodes(stations('bus'),0),nodes(stations('heliport'),0)
 -- Node-only pathfinding does not establish transfer reachability across automatic TP links.
@@ -96,6 +97,14 @@ return B.json.encode(out)
 
 AUDIT = AUDIT.replace('TRANSFER_HELPER', Path(__file__).with_name('station_walk_transfer.lua').read_text('utf8'))
 
+def expected_roadside_offsets(expected, spec):
+    """Carry template geometry into readback without mutating plan positions."""
+    result={role:dict(position) for role,position in expected.items()}
+    for f in spec['facilities']:
+        if f['role']=='road_maintenance' and f['role'] in result:
+            result[f['role']]['roadsideOffsetM']=f.get('roadSnap',{}).get('roadsideOffsetM',7)
+    return result
+
 async def main():
  p=argparse.ArgumentParser();p.add_argument('--preview',required=True,type=Path);p.add_argument('--defer-walking',action='store_true');a=p.parse_args();out=a.preview
  commit=json.loads((out/'commit_result.json').read_text('utf8'));spec=json.loads((out/'joint_spec.json').read_text('utf8'))
@@ -108,11 +117,12 @@ async def main():
   import math
   origin=json.loads((out/'receipt.json').read_text('utf8'))['origin'];angle=math.radians(origin['rotation']);cs,sn=math.cos(angle),math.sin(angle)
   expected={f['role']:{'x':origin['x']+cs*f['localPosition']['x']-sn*f['localPosition']['y'],'y':origin['y']+sn*f['localPosition']['x']+cs*f['localPosition']['y']}for f in spec['facilities']}
+  expected=expected_roadside_offsets(expected,spec)
   code=AUDIT.replace('IDS',quote(commit['added'])).replace('EXPECTED',quote(expected));atomic_write(out/'verify.lua',code)
   r=await call(pre+code)
   norm=lambda d:{str(k):(v['name'],v.get('variant',0))for k,v in (d or {}).items()}
   r['modulesVerified']=all(norm(f['params'].get('modules'))==norm(r['facilities'][f['role']]['params'].get('modules'))for f in spec['facilities'])
-  r['staticAccepted']=acceptance(r,a.defer_walking)
+  r['staticAccepted']=acceptance(r,a.defer_walking,spec)
   r['operationalAccepted']=False;r['externalPublicConnectionVerified']=False
   write_json(out/'verification.json',r)
   import hashlib
@@ -125,17 +135,42 @@ async def main():
    prev=sig;await asyncio.sleep(.5)
   else:raise StopBatch('Checkpoint not confirmed')
   r['save']={'path':str(path),'signature':sig};write_json(out/'verification.json',r);print(json.dumps(r,ensure_ascii=False))
-def acceptance(result,defer_walking=False):
- # Deferral changes the placement gate only; actual failed walking results remain visible.
- vehicle_paths=all(v['verified']for role,pair in result['paths'].items()if role!='walking'for v in pair.values())
- walking=all(v['verified']for v in result['paths'].get('walking',{}).values())
- linked=not result['airportRoadLinkRequired']or result['airportRoadLinkVerified']
- maintenance=result.get('maintenance',{});maintenance_ok=True
- if 'road_maintenance' in result.get('facilities',{}):
-  maintenance_ok=maintenance.get('serviceVerified',False) and maintenance.get('roadsideVerified',False)
- core=maintenance_ok and result['modulesVerified']and all(all(row[k]for k in ('baseEdge','network','node0Network','node1Network'))for row in result['roads'])and all(result['coverage'].values())and vehicle_paths
- result['placementAccepted']=core and (defer_walking or (walking and linked))
+def acceptance(result,defer_walking=False,spec=None):
+ # Missing evidence is a failure, never an empty all() success.
+ errors=[]
+ def require(ok,label):
+  if not ok:errors.append(label)
+  return bool(ok)
+ facilities=result.get('facilities',{})
+ roles={f['role'] for f in spec['facilities']} if spec else set(facilities)
+ require(bool(roles) and set(facilities)==roles,'facility_roles')
+ require({'warehouse','truck'}<=roles and bool(roles & {'heliport','helipad'}),'required_roles')
+ roads=result.get('roads',[])
+ require(isinstance(roads,list) and bool(roads),'roads_missing')
+ if spec:require(len(roads)>=len(spec['roads']),'roads_incomplete')
+ for row in roads:
+  require(all(row.get(k) is True for k in ('baseEdge','network','node0Network','node1Network')),'road_network')
+ require(result.get('modulesVerified') is True,'modules')
+ coverage=result.get('coverage',{})
+ for role in roles & {'heliport','helipad','helipad2','truck'}:
+  require(coverage.get(role) is True,'coverage:'+role)
+ paths=result.get('paths',{})
+ def pair_ok(role,keys):
+  pair=paths.get(role,{})
+  return all(isinstance(pair.get(k),dict) and pair[k].get('verified') is True for k in keys)
+ for role in roles & {'truck','bus','road_depot'}:
+  keys=('out_3','in_3','out_4','in_4') if role=='road_depot' else ('inbound','outbound')
+  require(pair_ok(role,keys),'path:'+role)
+ if 'road_maintenance' in roles:
+  require(all(result.get('maintenance',{}).get(k) is True for k in ('serviceVerified','roadsideVerified')),'maintenance')
+ linked='heliport' not in roles or result.get('airportRoadLinkVerified') is True
+ require(linked,'airport_road_link')
+ core=not errors
+ walking='bus' not in roles or pair_ok('walking',('inbound','outbound'))
+ if not walking:errors.append('walking')
+ result['acceptanceFailures']=errors
+ result['placementAccepted']=core and (defer_walking or walking)
  result['walkingDeferred']=defer_walking
- return core and walking and linked
+ return core and walking
 
 if __name__=='__main__':asyncio.run(main())

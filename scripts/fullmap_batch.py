@@ -18,11 +18,18 @@ def preview_ok(r):return r.get('previewPassed')is True
 
 def unfinished(ledger):return[k for k,v in ledger['items'].items()if v.get('attempts',0)>0 and v.get('status')not in ['static_verified','connection_verified','not_applicable','reconciled_rejected']]
 
-def save_slot(phase,plan_digest):
+def map_save_key(plan):
+ # Town centres survive plan revisions, renaming and resource exploration.
+ # Do not use mutable industries, task IDs, or plan bytes as a save identity.
+ points=sorted((round(t['position']['x'],2),round(t['position']['y'],2)) for t in plan['cities'])
+ if not points:raise StopBatch('Cannot identify map save slot without town centres')
+ return hashlib.sha256(json.dumps(points,separators=(',',':')).encode()).hexdigest()[:16]
+
+def save_slot(phase,map_key):
  # Keep recovery baselines and abnormal-world evidence outside the rolling slot.
  if 'before' in phase.split('_') or any(word in phase for word in ('map_changed','failure','crash','diagnostic')):
   return 'tf3_fullmap_'+phase+'_'+time.strftime('%Y%m%d_%H%M%S')+'_'+uuid.uuid4().hex[:6],False
- return 'tf3_fullmap_auto_'+plan_digest[:16],True
+ return 'tf3_fullmap_auto_map_'+map_key[:16],True
 
 def save_signature(path):
  try:
@@ -80,9 +87,10 @@ class Batch:
   self.prev=state;self.ledger['lastState']=state;self.flush();return state
  @timed_stage('save')
  async def save(self,phase):
-  name,rolling=save_slot(phase,self.ledger['planDigest']);path=self.b.dir.parent/'save'/(name+'.sav')
+  key=map_save_key(self.p)
+  name,rolling=save_slot(phase,key);path=self.b.dir.parent/'save'/(name+'.sav')
   baseline=save_signature(path)
-  event={'nativeSaveRequested':name,'phase':phase,'rolling':rolling,'replacesExisting':baseline is not None,'requestedAt':time.time()};self.ledger['events'].append(event);self.flush()
+  event={'nativeSaveRequested':name,'phase':phase,'mapSaveKey':key,'rolling':rolling,'replacesExisting':baseline is not None,'requestedAt':time.time()};self.ledger['events'].append(event);self.flush()
   await self.call('eval',{'code':f'app.saveGame("{name}",function() end,false,true);return {{requested=true}}'},False)
   previous=None
   for _ in range(60):

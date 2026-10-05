@@ -1,408 +1,57 @@
 {
+  "schema": 1,
+  "name": "生产集合 · 显示四设施布局 · 中型乡村公路",
+  "anchorRole": "heliport",
+  "coordinateFrame": "local XY rotated with aviation facility; relative Z must be revalidated against destination terrain",
+  "sourceEvidence": {
+    "state": {
+      "gameTime": 2055400,
+      "accountBalance": 0,
+      "date": {
+        "day": 28,
+        "year": 1961,
+        "month": 5
+      },
+      "player": 44942,
+      "speedup": 0,
+      "loan": 0,
+      "tickCount": 57077,
+      "timeOfDaySec": 52294,
+      "millisPerDay": 4000,
+      "world": 2
+    },
+    "origin": {
+      "z": 2.0203342437744,
+      "y": -5354.2783203125,
+      "x": -998.10821533203
+    },
+    "rotation": 45.55665513411289,
+    "facilities": {
+      "road_maintenance": 79174,
+      "warehouse": 77866,
+      "heliport": 77862,
+      "truck": 79185
+    }
+  },
   "facilities": [
     {
       "role": "heliport",
       "resource": "::/stations/air/heliport.con",
       "localPosition": {
-        "x": 0,
-        "y": 67
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
       },
       "relativeRotation": 0.0,
       "params": {
-        "year": 1960,
-        "seed": 1,
         "modules": {
           "1000": {
-            "updateScript": {
-              "fileName": "::/stations/air/heliport/modules.script@updateFn",
-              "params": {
-                "generatedData": {
-                  "lanes": {
-                    "curves": {
-                      "hangar_01": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "drivein": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ],
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ],
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "in": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ],
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ]
-                    }
-                  },
-                  "lane_terminal_helipad": {
-                    "curves": {
-                      "lane_terminal_helipad_01": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "lane_terminal_helipad_02": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ]
-                    }
-                  },
-                  "static": {
-                    "curves": {
-                      "ground_face": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "collider": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ]
-                    },
-                    "models": {
-                      "::/stations/air/heliport/heliport_module.mdl": [
-                        [
-                          1,
-                          0,
-                          0,
-                          0,
-                          0,
-                          1,
-                          0,
-                          0,
-                          0,
-                          0,
-                          1,
-                          0,
-                          0,
-                          0,
-                          0,
-                          1
-                        ]
-                      ]
-                    },
-                    "meshes": {
-                      "greater": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "equal": [
-                        [
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ],
-                      "less": [
-                        [
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>",
-                          "<max depth>"
-                        ]
-                      ]
-                    }
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "maintenanceCost": 30000,
-              "emissionConfig": {
-                "pollution": 40,
-                "noise": 20
-              },
-              "price": 180000
-            },
             "name": "::/stations/air/heliport/landing_module.module",
             "variant": 0
           }
-        }
-      },
-      "upgradeReserveM": {
-        "maxY": 50
+        },
+        "year": 1960,
+        "seed": 1
       },
       "footprintBounds": {
         "min": {
@@ -413,74 +62,65 @@
           "x": 52.95,
           "y": 53.69
         }
+      },
+      "upgradeReserveM": {
+        "minY": 10
       }
     },
     {
-      "role": "warehouse",
-      "resource": "::/warehouses/warehouse.con",
+      "role": "road_maintenance",
+      "resource": "::/depots/road/road_maint_station.con",
       "localPosition": {
-        "x": 110,
-        "y": 25
+        "x": -4.002644986760025,
+        "y": -99.99986287569607,
+        "z": 0.03908419609070002
       },
-      "relativeRotation": 0.0,
+      "relativeRotation": -180.00000000000003,
       "params": {
-        "upgrade": true,
+        "modules": {},
         "year": 1961,
-        "seed": 7,
-        "modules": {
-          "642502540": {
-            "name": "::/warehouses/wh_universal.module",
-            "variant": 0
-          },
-          "642502500": {
-            "name": "::/warehouses/wh_liquid.module",
-            "variant": 0
-          },
-          "632502540": {
-            "name": "::/warehouses/wh_universal.module",
-            "variant": 0
-          },
-          "632502500": {
-            "name": "::/warehouses/wh_universal.module",
-            "variant": 0
-          },
-          "652502540": {
-            "name": "::/warehouses/wh_universal.module",
-            "variant": 0
-          },
-          "652502500": {
-            "name": "::/warehouses/wh_liquid.module",
-            "variant": 0
-          }
-        }
-      },
-      "upgradeReserveM": {
-        "maxX": 50,
-        "maxY": 30
+        "seed": 3
       },
       "footprintBounds": {
         "min": {
-          "x": -52.84,
-          "y": -18.5
+          "x": -16,
+          "y": -16
         },
         "max": {
-          "x": 68.94,
-          "y": 140.04
+          "x": 16,
+          "y": 16
         }
+      },
+      "upgradeReserveM": {
+        "minY": 10
+      },
+      "roadSnap": {
+        "localPoint": {
+          "x": 0,
+          "y": -16
+        },
+        "target": {
+          "x": -4.00264498676002,
+          "y": -83.99986287569607
+        },
+        "roadPoint": {
+          "x": -4.002647839143428,
+          "y": -72.00000991592248
+        },
+        "roadsideOffsetM": 11.99985295977393,
+        "requiredNativeVerification": true
       }
     },
     {
       "role": "truck",
       "resource": "::/stations/street/modular_street_station/modular_terminal.con",
       "localPosition": {
-        "x": 110,
-        "y": -55
+        "x": 113.08564075371588,
+        "y": -108.9992639277429,
+        "z": -1.0681895613670198
       },
-      "relativeRotation": 180.0,
+      "relativeRotation": -179.99987682568698,
       "params": {
-        "upgrade": true,
-        "year": 1960,
-        "seed": 1,
         "modules": {
           "20009901": {
             "name": "::/stations/street/modular_street_station/cargo_platform.module",
@@ -534,11 +174,13 @@
             "name": "::/stations/street/modular_street_station/cargo_platform.module",
             "variant": 0
           }
-        }
-      },
-      "upgradeReserveM": {
-        "minX": 30,
-        "maxY": 40
+        },
+        "year": 1961,
+        "seed": 6,
+        "specialization": 1,
+        "tramTrack": 1,
+        "upgrade": true,
+        "platforms": 1
       },
       "footprintBounds": {
         "min": {
@@ -549,373 +191,265 @@
           "x": 42.64,
           "y": 37.13
         }
+      },
+      "upgradeReserveM": {
+        "minY": 10
       }
     },
     {
-      "role": "bus",
-      "resource": "::/stations/street/modular_street_station/modular_terminal.con",
+      "role": "warehouse",
+      "resource": "::/warehouses/warehouse.con",
       "localPosition": {
-        "x": -20,
-        "y": -55
+        "x": 107.08052353132862,
+        "y": -41.99977136144303,
+        "z": -1.0097178220749
       },
-      "relativeRotation": 180.0,
+      "relativeRotation": 0.00016663931813247048,
       "params": {
-        "year": 1960,
-        "seed": 1,
         "modules": {
-          "20209900": {
-            "updateScript": {
-              "fileName": "::/stations/street/modular_street_station/modules.script@passengerPlatform.updateFn",
-              "params": []
-            },
-            "metadata": {
-              "maintenanceCost": 10000,
-              "emissionConfig": {
-                "pollution": 5,
-                "noise": 1
-              },
-              "passenger": true,
-              "price": 60000
-            },
-            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+          "642502540": {
+            "name": "::/warehouses/wh_universal.module",
             "variant": 0
           },
-          "20210000": {
-            "updateScript": {
-              "fileName": "::/stations/street/modular_street_station/modules.script@passengerPlatform.updateFn",
-              "params": []
-            },
-            "metadata": {
-              "maintenanceCost": 10000,
-              "emissionConfig": {
-                "pollution": 5,
-                "noise": 1
-              },
-              "passenger": true,
-              "price": 60000
-            },
-            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+          "642502500": {
+            "name": "::/warehouses/wh_liquid.module",
             "variant": 0
           },
-          "20009900": {
-            "updateScript": {
-              "fileName": "::/stations/street/modular_street_station/modules.script@passengerPlatform.updateFn",
-              "params": []
-            },
-            "metadata": {
-              "maintenanceCost": 10000,
-              "emissionConfig": {
-                "pollution": 5,
-                "noise": 1
-              },
-              "passenger": true,
-              "price": 60000
-            },
-            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+          "632502540": {
+            "name": "::/warehouses/wh_universal.module",
             "variant": 0
           },
-          "20010000": {
-            "updateScript": {
-              "fileName": "::/stations/street/modular_street_station/modules.script@passengerPlatform.updateFn",
-              "params": []
-            },
-            "metadata": {
-              "maintenanceCost": 10000,
-              "emissionConfig": {
-                "pollution": 5,
-                "noise": 1
-              },
-              "passenger": true,
-              "price": 60000
-            },
-            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+          "632502500": {
+            "name": "::/warehouses/wh_universal.module",
             "variant": 0
           },
-          "20015503": {
-            "updateScript": {
-              "fileName": "::/stations/street/modular_street_station/modules.script@entranceExit.updateFn",
-              "params": []
-            },
-            "metadata": {
-              "catchmentCargo": {
-                "radius": 175
-              },
-              "emissionConfig": {
-                "pollution": 10,
-                "noise": 1
-              },
-              "catchmentPassenger": {
-                "radius": 175
-              },
-              "price": 6000,
-              "maintenanceCost": 1000,
-              "entrance": true,
-              "exit": true
-            },
-            "name": "::/stations/street/modular_street_station/entrance_exit.module",
+          "652502540": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          },
+          "652502500": {
+            "name": "::/warehouses/wh_liquid.module",
             "variant": 0
           }
-        }
-      },
-      "upgradeReserveM": {
-        "maxY": 20
-      },
-      "footprintBounds": {
-        "min": {
-          "x": -20.01,
-          "y": -27.58
         },
-        "max": {
-          "x": 20.01,
-          "y": 25.17
-        }
-      }
-    },
-    {
-      "role": "road_depot",
-      "resource": "::/depots/road/road_depot/road_depot.con",
-      "localPosition": {
-        "x": -100,
-        "y": -55
-      },
-      "relativeRotation": 180.0,
-      "params": {
         "year": 1960,
-        "seed": 1,
-        "modules": []
-      },
-      "upgradeReserveM": {
-        "maxX": 20,
-        "maxY": 20
+        "seed": 7,
+        "upgrade": true
       },
       "footprintBounds": {
         "min": {
-          "x": -17.81,
-          "y": -33.0
+          "x": -52.84,
+          "y": -18.5
         },
         "max": {
-          "x": 38.75,
-          "y": 20.01
-        }
-      }
-    },
-    {
-      "role": "road_maintenance",
-      "resource": "::/depots/road/road_maint_station.con",
-      "localPosition": {
-        "x": -200,
-        "y": -23
-      },
-      "relativeRotation": 180,
-      "params": {
-        "year": 1960,
-        "seed": 1,
-        "modules": []
-      },
-      "footprintBounds": {
-        "min": {
-          "x": -16,
-          "y": -16
-        },
-        "max": {
-          "x": 16,
-          "y": 16
+          "x": 68.94,
+          "y": 140.04
         }
       },
       "upgradeReserveM": {
-        "maxX": 20,
-        "maxY": 20
-      },
-      "roadSnap": {
-        "localPoint": {
-          "x": 0,
-          "y": -16
-        },
-        "target": {
-          "x": -200,
-          "y": -7
-        },
-        "roadPoint": {
-          "x": -200,
-          "y": 0
-        }
-      },
-      "footprintBasis": "Conservative planning estimate, not live measured; native footprint/collision preview required",
-      "serviceExpectation": {
-        "radius": 600,
-        "maintenancePool": 16,
-        "transportModes": [
-          "BUS",
-          "TRUCK",
-          "TRAM",
-          "ELECTRIC_TRAM"
-        ]
+        "minY": 10
       }
     }
   ],
   "roads": [
     {
-      "node0": 10,
-      "node1": 9,
+      "id": "ROAD0",
+      "node0": "N0",
+      "node1": "N5",
       "position0": {
-        "x": -255,
-        "y": 0
+        "x": 31.022847795588664,
+        "y": -72.0000015903086,
+        "z": -0.29310798645019975
       },
       "position1": {
-        "x": -200,
-        "y": 0
+        "x": 113.08538054846703,
+        "y": -71.99943899592076,
+        "z": -1.0681895613670198
       },
-      "roadTemplate": "country/country_new_small",
+      "tangent0": {
+        "x": 82.06208557847698,
+        "y": 7.05942890064648e-05,
+        "z": -0.63965725898743
+      },
+      "tangent1": {
+        "x": 82.06219174167026,
+        "y": 0.00016937127960403586,
+        "z": -0.7923681139946
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
       "buildPhase": "frontage"
     },
     {
-      "node0": 9,
-      "node1": 0,
+      "id": "ROAD1",
+      "node0": "N5",
+      "node1": "N4",
       "position0": {
-        "x": -200,
-        "y": 0
+        "x": 113.08538054846703,
+        "y": -71.99943899592076,
+        "z": -1.0681895613670198
       },
       "position1": {
-        "x": -155,
-        "y": 0
+        "x": 166.79470976113853,
+        "y": -71.99971612441146,
+        "z": -0.7624835968016999
       },
-      "roadTemplate": "country/country_new_small",
+      "tangent0": {
+        "x": 53.70932486836575,
+        "y": 0.00010865991219333182,
+        "z": -0.51860123872757
+      },
+      "tangent1": {
+        "x": 53.70932984361032,
+        "y": 6.545116421463604e-05,
+        "z": 0.4087994992733
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
       "buildPhase": "frontage"
     },
     {
-      "node0": 0,
-      "node1": 1,
+      "id": "ROAD2",
+      "node0": "N1",
+      "node1": "N0",
       "position0": {
-        "x": -155,
-        "y": 0
+        "x": -57.04368114424262,
+        "y": -72.0000225238572,
+        "z": 0.24734306335450018
       },
       "position1": {
-        "x": -100,
-        "y": 0
+        "x": 31.022847795588664,
+        "y": -72.0000015903086,
+        "z": -0.29310798645019975
       },
-      "roadTemplate": "country/country_new_small",
+      "tangent0": {
+        "x": 88.06664542043782,
+        "y": 7.105486891845203e-05,
+        "z": 0.46911498904228
+      },
+      "tangent1": {
+        "x": 88.0666481439147,
+        "y": 7.372593366739011e-05,
+        "z": -0.68646156787872
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
       "buildPhase": "frontage"
     },
     {
-      "node0": 1,
-      "node1": 2,
+      "id": "ROAD3",
+      "node0": "N2",
+      "node1": "N1",
       "position0": {
-        "x": -100,
-        "y": 0
+        "x": -145.10998969019073,
+        "y": -71.99957083420037,
+        "z": -1.2313327789306499
       },
       "position1": {
-        "x": -20,
-        "y": 0
+        "x": -57.04368114424262,
+        "y": -72.0000225238572,
+        "z": 0.24734306335450018
       },
-      "roadTemplate": "country/country_new_small",
+      "tangent0": {
+        "x": 88.06665076256732,
+        "y": 6.560791516108111e-05,
+        "z": 0.55884122848511
+      },
+      "tangent1": {
+        "x": 88.06664542043782,
+        "y": 7.105486891845203e-05,
+        "z": 0.46911498904228
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
       "buildPhase": "frontage"
     },
     {
-      "node0": 2,
-      "node1": 3,
+      "id": "ROAD4",
+      "node0": "N3",
+      "node1": "N2",
       "position0": {
-        "x": -20,
-        "y": 0
+        "x": -233.1768244980598,
+        "y": -71.99997723975291,
+        "z": -0.8703327178954998
       },
       "position1": {
-        "x": 0,
-        "y": 0
+        "x": -145.10998969019073,
+        "y": -71.99957083420037,
+        "z": -1.2313327789306499
       },
-      "roadTemplate": "country/country_new_small",
+      "tangent0": {
+        "x": 88.06665626193393,
+        "y": 7.634458699357083e-05,
+        "z": -0.36099940538406
+      },
+      "tangent1": {
+        "x": 88.06665076256732,
+        "y": 6.560791516108111e-05,
+        "z": 0.55884122848511
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
       "buildPhase": "frontage"
-    },
-    {
-      "node0": 3,
-      "node1": 4,
-      "position0": {
-        "x": 0,
-        "y": 0
-      },
-      "position1": {
-        "x": 110,
-        "y": 0
-      },
-      "roadTemplate": "country/country_new_small",
-      "buildPhase": "frontage"
-    },
-    {
-      "node0": 4,
-      "node1": 5,
-      "position0": {
-        "x": 110,
-        "y": 0
-      },
-      "position1": {
-        "x": 170,
-        "y": 0
-      },
-      "roadTemplate": "country/country_new_small",
-      "buildPhase": "frontage"
-    },
-    {
-      "node0": 4,
-      "node1": 6,
-      "position0": {
-        "x": 110,
-        "y": 0
-      },
-      "position1": {
-        "x": 110.0,
-        "y": -25
-      },
-      "roadTemplate": "country/country_new_small",
-      "bindRole": "truck",
-      "buildPhase": "entrance"
-    },
-    {
-      "node0": 2,
-      "node1": 7,
-      "position0": {
-        "x": -20,
-        "y": 0
-      },
-      "position1": {
-        "x": -19.999999999999996,
-        "y": -25
-      },
-      "roadTemplate": "country/country_new_small",
-      "bindRole": "bus",
-      "buildPhase": "entrance"
-    },
-    {
-      "node0": 1,
-      "node1": 8,
-      "position0": {
-        "x": -100,
-        "y": 0
-      },
-      "position1": {
-        "x": -100.0,
-        "y": -20
-      },
-      "roadTemplate": "country/country_new_small",
-      "bindRole": "road_depot",
-      "buildPhase": "entrance"
     }
   ],
+  "stationPortNodes": [
+    "N5"
+  ],
+  "externalBoundaries": [],
   "rolePortNodes": {
     "truck": [
-      6
-    ],
-    "bus": [
-      7
-    ],
-    "road_depot": [
-      8
+      "N5"
     ]
   },
-  "schema": 1,
-  "name": "city",
+  "sourceRoadConnected": {
+    "truck": true
+  },
+  "sourceCoverage": {
+    "heliport": true,
+    "truck": true
+  },
+  "nativeJointPreviewPassed": false,
   "constructionAuthorized": false,
-  "validationScope": "Six-facility template with roadside maintenance added offline 2026-10-05. Existing five-facility source capture is provenance only. New layout requires fresh native preview and maintenance/roadside readback; not live built or reload tested.",
-  "planningRevision": "city-road-first-maintenance-v3",
-  "upgradeReserveBasis": "Estimated outward planning clearance in facility-local axes, rotated with each facility; not measured upgrade dimensions. Native module/entrance/coverage checks required.",
-  "placementMode": "road-first",
-  "sourceCapture": "exports/city_template_current_20261004/capture.json",
-  "footprintBasis": "Observed construction BOUNDING_VOLUME, inverse-rotated from axis-aligned live poses and rounded outward to 0.01 m; includes engine clearance. New sites require fresh native previews."
+  "requirements": [
+    "Fresh destination terrain and obstacles",
+    "Joint native proposal at destination before construction",
+    "Resolve new truck external port; never reuse source IDs",
+    "Verify all shared stock types and capacities",
+    "Verify road turns, airport auto links and external road reachability"
+  ],
+  "limits": [
+    "Existing expansion modules preserved; no extra upgrade modules invented",
+    "Expansion slots are structural possibilities, not reserved collision-free land",
+    "Road styles and tangents preserved; construction-owned entrance generated by native facility",
+    "Source external junctions must be redesigned for each destination"
+  ],
+  "planningRevision": "production-displayed-four-facility-v5",
+  "placementMode": "joint",
+  "hydrateModules": true,
+  "requiresNativePortRefresh": true,
+  "requireWalkingPreview": false,
+  "sourceCapture": "exports/current_two_collections_20261005/template_comparison/production_capture.json",
+  "validationScope": "Observed four-facility geometry; destination medium-country native preview and access readback required",
+  "upgradeReserveBasis": "10m outward facility-local estimate; native collision and expansion checks required",
+  "sitingPolicy": {
+    "serviceTarget": "land_production",
+    "layoutSource": "production-displayed-four-facility-v5",
+    "minimumDistanceM": null,
+    "maximumDistanceM": null,
+    "citySetbackApplies": false,
+    "preference": "nearest_feasible_road_service",
+    "terrain": "flat_whole_collection_and_access_first",
+    "checks": [
+      "terrain",
+      "collision",
+      "expansion_reserve",
+      "noise_and_pollution",
+      "town_growth",
+      "shared_inventory",
+      "road_access",
+      "native_joint_preview"
+    ],
+    "sharing": "evaluate_existing_city_and_production_collections_before_new_construction"
+  }
 }

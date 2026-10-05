@@ -5,9 +5,11 @@ from fullmap_workflow import write_json,atomic_write
 
 
 def compile_template(capture):
+    if capture.get('captureRequiresRoadSelection') and not capture.get('internalRoadEdgeIds'):
+        raise ValueError('Explicit internal road selection required before compiling capture')
     fs=capture['facilities'];roles={f['role']:f for f in fs}
     anchor='helipad'if 'helipad'in roles else'heliport'
-    allowed={anchor,'truck','warehouse'}|({'bus','road_depot'}if anchor=='heliport'else {'helipad2'})
+    allowed={anchor,'truck','warehouse'}|({'bus','road_depot','road_maintenance'}if anchor=='heliport'else {'helipad2'})
     if not {anchor,'truck','warehouse'}<=set(roles) or set(roles)-allowed or len(fs)!=len(roles):raise ValueError('Expected one facility per role')
     airport=roles[anchor];origin=airport['position'];angle=math.atan2(airport['transform'][0]['y'],airport['transform'][0]['x']);cs,sn=math.cos(angle),math.sin(angle)
     def local(p,vector=False):
@@ -57,7 +59,7 @@ def compile_template(capture):
             'rolePortNodes':{role:[names[n]for n in sorted(ps)]for role,ps in role_ports.items()},
             'sourceRoadConnected':{role:any(e['node0']in ps or e['node1']in ps for e in selected)for role,ps in role_ports.items()},
             'sourceCoverage':coverage,'nativeJointPreviewPassed':False,'constructionAuthorized':False,
-            'requirements':['Fresh destination terrain and obstacles','Joint native proposal in an isolated test save',
+            'requirements':['Fresh destination terrain and obstacles','Joint native proposal at destination before construction',
                             'Resolve new truck external port; never reuse source IDs','Verify all shared stock types and capacities',
                             'Verify road turns, airport auto links and external road reachability'],
             'limits':['Existing expansion modules preserved; no extra upgrade modules invented',

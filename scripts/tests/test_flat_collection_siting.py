@@ -41,7 +41,7 @@ def test_lazy_and_eager_candidates_have_same_rank_and_geometry():
 
 def test_whole_collection_ranking_checks_upgrade_area_and_prefers_flat_farther_anchor():
     g=dict(x=-500,y=-500,nx=61,ny=21,spacing=50,water=[False]*(61*21),
-           heights=[max(0,25-i%61)*1.5 for i in range(61*21)])
+           heights=[max(0,25-i%61)*6 for i in range(61*21)])
     template=dict(facilities=[dict(role='truck',localPosition=dict(x=0,y=0),relativeRotation=0)],
                   roads=[dict(position0=dict(x=-20,y=0),position1=dict(x=20,y=0))])
     nodes={1:dict(x=0,y=0),2:dict(x=1200,y=0)};before=copy.deepcopy(template)
@@ -159,4 +159,31 @@ def test_city_candidates_exclude_disconnected_road_anchors():
     g=dict(x=-500,y=-500,nx=81,ny=61,spacing=50,heights=[0]*(81*61),water=[False]*(81*61))
     t=dict(facilities=[dict(role='truck',localPosition=dict(x=0,y=0),relativeRotation=0)],roads=[dict(position0=dict(x=-20,y=0),position1=dict(x=20,y=0))])
     rows=collection_candidates(t,[1,2],{1:dict(x=600,y=0),2:dict(x=1000,y=0)},'city',FlatTerrain(g),{'truck':(10,10)},dict(x=0,y=0),city_network_distances={2:1100})
+    assert rows and {r['node']for r in rows}=={2}
+
+
+def test_production_prefers_nearby_feasible_ground_over_tiny_slope_gain():
+    from tf3_mcp.flat_areas import production_preference_key
+    def profile(grade):return dict(outsideSurvey=False,dry=True,flatPreferred=True,maxGroundGrade=grade,heightRangeM=2)
+    near,far=profile(.03),profile(.001)
+    assert production_preference_key(near,near,150,100)<production_preference_key(far,far,1200,900)
+    # A short straight-line distance does not hide a long road detour.
+    assert production_preference_key(near,near,2000,50)>production_preference_key(near,near,200,100)
+
+
+def test_production_has_no_default_radius_or_city_setback_and_records_survey_limit():
+    g=dict(x=-1000,y=-1000,nx=101,ny=41,spacing=50,heights=[0]*(101*41),water=[False]*(101*41))
+    t=dict(facilities=[dict(role='truck',localPosition=dict(x=0,y=0),relativeRotation=0)],roads=[dict(position0=dict(x=-20,y=0),position1=dict(x=20,y=0))])
+    nodes={1:dict(x=0,y=0),2:dict(x=2400,y=0)}
+    args=(t,[1,2],nodes,'production',FlatTerrain(g),{'truck':(10,10)},dict(x=0,y=0))
+    rows=collection_candidates(*args)
+    assert {r['node']for r in rows}=={1,2}
+    assert min(r['productionTruckDirectDistanceM']for r in rows)<100
+    assert {r['node']for r in collection_candidates(*args,search_radius=500)}=={1}
+
+
+def test_production_filters_unreachable_anchor_using_road_network_distance():
+    g=dict(x=-1000,y=-1000,nx=81,ny=41,spacing=50,heights=[0]*(81*41),water=[False]*(81*41))
+    t=dict(facilities=[dict(role='truck',localPosition=dict(x=0,y=0),relativeRotation=0)],roads=[dict(position0=dict(x=-20,y=0),position1=dict(x=20,y=0))])
+    rows=collection_candidates(t,[1,2],{1:dict(x=0,y=0),2:dict(x=800,y=0)},'production',FlatTerrain(g),{'truck':(10,10)},dict(x=0,y=0),city_network_distances={2:1200})
     assert rows and {r['node']for r in rows}=={2}

@@ -8,7 +8,7 @@ from verify_joint_test import AUDIT
 from lupa import LuaRuntime
 
 def template():
-    return json.loads((Path(__file__).resolve().parents[2]/'config/planning_templates/city.json').read_text('utf8'))
+    return json.loads((Path(__file__).resolve().parent/'fixtures/city_road_first_v3.json').read_text('utf8'))
 
 def test_maintenance_survives_planning_and_road_first_compilation():
     t=prepare_template(template(),'city');s=compile_spec(t)
@@ -39,7 +39,7 @@ def test_maintenance_gate_cannot_be_deferred(defer,failed):
     from verify_joint_test import acceptance
     from test_city_joint_collection import result
     r=result();r['airportRoadLinkVerified']=True;r['paths']['walking']['inbound']['verified']=True
-    r['facilities']={'road_maintenance':123}
+    r['facilities']['road_maintenance']={};r['paths']['walking']['outbound']['verified']=True
     r['maintenance']={'serviceVerified':True,'roadsideVerified':True}
     if failed:r['maintenance'][failed]=False
     assert acceptance(r,defer) is (failed is None)

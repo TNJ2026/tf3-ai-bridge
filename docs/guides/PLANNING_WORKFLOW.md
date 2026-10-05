@@ -1,8 +1,8 @@
 # 全图规划准备与耗时优化
 
-2026-10-05 用户修订：取消独立的双停机坪生产集合类型。城市与陆上生产点统一采用完整城市集合：直升机场（使用自身两个降落平台）、仓库、货车站、客车站、公路车库及组内道路。优先复用，不按城市或工厂数量固定新建；捕鱼港口六设施集合保持不变。当前地图及已有设施、线路不改动，此次仅更新文档。
+2026-10-05 当前规则：城市使用六设施城市集合；陆上生产点使用四设施生产集合（直升机场、仓库、货车站、道路维护设施），不含客车站和公路车库。两者采用各自显示布局及中型乡村公路，优先评估复用，不按服务对象数量固定新建。捕鱼港口集合不变，既有设施不自动拆迁。
 
-实现边界：本次未修改配置 JSON 或规划、施工脚本。现有 `production.json`、生产角色校验和线路端点仍为旧双坪实现，不能把本次文档更新视为流水线已支持统一模板；后续新规划须先完成相应适配并验证，禁止直接执行旧生产模板或仅用城市模板路径替换后盲目施工。
+实现状态（2026-10-05）：城市默认模板为 `city-displayed-medium-country-v4`，生产默认模板为 `production-displayed-four-facility-v5`，均采用联合提案。四设施模板、角色校验和提案编译已适配，相关42项离线检查通过；新址原生预览、接路与施工读回仍须执行。旧双坪模板与冻结方案只供追溯。
 
 数量规则以[集合数量与共用规则](GROUPED_CONSTRUCTION_WORKFLOW.md#数量与近邻渔场共用规则)为准：城市与陆上生产点不按对象数固定配套；捕鱼港口每个渔场最多一个，两个渔场中心距离不超过 3000 米可评估共用。布局草稿仍先生成候选；最终网络按实际中转需求过滤未用陆上集合，并按距离、水路初筛及可选吞吐预算为近邻渔场共用完整港口集合。最终数量、服务归属和无分配运量对象见 COLLECTIONS.md 与 collection_quantity_decisions；候选数量不是施工数量。现有集合复用与合计吞吐须实时核验，原生预览前不得施工。
 
@@ -10,15 +10,15 @@
 
 ## 显式模板输入
 
-旧实现（待适配统一城市集合）：`plan_pipeline.py` 默认读取仓库内 `config/planning_templates/city.json` 和 `production.json`，包含设施模块、完整内部接路和独立端口映射。可用 `--city-template`、`--production-template` 显式覆盖。单独使用 `plan_template_map.py` 仍须显式传入这两个模板；不再隐式读取本机 `exports/hub_template_default.json` 等注册表。旧注册表只有 `template` 路径时，应传该路径所指的实际模板文件。模板可以保存在仓库外；相对路径按调用时的工作目录解析。
+当前实现：`plan_pipeline.py` 默认读取仓库内 `config/planning_templates/city.json` 和 `production.json`，包含设施模块、完整内部接路和独立端口映射。可用 `--city-template`、`--production-template` 显式覆盖。单独使用 `plan_template_map.py` 仍须显式传入这两个模板；不再隐式读取本机 `exports/hub_template_default.json` 等注册表。旧注册表只有 `template` 路径时，应传该路径所指的实际模板文件。模板可以保存在仓库外；相对路径按调用时的工作目录解析。
 
-模板顶层须包含 `facilities` 和非空 `roads`。统一规划规则要求城市与陆上生产点均采用城市五设施角色；现有校验实现中，城市设施角色为 `heliport/warehouse/truck/bus/road_depot`；旧生产分支仍为 `helipad/helipad2/warehouse/truck`，每种角色恰好一项。设施包含 `role`、`resource`、`localPosition:{x,y}`、`relativeRotation`（度）和原生 `params`；道路包含局部 `position0/position1:{x,y}`、模板内节点标识 `node0/node1` 和 `roadTemplate`。从已有集合整理模板时，位置应换算到同一局部原点，保留实际资源和模块参数；可附 `rolePortNodes` 描述共享入口。节点标识只描述模板拓扑，不能直接作为当前地图的实体编号。
+模板顶层须包含 `facilities` 和非空 `roads`。当前城市角色为 `heliport/warehouse/truck/bus/road_depot/road_maintenance`；生产角色为 `heliport/warehouse/truck/road_maintenance`，每种角色恰好一项。设施包含 `role`、`resource`、`localPosition:{x,y}`、`relativeRotation`（度）和原生 `params`；道路包含局部 `position0/position1:{x,y}`、模板内节点标识 `node0/node1` 和 `roadTemplate`。从已有集合整理模板时，位置应换算到同一局部原点，保留实际资源和模块参数；可附 `rolePortNodes` 描述共享入口。节点标识只描述模板拓扑，不能直接作为当前地图的实体编号。
 
 流水线会去除旧原生预览证据、校验角色并应用模板适配，将实际使用的模板保存到输出目录 `templates/city.json` 和 `templates/production.json`，供布局子进程读取。模板内容参与缓存键；复用基线时模板内容仍参与校验，可使用默认模板或显式传上次输出的这两份文件。模板缺失或不完整会报错，不会自动读取历史导出文件或连接游戏补齐。
 
 设施可配置 `upgradeReserveM:{minX,maxX,minY,maxY}`，数值为建筑自身局部坐标各侧额外预留的米数，必须有限且非负；省略方向为 0。该范围随设施朝向旋转，参与选址地形、障碍避让、集合间避让、后续设施规划及最终预检。输出 `footprint` 与 `reserved` 均按“平移但未旋转的局部矩形”保存，下游只旋转一次；不能直接拿原始 `reserved` 当作世界坐标轴包围框。默认城市模板的定向预留及估算边界见[城市集合说明](CITY_HUB_DEPOT_TEMPLATE.md#当前规划入口与预留修复)。
 
-旧实现中的城市和双坪生产模板均带 `placementMode: road-first`。城市先建五段主路，再建五设施与三段入口短路；生产端先建四段主路，再建四设施与一段入口短路。施工入口默认 `--mode auto` 按方案内模板选模式，账本及读回证据按集合编号隔离。模板修订使旧选址缓存失效。城市步行验收使用引擎车站间可达表；生产端检查两个坪和货站共同覆盖仓库及货车双向通路。详见[城市集合](CITY_HUB_DEPOT_TEMPLATE.md)及[生产集合使用方法](PRODUCTION_HELIPAD_TEMPLATE.md#使用方法)。
+当前城市和生产模板均为 `placementMode: joint`，分别联合预览六设施与六段组内道路、四设施与五段组内道路。施工入口按方案内模板选模式，账本和读回证据按集合编号隔离；模板修订使旧选址缓存失效。城市验收含客站—机场换乘；生产端无客站，不执行该项，但须验证货车双向通路、机场接路、共同库存及维护设施。外接路同步设计，按依赖施工。旧 road-first 和双坪方案仅供历史追溯。
 
 ## 先获取平整区域，再选择集合（2026-10-04）
 

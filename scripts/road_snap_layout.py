@@ -13,6 +13,9 @@ def validate_road_snaps(template):
             if set(p)!={'x','y'} or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in p.values()):
                 raise ValueError('Invalid road snap point')
         if s['localPoint']!={'x':0,'y':expected[f['role']]}:raise ValueError('Unexpected native road snap offset')
+        offset=s.get('roadsideOffsetM',7)
+        if isinstance(offset,bool) or not isinstance(offset,(int,float)) or not math.isfinite(offset) or offset<=0:
+            raise ValueError('Invalid roadside offset')
         a=math.radians(f['relativeRotation']);q=f['localPosition'];v=s['localPoint']
         actual={'x':q['x']+math.cos(a)*v['x']-math.sin(a)*v['y'],
                 'y':q['y']+math.sin(a)*v['x']+math.cos(a)*v['y']}
@@ -26,10 +29,16 @@ def validate_road_snaps(template):
             v=s['roadPoint'];u=((v['x']-p['x'])*dx+(v['y']-p['y'])*dy)/length**2
             on=math.hypot(v['x']-p['x']-u*dx,v['y']-p['y']-u*dy)<.001
             ox,oy=s['target']['x']-v['x'],s['target']['y']-v['y']
-            if on and 0<=u<=1 and abs(ox*dx+oy*dy)<.001 and abs(math.hypot(ox,oy)-7)<.001:
-                if r['roadTemplate']!='country/country_new_small':raise ValueError('Road snap clearance requires revalidation for this street type')
+            if on and -1e-8<=u<=1+1e-8 and abs(ox*dx+oy*dy)<.001 and abs(math.hypot(ox,oy)-offset)<.001:
+                widths={'country/country_new_small':7,'country/country_new_medium':11}
+                width=widths.get(r['roadTemplate'])
+                if width is None or offset<width-.001:raise ValueError('Road snap clearance requires revalidation for this street type')
+                if r['roadTemplate']=='country/country_new_small' and abs(offset-7)>.001:
+                    raise ValueError('Legacy small-road snap requires its verified 7m offset')
+                if r['roadTemplate']!='country/country_new_small' and s.get('requiredNativeVerification') is not True:
+                    raise ValueError('Changed roadside profile requires native verification')
                 found=True
-        if not found:raise ValueError('Road snap requires a matching frontage and 7m roadside offset')
+        if not found:raise ValueError('Road snap requires a matching frontage and declared roadside offset')
         if f['role']=='road_maintenance':
             # Keep the service building beside a through frontage, not beyond a dead end.
             p=s['roadPoint'];directions=[]

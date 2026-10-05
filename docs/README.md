@@ -1,5 +1,7 @@
 # TF3 文档导航
 
+本次集合经验：[集合规划与施工复盘（2026-10-05）](guides/COLLECTION_REVIEW_20261005.md)，包含模板串组、入口适配、验收边界、固定地图存档槽及代码优化优先级。
+
 全图规划与恢复经验：[三门峡规划施工复盘（2026-10-03）](guides/SANMENXIA_PLANNING_REVIEW_20261003.md)。包含联合选址、小批运输链验证、崩溃检查遗漏、存档隔离和验收分层。
 
 本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-01。
@@ -8,6 +10,7 @@
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 规划生产点旁的四设施集合 | [四设施生产模板](guides/PRODUCTION_COLLECTION_TEMPLATE.md) | [集合选址与共用](guides/GROUPED_CONSTRUCTION_WORKFLOW.md)、[六设施城市模板](guides/CITY_HUB_DEPOT_TEMPLATE.md) |
 | 判断交通设施是否需要仓库、货站或客运接驳 | [配套矩阵与完整运输链](strategy/TRANSPORT_CARGO_CONNECTIONS.md#各类建筑配套矩阵) | 运输任务判断、配套数量与验收清单 |
 | 比较各类交通建筑的站址、接驳和维护布局 | [交通设施选址指南](strategy/TRANSPORT_FACILITY_SITING.md) | [执行手册](guides/AGENT_PLAYBOOK.md)、[批量选址](reference/SITE_SELECTION.md) |
 | 为一个城市制定分期发展计划 | [城市发展策略](strategy/city-development-strategy.md) | [发展方案模板](strategy/DEVELOPMENT_PLAN_TEMPLATE.md) |

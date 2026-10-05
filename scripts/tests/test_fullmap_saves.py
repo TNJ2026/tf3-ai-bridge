@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fullmap_batch import Batch, StopBatch, save_slot
+from fullmap_batch import Batch, StopBatch, save_slot, map_save_key
 
 
 class SaveHarness(Batch):
@@ -17,6 +17,7 @@ class SaveHarness(Batch):
   self.b=SimpleNamespace(dir=root/'bridge');self.b.dir.mkdir()
   (root/'save').mkdir();self.path=root/'ledger.json'
   self.ledger={'planDigest':'a'*64,'items':{},'events':[]};self.write=write
+  self.p={'cities':[{'name':'A','position':{'x':10,'y':20}}]}
  async def call(self,command,args,engine):
   assert command=='eval' and engine is False
   assert 'function() end,false,true' in args['code']
@@ -28,7 +29,7 @@ class SaveHarness(Batch):
 
 
 class SaveTests(unittest.TestCase):
- def test_normal_phases_share_slot_and_plans_are_separate(self):
+ def test_normal_phases_share_slot_and_maps_are_separate(self):
   names=[save_slot(p,'a'*64) for p in ['checkpoint_10','after','roads_after','stops_10','lines_20','vehicles_after','maintenance_recovery_after']]
   self.assertEqual(len(set(names)),1);self.assertTrue(names[0][1])
   self.assertNotEqual(names[0][0],save_slot('after','b'*64)[0])
@@ -38,11 +39,19 @@ class SaveTests(unittest.TestCase):
    self.assertFalse(first[1]);self.assertNotEqual(first[0],second[0])
  def test_overwrite_reuses_one_file_and_records_both_events(self):
   with tempfile.TemporaryDirectory() as d,patch('fullmap_batch.asyncio.sleep',new_callable=AsyncMock):
-   h=SaveHarness(Path(d));asyncio.run(h.save('checkpoint_10'));asyncio.run(h.save('after'))
+   h=SaveHarness(Path(d));asyncio.run(h.save('checkpoint_10'))
+   h.ledger['planDigest']='b'*64
+   asyncio.run(h.save('after'))
    self.assertEqual(len(list((Path(d)/'save').glob('*.sav'))),1)
    self.assertEqual(len(h.ledger['events']),2)
    self.assertTrue(all(e['complete'] for e in h.ledger['events']))
    self.assertTrue(h.ledger['events'][-1]['replacesExisting'])
+ def test_map_key_ignores_plan_changes_renames_and_exploration(self):
+  a={'cities':[{'name':'A','position':{'x':10,'y':20}},{'name':'B','position':{'x':30,'y':40}}]}
+  b={'cities':[{'name':'renamed','position':{'x':30,'y':40}},{'name':'A','position':{'x':10,'y':20}}],'industries':[{'new':True}],'facilities':[{'changed':True}]}
+  self.assertEqual(map_save_key(a),map_save_key(b))
+  b['cities'][0]['position']['x']=99
+  self.assertNotEqual(map_save_key(a),map_save_key(b))
  def test_unchanged_old_file_does_not_count_as_success(self):
   with tempfile.TemporaryDirectory() as d,patch('fullmap_batch.asyncio.sleep',new_callable=AsyncMock):
    h=SaveHarness(Path(d));asyncio.run(h.save('after'));h.write=False

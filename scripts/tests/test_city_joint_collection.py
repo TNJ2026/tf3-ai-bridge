@@ -72,6 +72,15 @@ def test_native_code_has_exactly_one_commit_and_valid_lua():
     lua=LuaRuntime()
     for source in (probe(s),preview,commit):lua.execute('assert(load(...))',source)
 
+
+def test_required_walking_is_checked_before_joint_submission():
+    t=city();t['requireWalkingPreview']=True;s=compile_spec(t)
+    for build in (False,True):
+        code=code_for(s,dict(x=100,y=200,rotation=45),build)
+        LuaRuntime().execute('assert(load(...))',code)
+        assert 'walkPreview.outbound and walkPreview.inbound' in code
+        if build:assert code.index('Walking preview failed before joint submission')<code.index('api.cmd.sendCommand(')
+
 def test_2d_current_template_compiles_with_derived_tangents():
     path=SCRIPTS.parent/'config/planning_templates/city_air.json'
     paths=[p for p in (SCRIPTS.parent/'config/planning_templates').glob('*.json') if {f['role']for f in json.loads(p.read_text('utf8')).get('facilities',[])}in ({'bus','truck','warehouse','heliport','road_depot'},{'bus','truck','warehouse','heliport','road_depot','road_maintenance'})]
@@ -82,7 +91,8 @@ def test_2d_current_template_compiles_with_derived_tangents():
         assert all('z'in r['tangent0']and'z'in r['tangent1']for r in s['roads'])
 
 def result():
-    return dict(modulesVerified=True,roads=[dict(baseEdge=True,network=True,node0Network=True,node1Network=True)],coverage={'truck':True,'heliport':True},paths={'truck':{'inbound':{'verified':True}},'road_depot':{'out_4':{'verified':True}},'walking':{'inbound':{'verified':False}}},airportRoadLinkRequired=True,airportRoadLinkVerified=False)
+    pair=lambda ok=True:{k:{'verified':ok} for k in ('inbound','outbound')}
+    return dict(facilities={k:{} for k in ('heliport','warehouse','truck','bus','road_depot')},modulesVerified=True,roads=[dict(baseEdge=True,network=True,node0Network=True,node1Network=True)],coverage={'truck':True,'heliport':True},paths={'truck':pair(),'bus':pair(),'road_depot':{k:{'verified':True} for k in ('out_3','in_3','out_4','in_4')},'walking':pair(False)},airportRoadLinkRequired=True,airportRoadLinkVerified=True)
 
 def test_walking_deferral_does_not_claim_full_acceptance():
     r=result();assert acceptance(r,True)is False
@@ -124,6 +134,7 @@ def test_executor_single_submission_and_no_retry(tmp_path,monkeypatch,unknown):
                 return dict(callback={'success':not unknown},added=dict(constructions=list(range(100,105)),edges=[],nodes=[]))
             if 'local ids=B.json.decode'in code:
                 r=result();r['airportRoadLinkVerified']=True;r['paths']['walking']['inbound']['verified']=True
+                r['roads']=r['roads']*len(city()['roads']);r['paths']['walking']['outbound']['verified']=True
                 return r
             return {'previewPassed':True}
     b=Fake();monkeypatch.setattr(mod,'Batch',lambda a:b);monkeypatch.setattr(mod,'batch_lock',lambda d:contextlib.nullcontext())

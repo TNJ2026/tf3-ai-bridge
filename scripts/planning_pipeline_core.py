@@ -58,7 +58,7 @@ def prepare_template(template, kind):
     roles = {f['role']: f for f in result['facilities']}
     required = {'heliport', 'warehouse', 'truck', 'bus', 'road_depot'} if kind == 'city' else {'helipad', 'helipad2', 'warehouse', 'truck'}
     city_roles = {'heliport', 'warehouse', 'truck', 'bus', 'road_depot'}
-    allowed = [required, required | {'road_maintenance'}] if kind == 'city' else [required, city_roles | {'road_maintenance'}]
+    allowed = [required, required | {'road_maintenance'}] if kind == 'city' else [required, city_roles | {'road_maintenance'}, {'heliport', 'warehouse', 'truck', 'road_maintenance'}]
     if set(roles) not in allowed or len(roles) != len(result['facilities']):
         raise ValueError('Incomplete or duplicate collection roles: '+kind)
     if not result.get('roads'):

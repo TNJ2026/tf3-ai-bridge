@@ -9,7 +9,7 @@ from tf3_mcp.planning_geometry import facility_aabb
 from planning_pipeline_core import load_templates,layout_key,strip_native_evidence,FACILITY_HALF_SIZES,facility_bounds,positioned_bounds
 from planning_shared_hubs import select_shared_hubs,POLICY_VERSION
 from tf3_mcp.flat_areas import FlatTerrain,preference_key,grid_digest,RESERVE_MARGIN_M,POLICY_VERSION as TERRAIN_POLICY
-from tf3_mcp.flat_areas import city_preference_key
+from tf3_mcp.flat_areas import city_preference_key,production_preference_key
 
 def shift_box(box,origin):
  return {side:{a:box[side][a]+origin[a]for a in ('x','y')}for side in ('min','max')}
@@ -55,13 +55,15 @@ def collection_candidates(template,ordered,nodes,kind,flat_terrain,sizes,target,
  """Bounded terrain ranking before obstacle checks; includes frontage and reserve space."""
  compiled=compiled_footprints(template,sizes)
  candidates=[]
- for n in ordered[:600]:
+ # Production has no fixed distance or nearest-node count cutoff. A supplied
+ # search_radius only bounds this survey pass, never production eligibility.
+ for n in (ordered[:600] if kind=='city' else ordered):
   distance=math.dist((nodes[n]['x'],nodes[n]['y']),(target['x'],target['y']))
-  if distance>(search_radius if search_radius is not None else (2300 if kind=='city'else 1700)):break
+  if distance>(search_radius if search_radius is not None else (2300 if kind=='city'else math.inf)):break
   if kind=='city'and distance<500:continue
   for geometry in compiled:
    rot=geometry['rotation'];co,si=geometry['co'],geometry['si'];v=geometry['end']
-   for extension in ((90,170,270)if kind=='city'else(90,170,270,450,650,850)):
+   for extension in ((90,170,270)if kind=='city'else(30,50,90,170,270,450,650,850)):
     entry=dict(x=nodes[n]['x']+co*extension,y=nodes[n]['y']+si*extension)
     origin=dict(x=entry['x']-v['x'],y=entry['y']-v['y'])
     reserve=shift_box(geometry['reserve'],origin)
@@ -72,10 +74,12 @@ def collection_candidates(template,ordered,nodes,kind,flat_terrain,sizes,target,
     flat_key=preference_key(profile,ap,distance+extension)
     service_distance=(city_network_distances.get(n,math.inf) if city_network_distances is not None else distance)+extension
     if not math.isfinite(service_distance):continue
-    key=city_preference_key(profile,ap,service_distance) if kind=='city' else flat_key
+    truck=next((g['position'] for f,g in zip(template['facilities'],geometry['fac']) if f['role']=='truck'),dict(x=0,y=0))
+    direct_distance=math.hypot(origin['x']+truck['x']-target['x'],origin['y']+truck['y']-target['y'])
+    key=city_preference_key(profile,ap,service_distance) if kind=='city' else production_preference_key(profile,ap,service_distance,direct_distance)
     c=dict(node=n,origin=origin,rotation=rot,entry=entry,
         terrain=profile,accessTerrain=ap,terrainReserve=reserve,flatPreferred=not flat_key[0],rank=key,
-        serviceDistanceEstimateM=service_distance)
+        serviceDistanceEstimateM=service_distance,productionTruckDirectDistanceM=direct_distance if kind=='production'else None)
     candidates.append(materialize_candidate(c,template,geometry)if materialize else c)
  return sorted(candidates,key=lambda c:c['rank'])
 
@@ -146,12 +150,12 @@ def main():
    source=min(nodes,key=lambda n:dist(nodes[n],target));ordered=[n for n in ordered if components[n]==components[source]]
    construction=next(i['construction']for i in d['industries']if i['id']==owner)
    ci=BoxIndex([o for o in s['obstacles']if not(o['kind']=='CONSTRUCTION'and o['entity']==construction)])
-  # Generate the same bounded alternatives, rank whole-group terrain first,
+  # Generate surveyed alternatives, rank terrain feasibility and service distance,
   # then find the first candidate satisfying ALL existing spatial/access checks.
   search_radius=s.get('planning_policy',{}).get('owner_search_radius_m',{}).get(str(owner))
   if search_radius is not None and (not math.isfinite(search_radius) or search_radius<=0):raise ValueError('Invalid owner search radius')
   city_distances=None
-  if kind=='city':
+  if kind in ('city','production'):
    source=min(nodes,key=lambda n:dist(nodes[n],target));city_distances={source:dist(nodes[source],target)};queue=[(city_distances[source],source)]
    graph=collections.defaultdict(list)
    for edge in edges:
@@ -196,7 +200,10 @@ def main():
    roads.append(dict(id=prefix+'_depot_link',from_facility=fm[r['role']],to_facility=fm[r['targetRole']],path=[transform(r['position0'],origin,angle),transform(r['position1'],origin,angle)],depends_on=list(fm.values()),street_type='country/country_new_small',port_selector=r['basis']))
   h=dict(owner=prefix,entity=owner,kind=kind,position=origin,rotation=rot,node=n,facilities=fm,roads=[r['id']for r in roads if r['id'].startswith(prefix+'_')],template=kind,city_boundary_distance_m=boundary if kind=='city'else None,sharedStockCheck=list(fm.values()),native_verified=False)
   h['terrain_screen']=dict(policy=TERRAIN_POLICY,flatPreferred=chosen_terrain['flatPreferred'],
-      serviceDistanceEstimateM=chosen_terrain['serviceDistanceEstimateM'],rankingBasis='city road service distance plus bounded terrain penalty'if kind=='city'else'terrain first',
+      serviceDistanceEstimateM=chosen_terrain['serviceDistanceEstimateM'],rankingBasis='city road service distance plus bounded terrain penalty'if kind=='city'else'flat-feasible class, production road service distance, truck direct distance, terrain tie-break',
+      productionTruckDirectDistanceM=chosen_terrain['productionTruckDirectDistanceM'],
+      productionDistanceLimitsM=None if kind=='production'else 'city policy',
+      surveySearchRadiusM=search_radius,
       footprintAndUpgrade=chosen_terrain['terrain'],externalAccess=chosen_terrain['accessTerrain'],
       reserveBounds=chosen_terrain['terrainReserve'],estimatedUpgradeMarginM=RESERVE_MARGIN_M,
       candidatesRanked=len(candidates),candidatesChecked=checked,sampleSpacingM=s['grid']['spacing'],

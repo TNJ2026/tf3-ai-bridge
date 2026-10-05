@@ -5,7 +5,7 @@ from fullmap_batch import Batch,StopBatch,batch_lock,quote,write_json,unfinished
 from fullmap_workflow import atomic_write
 from hub_joint_prototype import compile_spec,probe
 from commit_joint_test import GUARD
-from verify_joint_test import AUDIT,acceptance
+from verify_joint_test import AUDIT,acceptance,expected_roadside_offsets
 
 def prepare(plan,owner):
     hub=next(h for h in plan['hubs'] if h['owner']==owner)
@@ -39,6 +39,9 @@ def code_for(spec,origin,build=False):
     prefix=source.split('return B.json.encode({previewOnly=true')[0]
     # Same strict placement and directed vehicle-path checks for preview and commit.
     checks=GUARD.split('local CT=api.type.ComponentType')[0]
+    if spec.get('requireWalkingPreview'):
+        prefix+=Path(__file__).with_name('road_first_walk.lua').read_text('utf8')
+        prefix+="\nassert(walkPreview.outbound and walkPreview.inbound,'Walking preview failed before joint submission')\n"
     return prefix+(GUARD if build else checks+'return B.json.encode({previewOnly=true,previewPassed=true,previewPaths=paths,portBindings=spec.portBindings})')
 
 async def execute(a):
@@ -86,10 +89,11 @@ async def execute(a):
                 if not all(x.get('staticVerified')for x in audits.values()):raise StopBatch('Facility readback failed')
                 if {x['entity'] for x in audits.values()}!=set(result['added']['constructions']):raise StopBatch('Unexpected construction set')
                 expected={role:next(t['position']for t in tasks if t['id']==fid)for role,fid in hub['facilities'].items()}
+                expected=expected_roadside_offsets(expected,spec)
                 audit=await b.eval(AUDIT.replace('IDS',quote(result['added'])).replace('EXPECTED',quote(expected)))
                 norm=lambda m:{str(k):(v['name'],v.get('variant',0)) for k,v in (m or {}).items()}
                 audit['modulesVerified']=all(norm(t['params'].get('modules'))==norm(audits[t['id']]['params'].get('modules'))for t in tasks)
-                audit['staticAccepted']=acceptance(audit,a.defer_walking);audit['operationalAccepted']=False
+                audit['staticAccepted']=acceptance(audit,a.defer_walking,spec);audit['operationalAccepted']=False
                 item['audit']=audit;write_json(out/'verification.json',audit)
                 if not audit['placementAccepted']:raise StopBatch('Joint placement acceptance incomplete')
                 for t in tasks:b.ledger['items'][t['id']]={'kind':t['kind'],'attempts':1,'jointOperation':key,'status':'static_verified','audit':audits[t['id']]}

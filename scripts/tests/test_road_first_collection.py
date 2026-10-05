@@ -7,7 +7,7 @@ from road_first_collection import stage_spec,source
 from road_first_collection import WALK
 
 def spec():
-    t=json.loads((Path(__file__).resolve().parents[2]/'config/planning_templates/city.json').read_text('utf8'))
+    t=json.loads((Path(__file__).resolve().parent/'fixtures/city_road_first_v3.json').read_text('utf8'))
     for r in t['roads']:r['buildPhase']='entrance' if r.get('bindRole')else 'frontage'
     return compile_spec(t)
 
@@ -106,7 +106,7 @@ def test_unknown_submission_locks_road_phase(tmp_path,monkeypatch):
 
 def test_production_road_first_keeps_complete_city_and_vehicle_walking_gates():
     from planning_pipeline_core import prepare_template
-    p=Path(__file__).resolve().parents[2]/'config/planning_templates/production.json'
+    p=Path(__file__).resolve().parent/'fixtures/city_road_first_v3.json'
     t=prepare_template(json.loads(p.read_text('utf8')),'production')
     assert t['placementMode']=='road-first'
     s=compile_spec(t);r=stage_spec(s,'roads')
@@ -141,7 +141,7 @@ def test_receipts_are_isolated_by_collection_and_legacy_is_unambiguous(tmp_path)
 
 def test_roadside_template_rejects_broken_alignment():
     from road_snap_layout import validate_road_snaps
-    p=Path(__file__).resolve().parents[2]/'config/planning_templates/production.json'
+    p=Path(__file__).resolve().parent/'fixtures/city_road_first_v3.json'
     t=json.loads(p.read_text('utf8'));validate_road_snaps(t)
     pads=[f for f in t['facilities'] if f.get('roadSnap')]
     assert {f['role'] for f in pads}=={'road_maintenance'}

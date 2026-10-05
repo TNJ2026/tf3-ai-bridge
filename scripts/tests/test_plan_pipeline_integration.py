@@ -105,9 +105,10 @@ def test_explicit_templates_and_missing_raw_supply_through_real_pipeline(tmp_pat
     template_paths.clear()
     bundled, report = run('bundled')
     city = json.loads((bundled/'templates/city.json').read_text('utf8'))
-    assert len(city['roads']) == 10
+    assert len(city['roads']) == 6
     assert 'road_maintenance' in {f['role'] for f in city['facilities']}
-    assert city['placementMode'] == 'road-first'
+    assert city['placementMode'] == 'joint'
+    assert all(r['roadTemplate']=='country/country_new_medium' for r in city['roads'])
     assert city['rolePortNodes']['truck'] != city['rolePortNodes']['road_depot']
     assert json.loads((bundled/'report_plan.json').read_text('utf8'))['snapshot']['map']['towns'][0]['name'] == 'Test'
 
