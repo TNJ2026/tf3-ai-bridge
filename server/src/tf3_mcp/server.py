@@ -51,7 +51,7 @@ BUILD_TIMEOUT = 30.0  # build commands may try several placements
 
 
 async def _call(cmd: str, _timeout: float | None = None, _engine: bool = False, **args: Any) -> Any:
-    mutation = (cmd.startswith("build_") or cmd in {"upgrade_road", "commit_facility", "commit_prospection", "commit_flatten_terrain", "bulldoze", "eval"}) and not args.get("preview", False)
+    mutation = (cmd.startswith("build_") or cmd in {"upgrade_road", "commit_industry", "commit_facility", "commit_prospection", "commit_flatten_terrain", "bulldoze", "eval"}) and not args.get("preview", False)
     try:
         return await bridge().call(cmd, args, timeout=_timeout, engine=_engine)
     except BridgeError as e:
@@ -201,6 +201,37 @@ async def configure_facility(entity: int, parameters: dict | None = None, module
     Native replacement geometry preview is unsafe: this is STRUCTURAL ONLY, not collision validation.
     Removal and nondefault variants are rejected. Returns a one-use 60-second commit token."""
     return await _call("configure_facility", _engine=True, entity=entity, parameters=parameters or {}, modules=modules or [])
+
+
+@mcp.tool()
+async def list_industry_resources() -> dict:
+    """List native industry construction resources and whether sandbox placement is enabled."""
+    return await _call("list_industry_resources", _engine=True)
+
+
+@mcp.tool()
+async def preview_industry(resource: str, x: float, y: float, rotation: float = 0,
+                           on_water: bool = False, seed: str = "tf3-mcp") -> dict:
+    """Sandbox only: native industry placement preview at XY, rotation in degrees.
+    Terrain elevation/layout come from native map generation. Use a resource from
+    list_industry_resources. Rejects removal proposals and collisions. No mutation.
+    Returns a single-use 60-second commit token and native resolved placement."""
+    return await _call("preview_industry", _engine=True, _timeout=BUILD_TIMEOUT,
+                       resource=resource, x=x, y=y, rotation=rotation, on_water=on_water, seed=seed)
+
+
+@mcp.tool()
+async def commit_industry(preview_token: str) -> dict:
+    """Commit one sandbox industry after revalidation. Never retry an ambiguous submission;
+    inspect get_industry_operation and actual map instead. Does not create freight service."""
+    return await _call("commit_industry", _engine=True, _timeout=BUILD_TIMEOUT, preview_token=preview_token)
+
+
+@mcp.tool()
+async def get_industry_operation(operation_id: str) -> dict:
+    """Read native callback and independent industry readback; never submits or retries.
+    Operation handles expire on bridge reload; unknown does not mean not built."""
+    return await _call("get_industry_operation", _engine=True, operation_id=operation_id)
 
 
 @mcp.tool()

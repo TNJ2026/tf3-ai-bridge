@@ -1,10 +1,10 @@
-"""Bounded, read-only native maintenance shoreline diagnostic in a confirmed test save."""
+"""Bounded, read-only native maintenance shoreline diagnostic."""
 import argparse, asyncio, json, math
 from pathlib import Path
 from fullmap_batch import Batch, StopBatch, batch_lock, quote, write_json
 
 LUA = '''local rows=B.json.decode(CANDIDATES);local out={}
-local state=B.commands.get_game_state({});assert(state.speedup==0,'Test save must stay paused')
+local state=B.commands.get_game_state({})
 local water=api.engine.getComponent(api.engine.util.getWorld(),api.type.ComponentType.TERRAIN).waterLevel
 for _,r in ipairs(rows)do
  local a=math.rad(r.rotation);local V=api.type.Vec4f.new
@@ -26,7 +26,6 @@ end
 return B.json.encode(out)'''
 
 async def execute(a):
-    if not a.isolated_test_save:raise ValueError('Confirmed isolated test save required')
     rows=json.loads(a.candidates.read_text('utf8'))
     if not 1<=len(rows)<=3:raise ValueError('Use 1..3 evidence-based candidates')
     for r in rows:
@@ -38,8 +37,7 @@ async def execute(a):
     if receipt.exists():raise StopBatch('Already attempted; inspect saved evidence before redesign')
     b=Batch(a)
     with batch_lock(b.b.dir):
-        state=await b.session()
-        if state['speedup']!=0:raise StopBatch('Pause the test save before native testing')
+        state=await b.call('get_game_state',{})
         await b.save('shore_probe_before')
         write_json(receipt,{'attempted':True,'candidates':rows,'state':state})
         result=await b.eval(LUA.replace('CANDIDATES',quote(rows)))

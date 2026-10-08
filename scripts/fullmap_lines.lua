@@ -22,7 +22,7 @@ for i,ep in ipairs(task.endpoints)do
  choices[i]={}
  for _,id in ipairs(stationIds)do local st=api.engine.getComponent(id,CT.STATION);local g=groups[id]
   if st and g then for k,t in ipairs(st.terminals)do
-   if (ep.terminal_index==nil or ep.terminal_index==k-1) and (t.transportModes[mode] or (ep.stop and mode==api.type.enum.TransportMode.TRUCK)) and t.cargoUnload and (#ep.loads==0 or t.cargoLoad)then choices[i][#choices[i]+1]={group=g.group,station=g.station,terminal=k-1,entity=id,node=t.vehicleNodeId}end
+   if (ep.terminal_index==nil or ep.terminal_index==k-1) and (t.transportModes[mode] or (ep.stop and mode==api.type.enum.TransportMode.TRUCK)) and ((#ep.loads>0 and t.cargoLoad) or (#ep.loads==0 and t.cargoUnload))then choices[i][#choices[i]+1]={group=g.group,station=g.station,terminal=k-1,entity=id,node=t.vehicleNodeId}end
   end end
  end
  assert(#choices[i]>0,'no compatible cargo terminal: '..ep.id)

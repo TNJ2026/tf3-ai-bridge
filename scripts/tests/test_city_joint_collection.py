@@ -119,6 +119,9 @@ def make_plan():
 def test_executor_single_submission_and_no_retry(tmp_path,monkeypatch,unknown):
     import build_joint_collection as mod
     plan=make_plan()
+    # Exercise the generic receipt controller independently of the suspended
+    # generated-port strategy; its production rejection has dedicated tests.
+    monkeypatch.setattr(mod,'require_supported_commit',lambda spec:None)
     class Fake:
         def __init__(self):
             self.p=plan;self.out=tmp_path;self.b=SimpleNamespace(dir=tmp_path);self.ledger={'items':{}};self.commits=0;self.saves=[]
@@ -145,7 +148,8 @@ def test_executor_single_submission_and_no_retry(tmp_path,monkeypatch,unknown):
     else:
         asyncio.run(execute(a))
         assert b.ledger['items']['JOINT_T1']['status']=='static_verified'
-        assert len([v for k,v in b.ledger['items'].items()if k.startswith('T1_')])==5
+        assert len([v for k,v in b.ledger['items'].items()if k.startswith('T1_') and not v.get('consumedByJoint')])==5
+        assert all(b.ledger['items'][r['id']]['consumedByJoint'] for r in plan['roads'])
     with pytest.raises(mod.StopBatch):asyncio.run(execute(a))
     assert b.commits==1 and b.saves[0]=='joint_preview_before'
     assert 'joint_before'in b.saves

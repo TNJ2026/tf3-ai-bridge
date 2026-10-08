@@ -17,6 +17,7 @@ def stage_spec(base, stage, road_nodes=None, road_entities=None):
     roles={f['role']for f in base['facilities']}
     if roles not in ({'heliport','bus','truck','warehouse','road_depot'},
                      {'heliport','bus','truck','warehouse','road_depot','road_maintenance'},
+                     {'heliport','truck','warehouse','road_maintenance'},
                      {'helipad','helipad2','truck','warehouse'}) or len(roles)!=len(base['facilities']):
         raise ValueError('Road-first requires a complete city or dual-pad production collection')
     if stage not in ('roads','facilities'):raise ValueError('Unknown phase')
@@ -164,7 +165,7 @@ end;return B.json.encode(out)'''
 
 
 async def run(a):
-    b=Batch(a);hub,base,origin=prepare(b.p,a.owner)
+    b=Batch(a);hub,base,origin=prepare(b.p,a.owner,include_external=False)
     if a.stage not in ('roads','facilities'):raise ValueError('Unknown phase')
     if not a.current_map_test and not getattr(a,'isolated_test_save',False):raise StopBatch('Explicit current-map test or isolated test save authorization required')
     if a.action=='build' and not a.authorize_build:raise StopBatch('Build authorization required')

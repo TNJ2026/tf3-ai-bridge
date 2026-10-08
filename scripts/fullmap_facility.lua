@@ -93,6 +93,7 @@ local function audit(x)
 end
 local existing=scan()
 if existing then return B.json.encode({existing=true,audit=audit(existing)})end
+assert(not task.reuseOnly,'Reuse-only facility missing or moved; resurvey, never construct a replacement')
 if action=='verify'then return B.json.encode({existing=false,built=false})end
 local args=task.args or {};args.x=task.position.x;args.y=task.position.y;args.z=api.engine.terrain.getHeightAt(api.type.Vec2f.new(args.x,args.y));args.rotation=task.rotation or 0;args.name=task.id;args.connect=false;args.preview=true;args.allow_collisions=false
 if task.kind=='headquarters'then

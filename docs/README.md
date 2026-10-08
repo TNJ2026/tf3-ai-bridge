@@ -1,16 +1,17 @@
 # TF3 文档导航
 
-本次集合经验：[集合规划与施工复盘（2026-10-05）](guides/COLLECTION_REVIEW_20261005.md)，包含模板串组、入口适配、验收边界、固定地图存档槽及代码优化优先级。
-
-全图规划与恢复经验：[三门峡规划施工复盘（2026-10-03）](guides/SANMENXIA_PLANNING_REVIEW_20261003.md)。包含联合选址、小批运输链验证、崩溃检查遗漏、存档隔离和验收分层。
-
-本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-01。
+本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-06。
 
 ## 按任务阅读
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 货运规划收尾、维护分流、交付时效与批量执行 | [运营预测与执行契约](guides/CARGO_PLAN_FINALIZATION.md) | [统一规划流程](guides/PLANNING_WORKFLOW.md) |
+| 建造或复用总部 | [总部建设指南](guides/HQ_ACCESS_DIAGNOSTIC.md) | [设施接口](reference/FACILITY_SUPPORT.md#总部专用接口) |
+| 规划与验收集合共用仓库 | [主仓库共库检查](strategy/TRANSPORT_CARGO_CONNECTIONS.md#主仓库共库检查) | [集合批量流程](guides/GROUPED_CONSTRUCTION_WORKFLOW.md#主仓库共库验收) |
+| 检查船坞、码头与渔场往返航路 | [船舶往返航路检查](guides/SHIP_ROUTE_CHECKS.md) | [集合航路验收](guides/GROUPED_CONSTRUCTION_WORKFLOW.md#船舶往返航路去重) |
 | 规划生产点旁的四设施集合 | [四设施生产模板](guides/PRODUCTION_COLLECTION_TEMPLATE.md) | [集合选址与共用](guides/GROUPED_CONSTRUCTION_WORKFLOW.md)、[六设施城市模板](guides/CITY_HUB_DEPOT_TEMPLATE.md) |
+| 每轮监控城市、供货、公交、载具和仓库并按授权处理 | [每轮监控清单](guides/MONITORING_WORKFLOW.md) | [人口公交](guides/POPULATION_BUS_MONITOR.md)、[操作协调](guides/OPERATION_COORDINATION.md) |
 | 判断交通设施是否需要仓库、货站或客运接驳 | [配套矩阵与完整运输链](strategy/TRANSPORT_CARGO_CONNECTIONS.md#各类建筑配套矩阵) | 运输任务判断、配套数量与验收清单 |
 | 比较各类交通建筑的站址、接驳和维护布局 | [交通设施选址指南](strategy/TRANSPORT_FACILITY_SITING.md) | [执行手册](guides/AGENT_PLAYBOOK.md)、[批量选址](reference/SITE_SELECTION.md) |
 | 为一个城市制定分期发展计划 | [城市发展策略](strategy/city-development-strategy.md) | [发展方案模板](strategy/DEVELOPMENT_PLAN_TEMPLATE.md) |
@@ -51,3 +52,10 @@
 3. 当前计划使用新采集的数据；历史案例保留日期、已验证事项和未解决事项。地图变化后重新调查。
 4. 移动文档时同步修正根目录与文档内部链接；示例坐标、金额和实体编号必须注明来源或为占位符。
 5. 只改文档不连接游戏。文档检查验证内部链接与接口名称，不以此替代实机验证。
+
+
+## 历史复盘
+
+本次集合经验：[集合规划与施工复盘（2026-10-05）](guides/COLLECTION_REVIEW_20261005.md)，包含模板串组、入口适配、验收边界、固定地图存档槽及代码优化优先级。
+
+全图规划与恢复经验：[三门峡规划施工复盘（2026-10-03）](guides/SANMENXIA_PLANNING_REVIEW_20261003.md)。包含联合选址、小批运输链验证、崩溃检查遗漏、存档隔离和验收分层。

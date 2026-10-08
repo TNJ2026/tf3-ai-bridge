@@ -53,6 +53,7 @@ for _,componentsForEntity in pairs(components) do
 end
 ''')
     script = lua.execute(SCRIPT.read_text(encoding="utf8"))
+    lua.globals().HQ_INTERNAL = script["_internal"]
     commands = script["_internal"]["commands"]
     commands["get_map_info"] = lua.eval('''function()return {towns={
  {id=100,name="Zürich",position={x=700,y=700}},
@@ -155,3 +156,39 @@ def test_mcp_preview_routes_to_engine_without_cache_mutation(monkeypatch):
     asyncio.run(server.build_headquarters(100, 700, 740, 2))
     cmd, args = calls[0]
     assert cmd == "build_headquarters" and args["_engine"] and args["preview"]
+
+
+def test_preparation_keeps_native_parameters_without_preview_or_submission(hq_game):
+    lua, call = hq_game
+    lua.execute('''
+PREVIEW_CALLS=0
+local original=api.engine.util.proposal.makeProposalData
+api.engine.util.proposal.makeProposalData=function(...)PREVIEW_CALLS=PREVIEW_CALLS+1;return original(...)end
+local p,b,params=HQ_INTERNAL.prepareHeadquarters({town=100,x=700,y=740,z=2,rotation=0})
+assert(type(params)=='table' and type(params.modules)=='table')
+assert(p.constructionsToAdd[1].params==params)
+assert(params.modules[6432000].metadata.main)
+''')
+    assert lua.globals().PREVIEW_CALLS == 0
+    p=preview(call)
+    assert 'parameters' in p and 'params' not in p
+    assert lua.globals().PREVIEW_CALLS == 1
+    assert lua.globals().SUBMISSIONS is None
+
+
+@pytest.mark.parametrize('template', ['nil','{}','{[1]="wrong.module"}',
+                                      '{[1.5]="::/landmarks/hq/modules/hq_main.module"}'])
+def test_malformed_template_rejected_before_native_parameter_assignment(hq_game,template):
+    lua,_=hq_game
+    lua.execute('''
+local original=ug_require
+ug_require=function(name)
+ if name=='::/landmarks/hq/headquarter.script.tl'then return {createTemplateFn=function()return '''+template+''' end}end
+ return original(name)
+end
+api.type.SimpleProposal.ConstructionEntity.new=function()error('UNSAFE_NATIVE_SETTER_REACHED')end
+''')
+    with pytest.raises(Exception)as error:
+        lua.execute('HQ_INTERNAL.prepareHeadquarters({town=100,x=700,y=740,z=2,rotation=0})')
+    assert 'UNSAFE_NATIVE_SETTER_REACHED' not in str(error.value)
+    assert lua.globals().SUBMISSIONS is None

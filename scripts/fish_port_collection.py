@@ -3,6 +3,8 @@ import argparse,asyncio,hashlib,json,math,time
 from pathlib import Path
 from fullmap_batch import Batch,StopBatch,batch_lock,quote,write_json
 from fullmap_workflow import atomic_write
+from primary_warehouse import prelude
+from ship_route_checks import compile_checks,audit_source,select_port
 from hub_joint_prototype import compile_spec,probe
 from commit_joint_test import GUARD
 ROOT=Path(__file__).resolve().parents[1]
@@ -14,10 +16,17 @@ def prepare(template):
     for f in spec['facilities']:
         if not all(isinstance(f['localPosition'].get(k),(int,float))and math.isfinite(f['localPosition'][k])for k in ('x','y','z')):raise ValueError('Invalid facility position')
         if not math.isfinite(f['relativeRotation']):raise ValueError('Invalid rotation')
+    roles={f['role']for f in spec['facilities']}
+    stations=['harbor','truck']if 'truck'in roles else ['harbor','helipad','helipad2']
+    spec['sharedWarehousePlan']={'primaryWarehouseRole':'warehouse','stationRoles':stations,
+        'primaryStockList':None,'inventoryVerified':False,
+        'rule':'Each cargo facility covers primary warehouse; resolve actual inventory after build'}
     return spec
 
 def attempt(spec,origin):
-    code=probe(spec).replace('local isolatedTestConfirmed=false','local isolatedTestConfirmed=true').replace(
+    code=probe(spec).replace('local isolatedTestConfirmed=false','').replace(
+        "assert(isolatedTestConfirmed and origin,'Isolated save and test origin required')","assert(origin,'Explicit preview origin required')").replace(
+        '-- EXPERIMENTAL: isolated test save only. Preview can trigger native assertions.','-- Native read-only preview; no isolated-save prerequisite.').replace(
         'local origin=nil -- {x=...,y=...,rotation=...}; choose empty land in the test save','local origin=B.json.decode('+quote(origin)+')')
     # Share the exact pre-submit path checks, without inventory or world commands.
     checks=GUARD.split('local CT=api.type.ComponentType')[0]
@@ -38,15 +47,15 @@ async def execute(a):
         spec=prepare(a.template);write_json(a.output/'joint_spec.json',spec)
         atomic_write(a.output/'isolated_preview.lua',probe(spec))
         print(json.dumps({'prepared':True,'facilities':len(spec['facilities']),'gameCalls':0,'nativeVerified':False}));return
-    if not a.plan:raise ValueError('--plan is required for current map identity checks')
-    if a.action in ('preview','build') and not a.isolated_test_save:raise ValueError('Experimental native proposal requires --isolated-test-save after confirming the actual save')
+    if not a.plan:raise ValueError('--plan is required for specifications and the execution journal')
     if a.action=='build' and not a.authorize_build:raise ValueError('Explicit future build authorization required')
     a.ids=None;a.limit=0;b=Batch(a)
     receipt_path=a.output/'fish_port_receipt.json';commit_path=a.output/'fish_port_commit.json'
     def digest(v):return hashlib.sha256(json.dumps(v,sort_keys=True).encode()).hexdigest()
     with batch_lock(b.b.dir):
-        state=await b.session()
-        if a.action in ('preview','build') and state['speedup']!=0:raise StopBatch('Pause the test save before native testing')
+        # Preview records context only. Map identity and pause are submission guards.
+        state=await b.call('get_game_state',{}) if a.action=='preview' else await b.session()
+        if a.action=='build' and state['speedup']!=0:raise StopBatch('Pause required during construction')
         if a.action=='preview':
             if receipt_path.exists():raise StopBatch('Preview already attempted; inspect evidence, use a new directory for revised design')
             if a.x is None or a.y is None:raise ValueError('Explicit --x and --y required; never infer a camera position')
@@ -55,7 +64,7 @@ async def execute(a):
             spec=prepare(a.template);code=attempt(spec,origin)
             write_json(a.output/'joint_spec.json',spec);atomic_write(a.output/'attempt.lua',code)
             await b.save('fish_port_before')
-            receipt={'specDigest':digest(spec),'origin':origin,'state':state,'attempted':True,'outcome':'pending','codeDigest':hashlib.sha256(code.encode()).hexdigest()}
+            receipt={'specDigest':digest(spec),'origin':origin,'state':state,'attempted':True,'outcome':'pending','isolatedSaveRequired':False,'codeDigest':hashlib.sha256(code.encode()).hexdigest()}
             write_json(receipt_path,receipt)
             try:
                 result=await b.eval(code);write_json(a.output/'preview.json',result)
@@ -86,8 +95,26 @@ async def execute(a):
             except BaseException:
                 event['outcome']='unknown_or_failed';write_json(commit_path,event);raise
         built=json.loads((a.output/'commit_result.json').read_text('utf8'))
-        lua=(ROOT/'scripts/fish_port_audit.lua').read_text('utf8')
+        lua=prelude()+(ROOT/'scripts/fish_port_audit.lua').read_text('utf8')
         audit=await b.eval(lua.replace('SPEC_JSON',quote(spec)).replace('ORIGIN_JSON',quote(receipt['origin'])).replace('ADDED_JSON',quote(built['added'])))
+        # Resolve the plan port by the freshly read harbor pose, never old entity IDs.
+        harbor=next(f for f in spec['facilities']if f['role']=='harbor')
+        angle=math.radians(receipt['origin']['rotation']);q=harbor['localPosition'];o=receipt['origin']
+        x=o['x']+q['x']*math.cos(angle)-q['y']*math.sin(angle)
+        y=o['y']+q['x']*math.sin(angle)+q['y']*math.cos(angle)
+        # Keep successful infrastructure readback even if route identity cannot be resolved.
+        write_json(a.output/'fish_port_infrastructure.json',audit)
+        port_id=select_port(b.p,{'x':x,'y':y},getattr(a,'port_id',None))
+        if port_id is not None:
+            checks=compile_checks(b.p,port_id)
+            audit['waterRoutes']=await b.eval(audit_source(checks))
+            audit['purchase']['harborPathsVerified']=all(v['verified']for v in audit['waterRoutes']['pairs']if v['kind']=='depot_harbor')
+            audit['staticAccepted']=audit['infrastructureAccepted']and audit['waterRoutes']['verified']
+            if audit['waterRoutes']['verified']:
+                audit['pending']=[v for v in audit['pending']if v!='actual fishing route and return path']
+                audit['pending'].append('ship model restrictions and actual route operation')
+        else:
+            audit['waterRoutes']={'verified':False,'reason':'Specify --port-id or match planned harbor position'}
         write_json(a.output/'fish_port_acceptance.json',audit)
         if not audit.get('staticAccepted'):raise StopBatch('Static acceptance incomplete; no resubmission')
         if a.action=='build':await b.save('fish_port_checkpoint')
@@ -98,6 +125,6 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('action',choices=['prepare','preview','build','verify'],default='prepare',nargs='?')
     ap.add_argument('--template',type=Path,default=DEFAULT);ap.add_argument('--output',type=Path,required=True);ap.add_argument('--plan',type=Path)
     ap.add_argument('--x',type=float);ap.add_argument('--y',type=float);ap.add_argument('--rotation',type=float,default=0)
-    ap.add_argument('--isolated-test-save',action='store_true');ap.add_argument('--authorize-build',action='store_true')
+    ap.add_argument('--port-id',help='Planned harbor id for required ship legs');ap.add_argument('--isolated-test-save',action='store_true');ap.add_argument('--authorize-build',action='store_true')
     asyncio.run(execute(ap.parse_args()))
 if __name__=='__main__':main()

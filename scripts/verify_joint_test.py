@@ -4,6 +4,7 @@ from pathlib import Path
 from batch_warehouses import Bridge,ROOT,batch_lock,write_json,StopBatch
 from fullmap_batch import quote,save_signature
 from fullmap_workflow import atomic_write
+from primary_warehouse import prelude
 
 AUDIT='''
 local ids=B.json.decode(IDS);local expected=B.json.decode(EXPECTED);local CT=api.type.ComponentType
@@ -71,16 +72,11 @@ local reach=api.engine.system.catchmentAreaSystem.getStation2stationsAndDistance
 TRANSFER_HELPER
 out.paths.walking={outbound=transfer(stations('bus'),stations('heliport')),inbound=transfer(stations('heliport'),stations('bus'))}
 end
-local stocks={};out.capacity=0
-api.engine.forEachEntityWithComponent(function(id)local w=api.engine.getComponent(id,CT.WAREHOUSE);if w.construction==f.warehouse then
- stocks[w.stockList]=true;stocks[id]=true
- for _,s in ipairs(api.engine.getComponent(w.stockList,CT.STOCK_LIST).stocks)do out.capacity=out.capacity+s.capacity end
-end end,CT.WAREHOUSE)
-local coverageRoles={f.helipad and'helipad'or'heliport','truck'};if f.helipad2 then coverageRoles[#coverageRoles+1]='helipad2'end
-for _,role in ipairs(coverageRoles)do local covered=false
- for _,st in ipairs(stations(role))do for _,id in ipairs(api.engine.system.catchmentAreaSystem.getStationCatchables(st,true))do covered=covered or stocks[id]==true end end
- out.coverage[role]=covered
-end
+local targets={}
+for _,role in ipairs({'heliport','truck','helipad','helipad2'})do if f[role]then targets[role]=f[role]end end
+out.sharedWarehouse=primaryWarehouse(f.warehouse,targets)
+out.capacity=out.sharedWarehouse.capacity;out.quantity=out.sharedWarehouse.quantity
+for role,ids in pairs(out.sharedWarehouse.coverage)do out.coverage[role]=#ids>0 end
 local sc=api.engine.system.streetConnectorSystem;local seen={};local roadIds={};for _,id in ipairs(roads)do roadIds[id]=true end
 out.airportRoadLinkVerified=false
 if f.heliport then
@@ -95,7 +91,7 @@ out.airportRoadLinkRequired=f.heliport~=nil
 return B.json.encode(out)
 '''
 
-AUDIT = AUDIT.replace('TRANSFER_HELPER', Path(__file__).with_name('station_walk_transfer.lua').read_text('utf8'))
+AUDIT = prelude()+AUDIT.replace('TRANSFER_HELPER', Path(__file__).with_name('station_walk_transfer.lua').read_text('utf8'))
 
 def expected_roadside_offsets(expected, spec):
     """Carry template geometry into readback without mutating plan positions."""
@@ -161,6 +157,8 @@ def acceptance(result,defer_walking=False,spec=None):
  for role in roles & {'truck','bus','road_depot'}:
   keys=('out_3','in_3','out_4','in_4') if role=='road_depot' else ('inbound','outbound')
   require(pair_ok(role,keys),'path:'+role)
+ if spec and spec.get('externalAnchor'):
+  require(pair_ok('external',('inbound','outbound')),'external_road_path')
  if 'road_maintenance' in roles:
   require(all(result.get('maintenance',{}).get(k) is True for k in ('serviceVerified','roadsideVerified')),'maintenance')
  linked='heliport' not in roles or result.get('airportRoadLinkVerified') is True

@@ -10,7 +10,9 @@ class BusLines(Lines):
  def specs(self):return self.p['bus_specs']
  async def line(self,t,action):
   source=(ROOT/'scripts/fullmap_lines.lua').read_text(encoding='utf8')
-  source=source.replace('t.cargoUnload and (#ep.loads==0 or t.cargoLoad)','t.passengersUnload and t.passengersLoad ')
+  predicate='((#ep.loads>0 and t.cargoLoad) or (#ep.loads==0 and t.cargoUnload))'
+  assert predicate in source,'Passenger terminal adapter requires review after freight executor change'
+  source=source.replace(predicate,'(t.passengersUnload and t.passengersLoad)')
   # Native street objects expose an empty terminal mode mask; validate BUS paths
   # through their actual vehicle nodes, as the freight executor does for TRUCK.
   source=source.replace('ep.stop and mode==api.type.enum.TransportMode.TRUCK','ep.stop and mode==api.type.enum.TransportMode.BUS')

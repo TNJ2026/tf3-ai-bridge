@@ -1,6 +1,7 @@
 """Read-only collection modules, shared warehouse stock and airport-road links."""
 import argparse,asyncio,json
 from pathlib import Path
+from primary_warehouse import prelude,selection
 from fullmap_batch import Batch,quote,batch_lock,StopBatch,write_json
 async def audit(b,owner):
  h=next(h for h in b.p['hubs']if h['owner']==owner);tasks=[t for t in b.tasks()if t.get('owner')==owner]
@@ -10,18 +11,18 @@ async def audit(b,owner):
   norm=lambda m:{str(k):(v['name'],v.get('variant',0))for k,v in (m or {}).items()}
   assert norm(t['params'].get('modules',{}))==norm(a['params'].get('modules',{})),'Module mismatch'
   entities[t['kind']]=a['entity'];audits[t['kind']]=a
- code='''local f=B.json.decode(FAC);local CT=api.type.ComponentType;local out={stocks={},coverage={},links={}};local stocks={}
-api.engine.forEachEntityWithComponent(function(id)local w=api.engine.getComponent(id,CT.WAREHOUSE);if w.construction==f.warehouse then stocks[id]=true;stocks[w.stockList]=true;out.stocks[#out.stocks+1]={entity=id,stockList=w.stockList}end end,CT.WAREHOUSE)
-for _,role in ipairs({'truck','heliport','helipad','helipad2'})do if f[role]then local cc={};for _,st in ipairs(api.engine.getComponent(f[role],CT.CONSTRUCTION).stations)do for _,id in ipairs(api.engine.system.catchmentAreaSystem.getStationCatchables(st,true))do if stocks[id]then cc[id]=true end end end;local rr={};for id in pairs(cc)do rr[#rr+1]=id end;out.coverage[role]=rr end end
+ code=prelude()+'''local f=B.json.decode(FAC);local CT=api.type.ComponentType;local targets={}
+for _,role in ipairs({'truck','heliport','helipad','helipad2'})do if f[role]then targets[role]=f[role]end end
+local out=primaryWarehouse(f.warehouse,targets,PRIMARY_STOCK);out.links={}
 if f.heliport then local sc=api.engine.system.streetConnectorSystem;local seen={};for _,ids in pairs(api.engine.system.tpNetLinkSystem.getEdgeId2linkEntities())do for _,id in ipairs(ids)do if not seen[id]then seen[id]=true;local l=api.engine.getComponent(id,CT.TP_NET_LINK);local a,c=l.from.edgeId.entity,l.to.edgeId.entity;if a==f.heliport or c==f.heliport or sc.getConstructionEntityForSubconstruction(a)==f.heliport or sc.getConstructionEntityForSubconstruction(c)==f.heliport then out.links[#out.links+1]={from=a,to=c}end end end end end
-return B.json.encode(out)'''.replace('FAC',quote(entities))
+return B.json.encode(out)'''.replace('FAC',quote(entities)).replace('PRIMARY_STOCK',selection(h.get('primaryStockList')))
  road_ids=list(h['roads']);extra_file=b.out/'extra_roads.json'
  if extra_file.exists():
   extras=json.loads(extra_file.read_text('utf8'))
   if extras['planDigest']!=b.ledger['planDigest']:raise StopBatch('Extra roads belong to another plan')
   road_ids += [r['id']for r in extras['roads']if r['id'].startswith(owner+'_')]
- v=await b.eval(code);sets=[set(ids)for ids in v['coverage'].values()];common=set.intersection(*sets)if sets else set();edgeids={e for rid in road_ids for e in b.ledger['items'].get(rid,{}).get('commit',{}).get('edges',[])}
- if 'heliport'in entities:
+ v=await b.eval(code);common=v['commonWarehouseStockIds'];edgeids={e for rid in road_ids for e in b.ledger['items'].get(rid,{}).get('commit',{}).get('edges',[])}
+ if 'heliport'in entities and 'bus'in entities:
   helper=Path(__file__).with_name('station_walk_transfer.lua').read_text('utf8')
   walking=('''local f=B.json.decode(FAC);local CT=api.type.ComponentType
 local function stations(role)local ids={};for _,id in ipairs(api.engine.getComponent(f[role],CT.CONSTRUCTION).stations)do ids[#ids+1]=id end;return ids end

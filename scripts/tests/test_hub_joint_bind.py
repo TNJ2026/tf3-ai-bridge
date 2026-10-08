@@ -21,6 +21,22 @@ api={engine={util={proposal={makeProposalData=function(p,c)
 end}}}}
 '''
 class Tests(unittest.TestCase):
+ def test_fixed_frontage_rejects_port_displacement_before_repreview(self):
+  lua=LuaRuntime();lua.execute(SETUP+'''
+  spec.alignGeneratedPortGeometry=true
+  spec.roads={{entity=-15,buildPhase='frontage'}}
+  function V3(x,y,z)return{x=x,y=y,z=z}end
+  edges[1].comp.position0=V3(0,0,0);edges[1].comp.position1=V3(100,0,0)
+  for _,id in ipairs({-30,-40})do for _,edge in ipairs(pd.entity2tn[id].edges)do
+   edge.geometry={cubicSpline={pos={{x=7,y=0},{x=107,y=0}}},height={x=0,y=0}}
+  end end
+  ''')
+  with self.assertRaisesRegex(LuaError,'move fixed frontage'):
+   lua.execute(Path(__file__).resolve().parents[1].joinpath('hub_joint_bind_probe.lua').read_text('utf8'))
+  self.assertEqual(lua.globals().called,0)
+  self.assertEqual(lua.globals().edges[1].comp.position0.x,0)
+  self.assertEqual(lua.globals().edges[1].comp.position1.x,100)
+
  def test_native_port_geometry_replaces_guessed_endpoint(self):
   lua=LuaRuntime();lua.execute(SETUP+'''
   spec.alignGeneratedPortGeometry=true

@@ -2,7 +2,7 @@
 import argparse,json,subprocess,sys,time
 from pathlib import Path
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('--plan',type=Path,required=True);ap.add_argument('--output',type=Path,required=True);ap.add_argument('--owners');ap.add_argument('--authorize-build',action='store_true');ap.add_argument('--mode',choices=['auto','road-first','joint','sequential'],default='auto');ap.add_argument('--isolated-test-save',action='store_true');ap.add_argument('--current-map-test',action='store_true');ap.add_argument('--defer-walking',action='store_true');a=ap.parse_args();
+ ap=argparse.ArgumentParser();ap.add_argument('--plan',type=Path,required=True);ap.add_argument('--output',type=Path,required=True);ap.add_argument('--owners');ap.add_argument('--compiled-dir',type=Path);ap.add_argument('--authorize-build',action='store_true');ap.add_argument('--mode',choices=['auto','road-first','joint','sequential'],default='auto');ap.add_argument('--isolated-test-save',action='store_true');ap.add_argument('--current-map-test',action='store_true');ap.add_argument('--defer-walking',action='store_true');a=ap.parse_args();
  if not a.authorize_build:ap.error('Planning pack only; explicit future build authorization required (--authorize-build)')
  p=json.loads(a.plan.read_text('utf8'));a.output.mkdir(parents=True,exist_ok=True)
  journal=a.output/'construction_run.json';v=json.loads(journal.read_text('utf8'))if journal.exists()else dict(started=time.time(),events=[],scope='facilities_roads_stops_only')
@@ -29,9 +29,9 @@ def main():
    v['lastAcceptedCollection']=owner;persist();continue
   if mode=='joint':
    flags=['--authorize-build']+(['--isolated-test-save']if a.isolated_test_save else[])+(['--current-map-test']if a.current_map_test else[])+(['--defer-walking']if a.defer_walking else[])
+   if a.compiled_dir:flags+=['--compiled-dir',str(a.compiled_dir)]
    run('build_joint_collection.py','build','--owner',owner,*flags)
-   external=[r['id']for r in p['roads']if r['id'].startswith(owner+'_')and not r.get('templateRoad')]
-   if external:run('build_planned_hub_roads.py','build','--owner',owner,'--road-ids',','.join(external))
+   # Joint compiler consumes internal and external roads together.
    v['lastAcceptedCollection']=owner;persist();continue
   run('fullmap_batch.py','build','--ids',','.join(h['facilities'].values()))
   run('build_planned_hub_roads.py','build','--owner',owner)

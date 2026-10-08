@@ -2,6 +2,19 @@
 import argparse,asyncio,json,time,sys
 from pathlib import Path
 from fullmap_batch import Batch,PLAN,ROOT,quote,batch_lock,unfinished,StopBatch
+
+def receipt_matches(task,item,audit,items):
+ """Read-only acceptance of a submitted stop or a recorded one-hop reuse."""
+ receipt=item
+ if item.get('alias'):
+  if item.get('attempts') or item['alias']==task['id']:return False
+  receipt=items.get(item['alias'],{})
+  if receipt.get('alias') or receipt.get('kind')!='street_stop' or receipt.get('status')!='static_verified':return False
+ expected={s['id']for s in receipt.get('commit',{}).get('stations',[])}
+ actual={s['id']for s in audit.get('objects',[])}
+ covered=set().union(*(set(s.get('catchables',[]))for s in audit.get('objects',[])))
+ return bool(expected) and bool(audit.get('verified')) and expected==actual and set(task['covered_building_hints'])<=covered
+
 class Stops(Batch):
  async def audit(self,t):return await self.eval((ROOT/'scripts/fullmap_stop_audit.lua').read_text(encoding='utf-8-sig').replace('TASKJSON',quote(t)))
  async def verify_batches(self):
@@ -20,10 +33,8 @@ class Stops(Batch):
     item=self.ledger['items'].setdefault(t['id'],{'kind':'street_stop','attempts':0});audit=row['result']
     if not audit['objects']:status='submission_absent_requires_review'if item['attempts']else'not_built'
     else:
-     expected={s['id']for s in item.get('commit',{}).get('stations',[])}
-     actual={s['id']for s in audit['objects']}
      # Unrecorded objects are evidence to reconcile, never implicit adoption.
-     status='static_verified'if audit['verified']and expected==actual else'needs_reconciliation'
+     status='static_verified'if receipt_matches(t,item,audit,self.ledger['items']) else'needs_reconciliation'
     item.update(audit=audit,status=status);failed|=status in ('needs_reconciliation','submission_absent_requires_review')
    self.flush()
    if failed:raise StopBatch('Stop audit requires reconciliation')

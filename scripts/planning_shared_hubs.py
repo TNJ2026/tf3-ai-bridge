@@ -157,7 +157,7 @@ def finalize_land_quantities(hubs, facilities, roads, routes, cities, industries
         if required or existing:keep[owner]=h
         else:removed.update(members)
         traffic=[dict(route=r['id'],annual=r.get('annual'),cargo=r.get('cargo')) for r in routes
-                 if any(any(leg.get(k) in members for k in ('warehouse','source_second','destination_second','maintenance_base') if isinstance(leg.get(k),str))
+                 if any(any(leg.get(k) in members for k in ('warehouse','source_second','destination_second') if isinstance(leg.get(k),str))
                         or any(leg.get(k) in members for k in ('from','to') if isinstance(leg.get(k),str)) for leg in r['transfer_chain'])]
         decisions.append(dict(owner=owner,entity=h['entity'],kind=h['kind'],traffic=traffic,
             decision='retain_existing' if existing else 'required_by_transport' if required else 'omit_unused_candidate',

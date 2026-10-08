@@ -25,7 +25,7 @@ def run(snapshot_path, details_path, capacity_path, output, baseline=None, redes
         for kind,template in templates.items():
             write_json(output/'templates'/(kind+'.json'),template)
         source_files=['plan_pipeline.py','plan_flat_areas.py','planning_pipeline_core.py','plan_template_map.py','plan_network_complete.py','planning_flow.py','fullmap_workflow.py','fullmap_prepare.py','fullmap_hub_sets.py','fullmap_identity.py']
-        source_files.append('planning_shared_hubs.py')
+        source_files.extend(['planning_shared_hubs.py','planning_operations.py'])
         sources={name:(ROOT/'scripts'/name).read_text('utf8') for name in source_files}
         sources.update({name:(ROOT/'server/src/tf3_mcp'/name).read_text('utf8') for name in ['flat_areas.py','site_planner.py','route_planner.py','planning_geometry.py']})
         code=digest(sources)
@@ -76,6 +76,11 @@ def run(snapshot_path, details_path, capacity_path, output, baseline=None, redes
         queue=dict(buildAuthorized=False,nativePreviewsReusable=False,
             order=['shortlisted_flat_area_local_survey','representative_city_group','representative_production_group','coastal_water_sampling','remaining_building_groups','roads','stops','individual_diagnostics_only_for_rejected_groups'],
             localTerrainSurveys=refinement,
+            shipRoutePolicy={'topology':'shipyard <-> harbor <-> each assigned fishing ground',
+                             'directions':'check outbound and return separately',
+                             'cacheScope':'one engine evaluation; endpoints, direction, mode, navigation profile',
+                             'readback':'ship_route_checks.py --plan <plan> --output <new-result> --readback',
+                             'nativeVerified':False},
             maxCandidatesPerFailure=3,onUnknown='stop_and_reconcile',
             sharedHubCapacityChecks=plan.get('shared_hub_capacity_review',[]),
             citySitingComparisons=plan.get('city_siting_reviews',[]),

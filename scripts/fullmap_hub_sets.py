@@ -56,6 +56,13 @@ def compile_hub_sets(plan, road_reviews, geometry):
                                        maxNativePreviews=3, onKnownRejection='next_candidate',
                                        onUnknownResult='stop_and_reconcile') for r in roads]
         result.append(dict(id='HUBSET:'+','.join(sorted(group['owners'])), owners=sorted(group['owners']),
+                           sharedWarehousePlans=[dict(owner=str(h['owner']),
+                               primaryWarehouse=h['facilities'].get('warehouse'),
+                               stationFacilities={role:fid for role,fid in h['facilities'].items()
+                                                  if role in ('truck','heliport','helipad','helipad2')},
+                               primaryStockList=None,inventoryVerified=False,
+                               rule='Each cargo facility covers designated warehouse; resolve canonical inventory after build')
+                               for h in plan.get('hubs',[])if str(h['owner'])in group['owners']],
                            facilities=sorted(members), roads=sorted(r['id'] for r in roads),
                            status='needs_design' if issues else 'joint_native_preview_required',
                            issues=issues, previewQueue=queue, constructionReady=False,

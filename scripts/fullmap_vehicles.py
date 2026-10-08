@@ -7,6 +7,7 @@ class Vehicles(Lines):
  async def vehicle(self,t,action):
   source=(ROOT/'scripts/fullmap_vehicles.lua').read_text(encoding='utf8');return await self.eval(source.replace('TASKJSON',quote(t)).replace('local action=ACTION','local action='+json.dumps(action)))
  async def run(self):
+  if 'line_specs' in self.p:raise StopBatch('Use fullmap_fleet.py with the current fleet_manifest.json; starter purchases cannot execute this plan')
   await self.session()
   if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions')
   if self.a.action=='build':await self.save('vehicles_before')

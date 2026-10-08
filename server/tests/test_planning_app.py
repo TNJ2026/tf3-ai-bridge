@@ -71,9 +71,10 @@ def test_actual_mcp_card_resource_and_result(tmp_path,apps_enabled):
                 image_data=base64.b64decode(card['image'].split(',',1)[1])
                 assert image_data.startswith(b'\x89PNG')
                 decoded=Image.open(io.BytesIO(image_data))
-                assert decoded.size==(1600,920)
-                assert decoded.mode=='RGBA' and decoded.getpixel((0,0))[3]==0
-                assert (card['width'],card['height'])==(1600,920)
+                assert decoded.width < 1600 and decoded.height <= 920
+                assert decoded.mode=='RGBA'
+                assert decoded.getchannel('A').getbbox()==(0,0,*decoded.size)
+                assert (card['width'],card['height'])==decoded.size
                 assert 'base64' not in r.content[0].text
                 assert 'do not automatically open' in r.structured_content['display']
                 body=await asyncio.to_thread(lambda:urlopen(card['htmlUrl']).read())

@@ -5,6 +5,7 @@ from build_displayed_collection import Copy,OUT
 from hub_collection import Collection
 from fullmap_batch import ROOT,quote,batch_lock,StopBatch
 from batch_warehouses import write_json
+from primary_warehouse import prelude
 
 async def accept_collection(b):
  tasks=b.tasks();rows=await b.read_facilities(tasks,'verify',with_session=True);entities={}
@@ -19,10 +20,11 @@ async def accept_collection(b):
  for spec in b.p['roads']:
   item=b.ledger['items'][spec['id']];audit=await b.audit_road(item);item['audit']=audit
   roads[spec['id']]=audit['verified'];edges+=item.get('commit',{}).get('edges',[])
- code='''local f=B.json.decode(ENTITIES);local CT=api.type.ComponentType
-local stocks={};local out={capacity=0,coverage={},links={}}
-api.engine.forEachEntityWithComponent(function(id)local w=api.engine.getComponent(id,CT.WAREHOUSE);if w.construction==f.warehouse then stocks[w.stockList]=true;stocks[id]=true;for _,s in ipairs(api.engine.getComponent(w.stockList,CT.STOCK_LIST).stocks)do out.capacity=out.capacity+s.capacity end end end,CT.WAREHOUSE)
-for _,role in ipairs({'heliport','truck'})do local covered=false;for _,st in ipairs(api.engine.getComponent(f[role],CT.CONSTRUCTION).stations)do for _,id in ipairs(api.engine.system.catchmentAreaSystem.getStationCatchables(st,true))do covered=covered or stocks[id]==true end end;out.coverage[role]=covered end
+ code=prelude()+'''local f=B.json.decode(ENTITIES);local CT=api.type.ComponentType
+local out={coverage={},links={}}
+out.sharedWarehouse=primaryWarehouse(f.warehouse,{heliport=f.heliport,truck=f.truck})
+out.capacity=out.sharedWarehouse.capacity;out.quantity=out.sharedWarehouse.quantity
+for role,ids in pairs(out.sharedWarehouse.coverage)do out.coverage[role]=#ids>0 end
 local sc=api.engine.system.streetConnectorSystem;local seen={}
 for _,ids in pairs(api.engine.system.tpNetLinkSystem.getEdgeId2linkEntities())do for _,id in ipairs(ids)do if not seen[id]then seen[id]=true;local l=api.engine.getComponent(id,CT.TP_NET_LINK);local a,b=l.from.edgeId.entity,l.to.edgeId.entity
 if a==f.heliport or b==f.heliport or sc.getConstructionEntityForSubconstruction(a)==f.heliport or sc.getConstructionEntityForSubconstruction(b)==f.heliport then out.links[#out.links+1]={from=a,to=b}end

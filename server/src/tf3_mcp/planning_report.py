@@ -143,8 +143,14 @@ def export_report(plan, output_dir, width=1600, height=1100):
     report_image.alpha_composite(image)
     report_image.convert('RGB').save(folder/'plan.png')
     # Card title is HTML; omit report captions, legend and sampling notes from its image.
-    image.crop((0, 90, width, height-90)).save(folder/'card.png')
+    card_image = image.crop((0, 90, width, height-90))
+    # The report centres the map on a wide canvas. Trim that transparent
+    # letterboxing before the card applies its initial cover scale.
+    visible_bounds = card_image.getchannel('A').getbbox()
+    if visible_bounds:
+        card_image = card_image.crop(visible_bounds)
+    card_image.save(folder/'card.png')
     (folder/'plan.html').write_text(content,encoding='utf-8')
     (folder/'plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
     return dict(files={ext:str(folder/f'plan.{ext}') for ext in ('html','png','svg','json')}, warnings=warnings, width=width,height=height,
-                cardImage=str(folder/'card.png'), cardWidth=width, cardHeight=height-180)
+                cardImage=str(folder/'card.png'), cardWidth=card_image.width, cardHeight=card_image.height)

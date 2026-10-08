@@ -2232,6 +2232,15 @@ local function buildRoad(points, tplName, tpl, maxLen, allowCollisions)
 		if pt.node then
 			endpoints[#endpoints + 1] = pt.node
 			before[pt.node] = listOf(api.engine.system.streetSystem.getNodeSegments(pt.node))
+            -- r15/r16: adding a branch at an existing multi-edge node asserted
+            -- in native commit despite clean previews. Keep this topology read-only
+            -- until the native junction contract is understood; collision flags do not bypass it.
+            if #before[pt.node] >= 2 then
+                outcome.reason = { ok = false, code = "junction_commit_suspended",
+                    node = pt.node, degree = #before[pt.node],
+                    messages = { "Existing junction branch commits are suspended after native assertions; preview is geometry only" } }
+                return outcome
+            end
 			for _, e in ipairs(listOf(api.engine.system.streetSystem.getNodeSegments(pt.node))) do oldEdges[e] = true end
 		end
 	end
@@ -2241,7 +2250,7 @@ local function buildRoad(points, tplName, tpl, maxLen, allowCollisions)
 		outcome.reason = check
 		return outcome
 	end
-	applyProposal(proposal, true, function(success, res)
+	applyProposal(proposal, allowCollisions == true, function(success, res)
 		outcome.built = success
 		if success then
 			local added = addedStreetEntities(res, endpoints)
@@ -2291,6 +2300,15 @@ commands.build_road = function(args)
 		r = previewProposal(proposal, roadIgnoreSet(points))
 		r.length, r.segments = round1(length), pieces
 		r.buildable = not r.critical and (not r.blocked or args.allow_collisions == true)
+        r.geometryBuildable = r.buildable
+        r.commitSupported = true
+        for _, pt in ipairs(points) do
+            if pt.node and #listOf(api.engine.system.streetSystem.getNodeSegments(pt.node)) >= 2 then
+                r.commitSupported = false
+                r.commitBlockedReason = "junction_commit_suspended"
+                r.buildable = false
+            end
+        end
 		r.path = {}
 		for i, edge in ipairs(proposal.streetProposal.edgesToAdd) do
 			if i == 1 then r.path[1] = roundPos(edge.comp.position0) end
@@ -2529,6 +2547,7 @@ local function placeConstruction(args, fileName, params, extra)
 end
 
 -- Generic facility support. Kept in a scope to avoid Lua's chunk-local limit.
+local prepareHeadquarters
 do
  local tickets, serial = {}, 0
  local function field(v,k) return tryField(function() return v[k] end) end
@@ -2786,7 +2805,11 @@ do
   return {entity=town,resource=HQ,world=api.engine.util.getWorld(),player=api.engine.util.getPlayer(),
    town_name=selected.name,position=selected.position},d
  end
- commands.build_headquarters=function(args)
+ -- Shared native parameter preparation: no preview, tickets or world commands.
+ -- Keep the typed parameter table here; never reconstruct it from a JSON preview.
+ prepareHeadquarters=function(args,stage)
+  assert(stage==nil or type(stage)=="function","invalid headquarters stage logger")
+  assert(type(args)=="table","headquarters arguments must be a table")
   for _,k in ipairs({"x","y","z"}) do roadNumber(args[k],k) end
   roadNumber(args.rotation or 0,"rotation")
   if not api.engine.terrain.isValidCoordinate(V2(args.x,args.y)) then error("headquarters is outside the map",0) end
@@ -2795,16 +2818,30 @@ do
   if not template or template.fileName~="::/landmarks/hq/headquarter.script@createTemplateFn" then error("unrecognized headquarters native template",0) end
   local factory=ug_require("::/landmarks/hq/headquarter.script.tl")
   local native=factory.createTemplateFn(copy(template.params or {}),{})
+  assert(type(native)=="table","headquarters native template must be a table")
   local modules={};local count=0
   for slot,name in pairs(native) do
-   if type(slot)~="number" or name~="::/landmarks/hq/modules/hq_main.module" then error("unrecognized headquarters root module",0) end
+   if type(slot)~="number" or slot~=slot or math.abs(slot)==math.huge or slot%1~=0 or slot<0
+    or name~="::/landmarks/hq/modules/hq_main.module" then error("unrecognized headquarters root module",0) end
    local md=lookup("module",name)
+   assert(md and md.metadata and md.updateScript and type(md.updateScript.fileName)=="string",
+    "headquarters main module metadata/update script missing")
    modules[slot]={name=name,variant=0,metadata=md.metadata,updateScript={fileName=md.updateScript.fileName,params=md.updateScript.params}}
    count=count+1
   end
   if count~=1 then error("headquarters template must contain exactly one main module",0) end
   local params={seed=1,year=currentYear(),modules=modules}
-  local check=facilityPreview(buildProposal({resource=HQ,params=params,args=args}))
+  assert(type(params.year)=="number" and params.year==params.year and math.abs(params.year)<math.huge,
+   "headquarters year must be finite")
+  assert(type(params.modules)=="table" and next(params.modules),"headquarters modules missing")
+  if stage then stage("native_parameters_validated");stage("construction_assignment_begin") end
+  local proposal=buildProposal({resource=HQ,params=params,args=args})
+  if stage then stage("construction_assignment_complete") end
+  return proposal,before,params
+ end
+ commands.build_headquarters=function(args)
+  local proposal,before,params=prepareHeadquarters(args)
+  local check=facilityPreview(proposal)
   if not check.ok or #check.collisions>0 then return {preview=true,blocked=true,check=check} end
   local out=issue("headquarters",before,params,args,check)
   out.resource=HQ;out.town=before.entity
@@ -3018,6 +3055,150 @@ do
   end
   out.verification="configuration_only; connectivity and long-term simulation must be checked separately"
   return out
+ end
+ -- Sandbox industries use the native map-editor placement pipeline, not facility cloning.
+ do
+  local previews,operations={},{}
+  local sequence,epoch=0,tostring({})
+  local function sandbox()
+   assert(api.res.getBaseConfig().sandboxMode==true,"industry placement requires sandbox mode")
+  end
+  local function industryResource(name)
+   local d=lookup("construction",name)
+   assert(field(d,"isIndustry")==true,"resource is not an industry construction")
+   return d
+  end
+  local function session()
+   local s=commands.get_game_state({})
+   local map=api.engine.terrain.makeMapFromGame(false,true,true,false)
+   local rows,industrySet,towns={},{},{}
+   for _,v in pairs(map.industries) do rows[#rows+1]=canonical({id=v.existing,resource=v.fileName,pos=toPlain(v.pos)}) end
+   for _,r in ipairs(rows) do industrySet[r]=true end
+   for _,v in pairs(map.towns) do towns[#towns+1]=canonical({town=v.existing,pos=toPlain(v.pos)}) end
+   table.sort(towns)
+   for _,r in ipairs(towns) do rows[#rows+1]=r end
+   table.sort(rows)
+   return {world=s.world,player=s.player,time=s.gameTime,tick=s.tickCount,map=table.concat(rows,"|"),towns=table.concat(towns,"|"),industries=industrySet},map
+  end
+  local function same(a,b)
+   return a.world==b.world and a.player==b.player and b.time>=a.time and b.tick>=a.tick and a.map==b.map
+  end
+  local function prepare(args)
+   sandbox();industryResource(args.resource)
+   for _,k in ipairs({"x","y","rotation"}) do roadNumber(args[k] or (k=="rotation" and 0 or nil),k) end
+   assert(type(args.on_water)=="boolean","on_water must be boolean")
+   assert(type(args.seed)=="string" and #args.seed>0 and #args.seed<=128,"seed must be 1-128 characters")
+   assert(api.engine.terrain.isValidCoordinate(V2(args.x,args.y)),"industry outside map")
+   local snap,map=session();local all={}
+   for _,v in pairs(map.industries) do all[#all+1]=v end
+   local item=api.type.Map.Industry.new()
+   item.pos=V2(args.x,args.y);item.angle=math.rad(args.rotation or 0)
+   item.fileName=args.resource;item.onWater=args.on_water;item.existing=-1
+   all[#all+1]=item
+   -- Preserve every existing industry when using the native map-editor diff API.
+   local generated=api.engine.mapgen.createIndustries(args.seed,all)
+   assert(generated and #listOf(generated.toRemove)==0,"industry generation requested removals")
+   local additions=listOf(generated.toAdd)
+   assert(#additions==1,"native placement must produce exactly one industry")
+   local info=additions[1];assert(info.fileName==args.resource,"native resource changed")
+   local context=api.type.Context.new()
+   local proposal=api.engine.util.proposal.createIndustryProposal(args.seed,info,context)
+   if not proposal then return snap,nil,nil,{ok=false,blocked=true,reason="native industry placement rejected"} end
+   assert(#listOf(proposal.toRemove)==0,"industry proposal requested removals")
+   assert(next(toPlain(proposal.old2new or {}))==nil,"industry proposal requested replacements")
+   for _,key in ipairs({"removedSegments","removedNodes","nodeConfigsToRemove","old2newEdgeObjects","new2oldEdgeObjects"}) do
+    assert(next(toPlain(proposal.proposal[key] or {}))==nil,"industry proposal modifies existing roads")
+   end
+   local built=listOf(proposal.toAdd)
+   assert(#built==1 and built[1].fileName==args.resource,"unexpected industry construction proposal")
+   -- The script binding accepts only SimpleProposal for makeProposalData,
+   -- despite its Teal signature. Rebuild from the native generator's resolved
+   -- construction parameters; preview and commit this SAME proposal type.
+   local simple=api.type.SimpleProposal.new()
+   local ce=api.type.SimpleProposal.ConstructionEntity.new()
+   ce.fileName=built[1].fileName;ce.transf=built[1].transf
+   ce.params=copy(built[1].construction.params)
+   ce.playerEntity=built[1].playerEntity
+   simple.constructionsToAdd={ce}
+   local check=facilityPreview(simple)
+   local transform={}
+   for i=0,3 do local v=info.transf:cols(i);transform[#transform+1]={v.x,v.y,v.z,v.w} end
+   local resolved={resource=info.fileName,transform=transform,bbox=toPlain(info.bbox),streetPoint=toPlain(info.streetPoint),onWater=info.onWater,parameters=copy(ce.params)}
+   return snap,simple,resolved,check,context
+  end
+  commands.list_industry_resources=function()
+   local out={sandbox=api.res.getBaseConfig().sandboxMode==true,items={}}
+   for id,name in pairs(api.res.constructionRep.getAll()) do
+    local d=api.res.constructionRep.get(id)
+    if field(d,"isIndustry")==true then
+     local desc=field(d,"description")
+     out.items[#out.items+1]={resource=name,name=field(desc,"name"),sandbox_only=true}
+    end
+   end
+   table.sort(out.items,function(a,b)return a.resource<b.resource end)
+   return out
+  end
+  commands.preview_industry=function(args)
+   args=copy(args);if args.on_water==nil then args.on_water=false end;args.seed=args.seed or "tf3-mcp"
+   local s,p,resolved,check=prepare(args)
+   if not p or not check.ok or #check.collisions>0 then return {preview=true,blocked=true,check=check} end
+   local clock=assert(wallClock(),"preview clock unavailable")
+   for key,t in pairs(previews) do if clock-t.clock>60 then previews[key]=nil end end
+   sequence=sequence+1;local token="industry:"..epoch..":"..sequence
+   previews[token]={clock=clock,session=s,args=args,resolved=canonical(resolved)}
+   return {preview=true,preview_token=token,expires_in_seconds=60,check=check,resolved=resolved,
+    externalConnectionsBuilt=false,warning="Native preview only; roads, supply, production and long-term simulation require separate acceptance."}
+  end
+  local function readOperation(op)
+   local s=session()
+   if not same(op.session,s) then
+    -- A new industry changes the fingerprint by design. Still reject reload/time regression.
+    local missing=false
+    for key in pairs(op.session.industries) do if not s.industries[key] then missing=true end end
+    if missing or s.towns~=op.session.towns or s.world~=op.session.world or s.player~=op.session.player or s.time<op.session.time or s.tick<op.session.tick then
+     return {operation_id=op.id,status="session_changed",verified=false,do_not_resubmit=true}
+    end
+   end
+   local found={}
+   api.engine.forEachEntityWithComponent(function(id)
+    local c=getComponent(id,"CONSTRUCTION")
+    if c.fileName==op.args.resource and not op.existing[id] then
+     local p=c.transf:cols(3)
+     if math.abs(p.x-op.position.x)<.1 and math.abs(p.y-op.position.y)<.1 then
+      local industries={}
+      for _,iid in ipairs(listOf(c.industries or {})) do
+       local ind=getComponent(iid,"INDUSTRY")
+       if ind and ind.construction==id then industries[#industries+1]=iid end
+      end
+      if #industries>0 then found[#found+1]={construction=id,industries=industries,position={x=p.x,y=p.y,z=p.z}} end
+     end
+    end
+   end,componentTypes().CONSTRUCTION)
+   return {operation_id=op.id,status=#found==1 and "verified" or (op.callback==false and "rejected" or "pending_or_unconfirmed"),
+    submitted=true,callback=op.callback,verified=#found==1,entities=found,do_not_resubmit=true,
+    verification="industry_component_only; roads, production and simulation safety not verified"}
+  end
+  commands.get_industry_operation=function(args)
+   local op=operations[args.operation_id]
+   if not op then return {status="unknown_or_bridge_reloaded",verified=false,do_not_resubmit=true} end
+   return readOperation(op)
+  end
+  commands.commit_industry=function(args)
+   local t=previews[args.preview_token];previews[args.preview_token]=nil
+   assert(t,"industry preview expired, consumed or bridge reloaded")
+   local clock=assert(wallClock());assert(clock>=t.clock and clock-t.clock<=60,"industry preview expired")
+   sandbox();local now=session();assert(same(t.session,now),"industry session/map changed; preview again")
+   local s,proposal,resolved,check,context=prepare(t.args)
+   assert(canonical(resolved)==t.resolved,"native industry layout changed; preview again")
+   if not proposal or not check.ok or #check.collisions>0 then return {submitted=false,blocked=true,check=check} end
+   local existing={};api.engine.forEachEntityWithComponent(function(id)existing[id]=true end,componentTypes().CONSTRUCTION)
+   local pos=proposal.constructionsToAdd[1].transf:cols(3)
+   local op={id=args.preview_token,session=s,args=t.args,position={x=pos.x,y=pos.y},existing=existing}
+   operations[op.id]=op -- Persist intent before native dispatch, including ambiguous callbacks.
+   api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,context,false,true),function(_,success)op.callback=success==true end)
+   return readOperation(op)
+  end
+  for _,name in ipairs({"list_industry_resources","preview_industry","commit_industry","get_industry_operation"}) do ENGINE_COMMANDS[name]=true end
  end
  for _,name in ipairs({"list_facility_resources","list_facilities","get_facility_config","configure_facility","build_facility","build_headquarters","build_warehouse","build_helipad","build_heliport","commit_facility"}) do ENGINE_COMMANDS[name]=true end
 end
@@ -4607,7 +4788,7 @@ end
 -- END TERRAIN FLATTEN ADAPTER
 
 -- exposed for offline tests
-bridgeScript._internal = { previewReputation = previewReputation, json = json, commands = commands, toPlain = toPlain, finishRoadConnections = finishRoadConnections }
+bridgeScript._internal = { prepareHeadquarters = prepareHeadquarters, previewReputation = previewReputation, json = json, commands = commands, toPlain = toPlain, finishRoadConnections = finishRoadConnections }
 
 -- The game loads ".script.lua" files by calling the global data() and resolving
 -- "@update" / "@handleEvent" inside the returned table. Returning the same table

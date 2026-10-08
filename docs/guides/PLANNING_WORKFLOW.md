@@ -8,6 +8,10 @@
 
 新地图候选生成入口为 `scripts/plan_pipeline.py`：输入快照、需求明细、产能，以及仓库内默认模板（可显式覆盖），一次完成模板布局、供给网络、执行清单、统一预检和分类索引。已有完整方案继续使用 `scripts/fullmap_workflow.py` 预检。两者全程离线，不连接游戏，不显示卡片，不以旧地图目录或历史编号代替当前输入。
 
+## 规划收尾
+
+布局和线路精修后，按[运营预测与执行契约](CARGO_PLAN_FINALIZATION.md)执行 `plan_finalize.py --pack <目录>`，再用 `--check` 校验。统一生成维护分配、全链时效、平台占用、逐线购车清单和完整联合规格；报告、CSV 与任务绑定同一计划摘要。保持原生及建后证据的阶段边界，不将离线结果标为可直接施工。
+
 ## 显式模板输入
 
 当前实现：`plan_pipeline.py` 默认读取仓库内 `config/planning_templates/city.json` 和 `production.json`，包含设施模块、完整内部接路和独立端口映射。可用 `--city-template`、`--production-template` 显式覆盖。单独使用 `plan_template_map.py` 仍须显式传入这两个模板；不再隐式读取本机 `exports/hub_template_default.json` 等注册表。旧注册表只有 `template` 路径时，应传该路径所指的实际模板文件。模板可以保存在仓库外；相对路径按调用时的工作目录解析。

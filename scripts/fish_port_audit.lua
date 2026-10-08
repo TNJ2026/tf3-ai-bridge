@@ -26,27 +26,11 @@ for _,f in ipairs(spec.facilities)do
  assert(owner.player==api.engine.util.getPlayer(),'Owner mismatch')
  out.facilities[f.role]={entity=row.id,modulesVerified=true,poseVerified=true}
 end
-local stockIds={};local warehouseCount=0
-api.engine.forEachEntityWithComponent(function(id)
- local w=api.engine.getComponent(id,CT.WAREHOUSE)
- if w.construction==roles.warehouse then
-  assert(w.stockList>=0 and api.engine.entityExists(w.stockList),'Invalid warehouse stock')
-  assert(api.engine.getComponent(w.stockList,CT.STOCK_LIST),'Missing stock list')
-  stockIds[id]=true;stockIds[w.stockList]=true;warehouseCount=warehouseCount+1
- end
-end,CT.WAREHOUSE)
-assert(warehouseCount>0,'Warehouse missing')
-local shared=nil
 local stationRoles=roles.truck and {'harbor','truck'}or{'harbor','helipad','helipad2'}
-for _,role in ipairs(stationRoles)do
- local caught={};assert(#cs[role].stations>0,'Station missing')
- for _,st in ipairs(cs[role].stations)do
-  for _,id in ipairs(api.engine.system.catchmentAreaSystem.getStationCatchables(st,true))do if stockIds[id]then caught[id]=true end end
- end
- local values={};for id in pairs(caught)do values[#values+1]=id end;out.coverage[role]=values
- if not shared then shared=caught else for id in pairs(shared)do if not caught[id]then shared[id]=nil end end end
-end
-local common={};for id in pairs(shared or{})do common[#common+1]=id end
+local targets={};for _,role in ipairs(stationRoles)do targets[role]=assert(roles[role],'Missing cargo station role')end
+local shared=primaryWarehouse(roles.warehouse,targets,spec.primaryStockList)
+out.sharedWarehouse=shared;out.coverage=shared.coverage
+local common=shared.commonWarehouseStockIds
 out.commonWarehouseStockIds=common
 local transportAccepted=false
 if roles.truck then
@@ -91,26 +75,8 @@ for _,id in ipairs(cs.water_maintenance.depots)do
   service=service or (compatible and covers and d.maintenancePool>0)
  end
 end
-local purchaseAccepted=true
-if roles.water_depot then
- purchaseAccepted=false;out.purchase={resourceVerified=true,depots={}}
- local mode=api.type.enum.TransportMode.SMALL_SHIP;local targets={}
- for _,id in ipairs(cs.harbor.stations)do
-  local st=api.engine.getComponent(id,CT.STATION)
-  for _,t in ipairs(st.terminals)do if t.transportModes[mode]then targets[#targets+1]=t.vehicleNodeId end end
- end
- for _,id in ipairs(cs.water_depot.depots)do
-  local d=api.engine.getComponent(id,CT.VEHICLE_DEPOT)
-  local compatible=d and d.transportModes[mode]
-  local forward,back=false,false
-  if compatible and #targets>0 and #d.outNodes>0 and #d.inNodes>0 then
-   forward=#api.engine.util.pathfinding.findPathNodeToNode(d.outNodes,targets,{mode})>0
-   back=#api.engine.util.pathfinding.findPathNodeToNode(targets,d.inNodes,{mode})>0
-  end
-  out.purchase.depots[#out.purchase.depots+1]={entity=id,smallShip=compatible,harborOutbound=forward,harborInbound=back}
-  purchaseAccepted=purchaseAccepted or (compatible and forward and back)
- end
- out.purchase.harborPathsVerified=purchaseAccepted;out.purchase.purchaseExecuted=false
-end
-out.staticAccepted=#common>0 and transportAccepted and service and purchaseAccepted
+-- Required ship legs are audited once by ship_route_checks after this readback.
+out.purchase={required=roles.water_depot~=nil,harborPathsVerified=false,purchaseExecuted=false}
+out.infrastructureAccepted=#common>0 and transportAccepted and service
+out.staticAccepted=false
 return B.json.encode(out)

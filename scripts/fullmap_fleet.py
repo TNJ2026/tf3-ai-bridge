@@ -4,18 +4,38 @@ from pathlib import Path
 from fullmap_lines import Lines
 from fullmap_batch import ROOT,quote,batch_lock,unfinished,StopBatch
 
+def fleet_rows(policy, plan, digest):
+ if policy.get('planDigest')!=digest:raise StopBatch('Fleet and route plan differ')
+ modern='vehicles' in policy
+ rows=[dict(id=r['line'],model=r['model'],cargos=r['cargos'],count=r['quantity'],depot=r['depot']) for r in policy['vehicles']] if modern else policy['lines']
+ ids=[r['id'] for r in rows]
+ if len(ids)!=len(set(ids)):raise StopBatch('Duplicate fleet line')
+ if modern and set(ids)!={l['id'] for l in plan['line_specs']}:raise StopBatch('Fleet does not cover exact planned lines')
+ facilities={f['id']:f for f in plan.get('facilities',[])+plan.get('ports',[])}
+ lines={l['id']:l for l in plan.get('line_specs',[])}
+ for r in rows:
+  if type(r['count'])is not int or r['count']<=0:raise StopBatch('Positive integer fleet count required')
+  if not isinstance(r['model'],str) or not r['model']:raise StopBatch('Explicit vehicle model required')
+  if modern:
+   line=lines[r['id']];kind={'TRUCK':'road_depot','HELICOPTER':'heliport','SMALL_SHIP':'water_depot'}[line['mode']]
+   if facilities.get(r['depot'],{}).get('kind')!=kind:raise StopBatch('Wrong or missing purchase depot')
+   if set(r['cargos'])!={int(c) for c in line['cargos']}:raise StopBatch('Fleet cargo mismatch')
+   if r['model']!=line['vehicle_model'] or r['count']!=line['fleet_forecast']:raise StopBatch('Fleet model/count differs from plan')
+ return rows
+
 class Fleet(Lines):
  async def vehicle(self,t,action):
   source=(ROOT/'scripts/fullmap_fleet.lua').read_text(encoding='utf8')
   return await self.eval(source.replace('TASKJSON',quote(t)).replace('local action=ACTION','local action='+json.dumps(action)))
  async def run(self):
-  await self.session()
   policy=json.loads(self.a.fleet.read_text(encoding='utf8'))
-  if policy['planDigest']!=self.ledger['planDigest']:raise StopBatch('Fleet and route plan differ')
+  policy_rows=fleet_rows(policy,getattr(self,'p',{}),self.ledger['planDigest'])
+  await self.session()
   if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions')
   if self.a.action=='build':await self.save('fleet_before')
   specs={s['id']:s for s in self.specs()};facilities=self.tasks();done=0
-  rows=[r for r in policy['lines']if r['id']in specs]
+  rows=[r for r in policy_rows if r['id']in specs]
+  if not rows:raise StopBatch('No selected fleet lines')
   # Representatives first, then round-robin so a whole line is never blindly bulk-purchased.
   rows.sort(key=lambda r:(0 if r['id']=='LINE001'else 1 if r['id']=='LINE002'else 2 if r['id']=='LINE011'else 3,r['id']))
   for ordinal in range(1,max(r['count']for r in rows)+1):
@@ -29,7 +49,8 @@ class Fleet(Lines):
     expected=sorted(v['id']for k,it in self.ledger['items'].items()if k.startswith(sid+'__fleet_')and it.get('status')=='static_verified'for v in it['commit']['newVehicles'])
     kind={'TRUCK':'road_depot','BUS':'road_depot','HELICOPTER':'heliport','SMALL_SHIP':'water_depot'}[spec['mode']]
     task=dict(spec,model=row['model'],cargos=row['cargos'],expectedVehicles=expected,
-      origin=spec['endpoints'][0].get('position',spec['endpoints'][0].get('stop',{}).get('position')),depots=[f for f in facilities if f['kind']==kind])
+      origin=spec['endpoints'][0].get('position',spec['endpoints'][0].get('stop',{}).get('position')),depots=[f for f in facilities if f['kind']==kind and (not row.get('depot') or f['id']==row['depot'])])
+    if row.get('depot') and len(task['depots'])!=1:raise StopBatch('Planned purchase depot missing or ambiguous')
     current=await self.vehicle(task,'verify')
     if sorted(v['id']for v in current['vehicles'])!=expected:raise StopBatch(sid+' unrecorded fleet; reconcile')
     if any(v['noPath']or v['userStopped']for v in current['vehicles']):raise StopBatch(sid+' vehicle path/stopped problem')

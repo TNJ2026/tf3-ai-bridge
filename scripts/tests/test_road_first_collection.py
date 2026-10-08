@@ -95,7 +95,7 @@ def test_unknown_submission_locks_road_phase(tmp_path,monkeypatch):
                 self.commits+=1;return {'callback':{'success':False}}
             return {'previewPassed':True}
     b=Fake();monkeypatch.setattr(mod,'Batch',lambda a:b)
-    monkeypatch.setattr(mod,'prepare',lambda p,o:({},base,{'x':0,'y':0,'rotation':0}))
+    monkeypatch.setattr(mod,'prepare',lambda p,o,include_external=False:({},base,{'x':0,'y':0,'rotation':0}))
     monkeypatch.setattr(mod,'batch_lock',lambda d:contextlib.nullcontext())
     a=SimpleNamespace(owner='T1',action='build',stage='roads',current_map_test=True,authorize_build=True)
     with pytest.raises(mod.StopBatch,match='unknown'):asyncio.run(mod.run(a))

@@ -62,6 +62,8 @@ return B.json.encode({nodes=out})'''.replace('POS',quote(p))
   done=0
   for spec in selected:
    key=spec['id'];item=self.ledger['items'].setdefault(key,{'kind':'connection','attempts':0});await self.session()
+   if item.get('consumedByJoint'):
+    raise StopBatch(key+' already consumed by joint collection; use joint readback, never resubmit')
    if item.get('attempts'):
     item['audit']=await self.audit_road(item);item['status']='connection_verified'if item['audit']['verified']else'needs_reconciliation';self.flush()
     if item['status']!='connection_verified':raise StopBatch(key+' road readback failed; do not rebuild')

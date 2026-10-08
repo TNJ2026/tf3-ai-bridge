@@ -89,8 +89,27 @@ def test_prepare_never_connects_to_bridge(tmp_path,monkeypatch):
     assert (tmp_path/'joint_spec.json').exists()
     assert not json.loads((tmp_path/'joint_spec.json').read_text('utf8'))['commitEnabled']
 
-def test_unknown_native_test_is_blocked_before_bridge(tmp_path,monkeypatch):
+def test_unauthorized_build_is_blocked_before_bridge(tmp_path,monkeypatch):
     import fish_port_collection
     monkeypatch.setattr(fish_port_collection,'Batch',lambda *a:pytest.fail('No game calls permitted'))
-    a=SimpleNamespace(action='preview',output=tmp_path,plan=Path('unused'),isolated_test_save=False)
-    with pytest.raises(ValueError,match='isolated-test-save'):asyncio.run(execute(a))
+    a=SimpleNamespace(action='build',output=tmp_path,plan=Path('unused'),isolated_test_save=False,authorize_build=False)
+    with pytest.raises(ValueError,match='build authorization'):asyncio.run(execute(a))
+
+def test_preview_needs_no_map_pause_or_isolated_save(tmp_path,monkeypatch):
+    import fish_port_collection
+    from contextlib import nullcontext
+    class FakeBatch:
+        b=SimpleNamespace(dir=tmp_path)
+        async def session(self):pytest.fail('Preview must not enforce plan map identity')
+        async def call(self,command,args):
+            assert command=='get_game_state'
+            return {'speedup':4,'player':9,'world':77,'gameTime':10,'tickCount':20}
+        async def save(self,phase):pass
+        async def eval(self,code):
+            assert 'sendCommand' not in code and 'isolatedTestConfirmed' not in code
+            return {'errorState':{'critical':False,'infos':[],'messages':[],'warnings':[]},'collisions':[],'connectionsVerified':True}
+    monkeypatch.setattr(fish_port_collection,'Batch',lambda *a:FakeBatch())
+    monkeypatch.setattr(fish_port_collection,'batch_lock',lambda *a:nullcontext())
+    a=SimpleNamespace(action='preview',output=tmp_path,plan=Path('unused'),isolated_test_save=False,x=0,y=0,rotation=0,template=AIR_DEFAULT)
+    asyncio.run(execute(a))
+    assert json.loads((tmp_path/'fish_port_receipt.json').read_text('utf8'))['previewPassed']

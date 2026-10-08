@@ -1,4 +1,4 @@
-# TF3 MCP Bridge
+# Transport Fever 3 AI Bridge
 
 通过 **Agent → MCP → 模组** 控制《狂热运输3》(Transport Fever 3)。
 
@@ -27,12 +27,12 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 - `mod/tf3_mcp_bridge/` — 游戏模组。`content/tf3_mcp_bridge/bridge.gs.lua` 注册 game script，`bridge.script.lua` 是全部逻辑（JSON、userdata 通信、命令分发）。引擎侧脚本会热重载；GUI 侧（通信循环所在）要重新载入存档才生效。改脚本时要整体替换文件，否则游戏可能读到改了一半的内容。
 - `server/` — Python MCP Server（`mcp` 2.x）和命令行测试工具 `tf3-bridge`。
 - `scripts/install_mod.ps1` — 把模组以目录联接方式装进 Steam 的 `userdata\<id>\3493540\local\mods`。
-- `.mcp.json` — Claude Code 的 MCP 配置。
+- `.mcp.example.json` — MCP 配置示例；复制为本地 `.mcp.json` 并填写仓库绝对路径，本地配置不提交。
 
 ## 使用
 
 1. 安装模组：`powershell -ExecutionPolicy Bypass -File scripts\install_mod.ps1`
-2. 启动游戏 → 新游戏（或读档）→ **添加模组** 里激活 **TF3 MCP Bridge** → 进入存档。
+2. 启动游戏 → 新游戏（或读档）→ **添加模组** 里激活 **Transport Fever 3 AI Bridge** → 进入存档。发布版 ID 为 `cheng_tf3_ai_bridge`；旧版 `tf3_mcp_bridge_1` 使用相同通信目录，不要同时启用。旧存档的模组依赖不会自动迁移。
 3. 检查连通：
    ```
    cd server
@@ -40,7 +40,15 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
    uv run tf3-bridge ping
    uv run tf3-bridge get_game_state
    ```
-4. 在 Claude Code 里打开本目录，`.mcp.json` 会注册 `tf3` MCP Server。
+4. 将 `.mcp.example.json` 复制为 `.mcp.json`，把示例中的绝对路径替换为本机 `server` 目录；在 Claude Code 里打开本目录，配置会注册 `tf3` MCP Server。其他 MCP 客户端使用对应的配置入口。示例不默认开放任意 Lua eval。
+
+## 发布文件
+
+作者：**TNJ2026**。`mod/tf3_mcp_bridge/` 保存发布模组源码、`mod.json`、`_metadata/modinfo.json` 和封面 `_metadata/0.png`。源目录名称保留以兼容现有开发脚本。
+
+发布时将该目录复制到游戏用户目录的 `staging_area/cheng_tf3_ai_bridge/`，在主菜单 Mod Hub → My Mods 中校验并上传。`staging_area` 是本机发布副本，不提交到仓库。MCP 服务需要另行安装，游戏端模组本身不包含 AI 客户端。
+
+`exports/`、现场调查结果及测试临时目录均为本地运行证据，不随源码发布。历史指南对这些证据的链接仅供本地追溯，公共仓库可能没有对应文件；它们不构成当前地图的施工授权或验收。
 
 ## MCP 工具
 
@@ -355,3 +363,5 @@ server/.venv/Scripts/python.exe scripts/watch_map_cache.py --start 120586 --end 
 ## 资源勘探
 
 桥接0.12.5新增 `list_prospections`、`get_prospections`、`preview_prospection`、`commit_prospection`、`get_prospection_operation`，支持原生许可校验、一次性提交与进度/结果读回。使用流程、加载要求及验证边界见[资源勘探接口](docs/reference/PROSPECTIONS.md)。
+
+沙盒产业放置新增 `list_industry_resources`、`preview_industry`、`commit_industry`、`get_industry_operation`，提供资源目录、原生布局预览、一次性提交与产业组件读回。当前沙盒图全部 27 类产业已完成单次实建及独立组件验收；使用方式与验收边界见[沙盒产业放置](docs/reference/INDUSTRY_PLACEMENT.md)。

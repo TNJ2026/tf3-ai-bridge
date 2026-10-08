@@ -185,18 +185,29 @@ for n in sorted((n for n in nodes if len(adj[n])==1 and dst(nodes[n],target)<950
   q=curve(edge,t);lo=curve(edge,max(0,t-.01));hi=curve(edge,min(1,t+.01))
   tx,ty=hi[0]-lo[0],hi[1]-lo[1];norm=math.hypot(tx,ty)
   if norm<1e-6:continue
-  for offset in [60,70,85]:
+  # Enshi native readback: 30m centre offset links; 36m did not.
+  # Candidate distances, not universal thresholds. Never move far away merely
+  # to make a symmetric upgrade box clear; check entrance links at native preview.
+  for offset in [30,32,34]:
    for side in [1,-1]:
     away=pt(-ty/norm*side,tx/norm*side)
     p=pt(q[0]+away['x']*offset,q[1]+away['y']*offset)
     rot=math.degrees(math.atan2(-away['x'],away['y']))%360
-    if clear(box(p,50)):
-     hq=add('HQ','headquarters',p,rot,'build_headquarters',{'town':focus},50,
+    footprint=box(p,24,20)
+    reserved={'min':pt(p['x']-65,p['y']-24),'max':pt(p['x']+35,p['y']+76)}
+    if clear(facility_aabb(dict(position=p,rotation=rot,footprint=footprint),'footprint')):
+     hq=add('HQ','headquarters',p,rot,'build_headquarters',{'town':focus},24,
       town_name=T[focus]['name'],road_anchor=n,
       road_frontage={'edge_hint':eid,'position':pt(q[0],q[1]),'side':side,
        'placement':'beside_terminal_segment','native_verified':False,
        'verification_required':'entrance orientation, frontage gap/height and native pedestrian access'},
       road_basis='fronts existing street; no speculative road to construction centre')
+     hq.update(footprint=footprint,reserved=reserved,
+      upgrade_review_required=True,status='blocked_native_entrance_and_upgrade_review',
+      entrance_plan={'localPosition':dict(x=0,y=-16.8,z=.05001),
+       'centerlineGapM':offset-16.8,'pathVerified':False,
+       'basis':'30m observed Enshi centre offset; candidates still require native links, terrain and upgrade review'})
+     reserves[-1]=facility_aabb(hq)
      break
    if hq:break
   if hq:break
@@ -269,7 +280,7 @@ for j,l in enumerate(links,1):
  if mode=='HELICOPTER':
   if not hb or (not ha and not port and not offshore):raise ValueError('Required air-transfer collection has no feasible layout for flow '+str(a)+' -> '+str(b))
   if ha and not port:chain.append(dict(mode='TRUCK',**{'from':src,'to':ha['facilities']['truck']},warehouse=ha['facilities']['warehouse']))
-  chain.append(dict(mode='HELICOPTER',**{'from':src if port else air(ha)if ha else src,'to':air(hb)},source_second=port['helipad2']if port else air(ha,True)if ha else None,destination_second=air(hb,True),warehouse=hb['facilities']['warehouse'],maintenance_base=next(h['facilities']['heliport']for h in hubs.values()if h['kind']=='city')))
+  chain.append(dict(mode='HELICOPTER',**{'from':src if port else air(ha)if ha else src,'to':air(hb)},source_second=port['helipad2']if port else air(ha,True)if ha else None,destination_second=air(hb,True),warehouse=hb['facilities']['warehouse'],maintenance_base=None))
   chain.append(dict(mode='TRUCK',**{'from':hb['facilities']['truck'],'to':dstend}))
  else:chain.append(dict(mode='TRUCK',**{'from':src,'to':dstend}))
  routes.append(dict(id='R%03d'%j,**l,mode=mode,path=[pa,pb],road_edges=rp,transfer_chain=chain,alternatives={'road_seconds':rt,'air_seconds':at,'basis':'11m/s road;45m/s air;330s transfer estimate'},native_path_verified=False))
@@ -323,6 +334,9 @@ for owner in sorted({v['hub_owner']for v in L.get('shared_industry_hubs',{}).val
    if isinstance(line[end],str)and line[end]in members:
     traffic.append(dict(line=line['id'],direction=end,mode=line['mode'],cargos=line['cargos']))
  plan['shared_hub_capacity_review'].append(dict(owner=owner,industries=[int(i)for i,v in L['shared_industry_hubs'].items()if v['hub_owner']==owner],traffic=traffic,capacity_verified=False,required_checks=['industry round-trip road path','common warehouse stock','aggregate storage and truck terminal throughput','two landing terminals and fleet capacity'],note='Directional handling forecasts; do not sum both ends as additional supply. Expand or restore separate production hub if capacity fails.'))
+from planning_operations import enrich
+plan['cargo_deadlines_seconds']={str(k):v['timeToDeliverInSeconds'] for k,v in C.items() if v.get('timeToDeliverInSeconds',0)>0}
+enrich(plan)
 fm={f['id']:f for f in fac+ports};known=set(fm)|{r['id']for r in roads}|{st['id']for st in stops}
 jobs=[]
 for f in fac+ports:
