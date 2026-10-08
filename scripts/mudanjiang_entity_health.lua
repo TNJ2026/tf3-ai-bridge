@@ -1,0 +1,3 @@
+local out={ct={BASE_EDGE=api.type.ComponentType.BASE_EDGE,BASE_NODE=api.type.ComponentType.BASE_NODE,BASE_NODE_CONFIG=api.type.ComponentType.BASE_NODE_CONFIG},nodes={}}
+for _,n in ipairs({72647,70933,72653}) do local row={id=n,edges={},cfg=api.engine.getComponent(n,api.type.ComponentType.BASE_NODE_CONFIG)~=nil};for _,id in ipairs(api.engine.system.streetSystem.getNodeSegments(n)) do local e=api.engine.getComponent(id,api.type.ComponentType.BASE_EDGE);row.edges[#row.edges+1]={id=id,exists=api.engine.entityExists(id),base=e~=nil,entity=B.commands.get_entity({id=id,components={'BASE_EDGE'}})} end;out.nodes[#out.nodes+1]=row end
+return B.json.encode(out)

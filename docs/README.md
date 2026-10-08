@@ -1,0 +1,61 @@
+# TF3 文档导航
+
+本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-06。
+
+## 按任务阅读
+
+| 要做什么 | 先读 | 再读 |
+|---|---|---|
+| 货运规划收尾、维护分流、交付时效与批量执行 | [运营预测与执行契约](guides/CARGO_PLAN_FINALIZATION.md) | [统一规划流程](guides/PLANNING_WORKFLOW.md) |
+| 建造或复用总部 | [总部建设指南](guides/HQ_ACCESS_DIAGNOSTIC.md) | [设施接口](reference/FACILITY_SUPPORT.md#总部专用接口) |
+| 规划与验收集合共用仓库 | [主仓库共库检查](strategy/TRANSPORT_CARGO_CONNECTIONS.md#主仓库共库检查) | [集合批量流程](guides/GROUPED_CONSTRUCTION_WORKFLOW.md#主仓库共库验收) |
+| 检查船坞、码头与渔场往返航路 | [船舶往返航路检查](guides/SHIP_ROUTE_CHECKS.md) | [集合航路验收](guides/GROUPED_CONSTRUCTION_WORKFLOW.md#船舶往返航路去重) |
+| 规划生产点旁的四设施集合 | [四设施生产模板](guides/PRODUCTION_COLLECTION_TEMPLATE.md) | [集合选址与共用](guides/GROUPED_CONSTRUCTION_WORKFLOW.md)、[六设施城市模板](guides/CITY_HUB_DEPOT_TEMPLATE.md) |
+| 每轮监控城市、供货、公交、载具和仓库并按授权处理 | [每轮监控清单](guides/MONITORING_WORKFLOW.md) | [人口公交](guides/POPULATION_BUS_MONITOR.md)、[操作协调](guides/OPERATION_COORDINATION.md) |
+| 判断交通设施是否需要仓库、货站或客运接驳 | [配套矩阵与完整运输链](strategy/TRANSPORT_CARGO_CONNECTIONS.md#各类建筑配套矩阵) | 运输任务判断、配套数量与验收清单 |
+| 比较各类交通建筑的站址、接驳和维护布局 | [交通设施选址指南](strategy/TRANSPORT_FACILITY_SITING.md) | [执行手册](guides/AGENT_PLAYBOOK.md)、[批量选址](reference/SITE_SELECTION.md) |
+| 为一个城市制定分期发展计划 | [城市发展策略](strategy/city-development-strategy.md) | [发展方案模板](strategy/DEVELOPMENT_PLAN_TEMPLATE.md) |
+| 调查地图、输出全局或局部规划图 | [执行手册](guides/AGENT_PLAYBOOK.md)第 2～3 节 | [规划与可视化接口](reference/PLANNING_TOOLS.md) |
+| 建造、改路、建线路或购车 | [项目执行规则](../AGENTS.md)、[执行手册](guides/AGENT_PLAYBOOK.md) | 对应接口说明与[操作协调](guides/OPERATION_COORDINATION.md) |
+| 扩建仓库、港口或其他设施 | [设施接口](reference/FACILITY_SUPPORT.md) | 策略中的升级预留要求 |
+| 天然平地不足时平整局部用地 | [地形平整接口](reference/TERRAIN_FLATTEN.md) | [规划与前置工序](guides/PLANNING_WORKFLOW.md#找不到天然平地时的地形平整) |
+| 快速比较停靠点、仓库或车站的位置 | [批量选址](reference/SITE_SELECTION.md) | [局部布局与卡片](reference/PLANNING_TOOLS.md) |
+| 编辑城市需求货物种类 | [城市货物需求接口](reference/TOWN_CARGO_NEEDS.md) | 原生参数、读回和验证边界 |
+| 查询或办理游戏贷款 | [贷款接口](reference/LOAN_SUPPORT.md) | 发展方案中的资金安排 |
+| 接取通知中的机遇任务 | [补贴任务接口](reference/SUBVENTIONS.md) | [操作协调](guides/OPERATION_COORDINATION.md) |
+| 调查停靠点崩溃、部分施工或超时 | 执行手册第 4、6、9、10 节 | [停靠点历史诊断](../STREET_STOP_INTERFACE.md) |
+
+## 目录职责
+
+- `strategy/`：发展顺序、生产布局、运输与仓储平衡、分期方案模板。经营建议与当前地图事实分开记录。
+- `guides/`：会话确认、授权范围、预览与提交、读回验证、操作协调和异常处置。
+- `reference/`：工具参数、调用顺序、结果解释、支持范围与验证边界。
+- `history/`：旧地图案例；不可直接重用其中的状态、编号、坐标或建造顺序。目前收录[牡丹江调查案例](history/MUDANJIANG_CASE.md)。
+
+根目录 [README](../README.md) 保留安装、API 概览与版本演进；[AGENTS](../AGENTS.md) 是 agent 的入口规则。工具签名以 [server.py](../server/src/tf3_mcp/server.py) 为准；游戏侧行为还须核对当前部署的桥接与存档。
+
+## 如何判断文档中的结论
+
+| 标记或内容 | 可以据此判断 | 不能据此判断 |
+|---|---|---|
+| 接口已实现 | 当前源码存在对应入口 | 当前游戏已加载同版本，或已完成实机写入验证 |
+| 历史只读核对／测试记录 | 指定时间、环境下的观察结果 | 当前地图仍有相同实体或数值 |
+| 预测、经营建议、升级预留 | 候选布局和需要核对的条件 | 原生碰撞通过、准确后期需求或收益保证 |
+| `built`、静态 `verified` | 对应接口的回调／读回结果 | 完整运输周期、重载或长期模拟安全 |
+
+规划与图片卡片已实现；跨规划、施工和补贴任务的统一调度、共享运力／预算预留尚未实现，当前由执行者按操作协调文档安排。不要把建议流程写成工具已有能力。
+
+## 文档维护约定
+
+1. 通用约束集中在执行手册，参数与能力边界集中在接口说明；其他文档链接引用，避免复制后不一致。
+2. 新能力分别注明“引入版本”“验证日期与范围”；最低版本不等于必须安装的精确版本。
+3. 当前计划使用新采集的数据；历史案例保留日期、已验证事项和未解决事项。地图变化后重新调查。
+4. 移动文档时同步修正根目录与文档内部链接；示例坐标、金额和实体编号必须注明来源或为占位符。
+5. 只改文档不连接游戏。文档检查验证内部链接与接口名称，不以此替代实机验证。
+
+
+## 历史复盘
+
+本次集合经验：[集合规划与施工复盘（2026-10-05）](guides/COLLECTION_REVIEW_20261005.md)，包含模板串组、入口适配、验收边界、固定地图存档槽及代码优化优先级。
+
+全图规划与恢复经验：[三门峡规划施工复盘（2026-10-03）](guides/SANMENXIA_PLANNING_REVIEW_20261003.md)。包含联合选址、小批运输链验证、崩溃检查遗漏、存档隔离和验收分层。

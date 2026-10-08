@@ -1,0 +1,76 @@
+local vehicle_util = ug_require "/gui/line_vehicle_mgmt/vehicle_util.tl" as VehicleUtil
+local listutil = ug_require "/scripts/util/listutil.tl" as ListUtil
+
+local type S = MissionTaskReplaceVehicles.State
+local type P = MissionTaskReplaceVehicles.Params
+local type TaskContext = MissionInterface.TaskContext
+
+local replaceVehicles = function(changes : {VehicleReactUtil.VehicleChange})
+	for __, change in ipairs(changes) do
+		local entity = change.vehicleEntity
+		local config = change.config
+		local newVehicles = {}
+		for __, part in ipairs(config.vehicles) do
+			if part.purchaseTime <= 0 then
+				part.purchaseTime = (api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME) as Engine.Component.GameTime).gameTime as integer
+			end
+			part.autoLoadConfig = listutil.listAssign(#part.part.compartment2loadConfig, true)
+			table.insert(newVehicles, part)
+		end
+		config.vehicles = newVehicles
+		api.cmd.sendCommand(api.cmd.makeVehicleReplaceCmd(entity, config))
+	end
+end
+
+local ret : MissionTaskReplaceVehicles = {
+
+	taskScriptName = "replace_vehicles",
+
+	onSpawn = function(param : P) : S
+
+		local modelId : integer = 0
+		if param.modelId then
+			modelId = param.modelId
+		else
+			modelId = api.res.modelRep.find(param.modelName)
+			if modelId <= 0 then
+				log.error("Could not find model", "modelName = " .. param.modelName)
+			end
+		end
+
+		local vehiclePartsList = { vehicle_util.makePart(modelId, true, nil) }
+		local vehicles = {}
+		local vehicleGroups = { 1 }
+		local muFileNames = {} -- not a multiple unit
+		for __, vehiclePartsListVehicle in ipairs(vehiclePartsList) do
+			table.insert(vehicles, vehiclePartsListVehicle)
+		end
+
+		local config = api.type.TransportVehicleConfig.new()
+		config.vehicles = vehicles
+		config.vehicleGroups = vehicleGroups
+		config.muFileNames = muFileNames
+
+		local changes : {VehicleReactUtil.VehicleChange} = {}
+		for __, vehicle in ipairs(param.entities) do
+			if not param.skipInvalidEntities or api.engine.entityExists(vehicle) then
+				local transportVehicle = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE) as Engine.Component.TransportVehicle
+				if not param.skipInvalidEntities or transportVehicle then
+					changes[#changes + 1] = {
+						vehicleEntity = vehicle,
+						config = config,
+					}
+				end
+			end
+		end
+
+		replaceVehicles(changes)
+		return
+	end,
+
+	isComplete = function(_ctx : TaskContext<S, P>) : boolean
+		return true
+	end,
+}
+
+return ret

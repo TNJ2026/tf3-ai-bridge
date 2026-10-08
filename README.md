@@ -1,0 +1,108 @@
+# Transport Fever 3 AI Bridge
+
+**English** | [简体中文](README.zh-CN.md)
+
+Connect AI assistants to Transport Fever 3 for map analysis, transport planning, and in-game operations.
+
+![Transport Fever 3 AI Bridge](mod/tf3_mcp_bridge/_metadata/0.png)
+
+This project includes an in-game mod and a local Python MCP server. Bring your own MCP-compatible AI client; the mod does not include an AI model or a model-service subscription.
+
+## Features
+
+- Inspect towns, industries, supply and demand, inventories, lines, vehicles, and finances.
+- Capture map and terrain snapshots, identify facility sites, and plan transport connections.
+- Export planning reports as HTML, PNG, SVG, and JSON.
+- Preview, submit, and read back facility, road, line, and vehicle operations through their respective interfaces.
+- Inspect opportunities, loans, and operating conditions; automation requires separate configuration.
+
+See the [documentation index](docs/README.md) for interface capabilities and validation boundaries. A successful preview, a constructed entity, and stable long-term operation are separate milestones.
+
+## How it works
+
+```text
+AI client → MCP (stdio) → Python server → local file bridge → game mod → game engine
+```
+
+The mod exchanges request, response, and heartbeat files with the server using `app.saveUserdata` / `app.loadUserdata` in the game's GUI environment. The default bridge directory is:
+
+```text
+<Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
+```
+
+## Requirements
+
+- Transport Fever 3 with a loaded save that has this mod enabled.
+- Python 3.11 or newer and `uv`.
+- An AI client supporting MCP over standard input/output.
+- The automatic installer targets Windows / Steam. Installation on other environments has not been verified.
+
+## Quick start with an Agent
+
+Open this repository in an AI Agent that can access local files and configure MCP connections. Enter the prompts below in its chat. The Agent handles setup and tool calls; you describe what you want to achieve.
+
+### 1. Set up and connect
+
+> Read this project's documentation and help me install and configure Transport Fever 3 AI Bridge. Check the local dependencies and MCP connection. Tell me when I need to enable the mod and load a save in the game, then verify the connection.
+
+### 2. Understand the current map
+
+> Analyze the current map, city demand, existing transport lines, and finances. Identify the main supply bottlenecks and opportunities for improvement.
+
+### 3. Plan a project
+
+> Plan a supply route for Chengde using nearby industries and existing infrastructure where possible. Estimate construction and operating costs, and show me the plan before building anything.
+
+Replace Chengde with a city on your map. You can also ask for bus routes, warehouse placement, or improvements to an existing network.
+
+### 4. Build the reviewed plan
+
+> Implement the plan we just reviewed within its budget. Build the infrastructure, configure the lines, and purchase the vehicles included in the plan. Verify actual loading, delivery, and maintenance, and report any blockers or unfinished work.
+
+For a follow-up operating check:
+
+> Check the new routes for supply shortages, congestion, cargo expiry, and financial risks, and suggest improvements.
+
+## Operating workflow and current limitations
+
+Check connectivity and the current map before resolving target entities. For world changes, follow **survey → backup → fresh preview → single submission → independent readback**. Reconcile timeouts or unknown outcomes before retrying.
+
+Protective restrictions remain in place for adding branches at existing road junctions and for joint submissions using generated ports across multiple facilities. Native crash causes are not fully resolved; a clean geometry preview does not establish safe submission. Resolve entity IDs again rather than reusing IDs from historical examples.
+
+Read [AGENTS.md](AGENTS.md) and the [operating playbook](docs/guides/AGENT_PLAYBOOK.md) before live operations. Monitoring instructions and historical construction procedures are not authorization for a new task.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `mod/tf3_mcp_bridge/` | Game mod, publishing metadata, and cover image |
+| `server/` | Python MCP server and the `tf3-bridge` CLI |
+| `scripts/` | Installation, planning, diagnostics, and execution tools; some are historical experiments |
+| `config/` | Planning templates and configuration |
+| `docs/` | Interface references, operating guides, and historical records, primarily in Chinese |
+| `.mcp.example.json` | Portable client configuration example |
+
+## Development and tests
+
+```powershell
+cd server
+uv sync --extra test
+cd ..
+$env:PYTHONPATH = 'server/src;scripts'
+server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
+```
+
+**The test suite is not currently fully passing.** The latest full collection was blocked by the missing historical `construct_roads` module. Excluding that test file produced 627 passes, 15 failures, and 4 passing subtests. See the [validation record](docs/COMMIT_VALIDATION_20261008.md) for the command, failure scope, and limitations. This project remains a development source checkpoint.
+
+## Publishing and documentation
+
+Publishing sources live in `mod/tf3_mcp_bridge/`; its directory name is retained for tool compatibility. Copy the complete directory to `staging_area/tnj_tf3_ai_bridge/` under the game's userdata directory, then validate and upload through **Mod Hub → My Mods** in the main menu.
+
+`_metadata/0.png` is the cover image, and `_metadata/modinfo.json` contains the author and description. The staging copy stays outside Git. Users still need to install the local MCP server separately.
+
+`exports/`, live-game survey records, logs, and test temporary directories are not distributed with the source. References to those files in historical documents may not resolve in a public checkout.
+
+- [Documentation index](docs/README.md)
+- [Planning tools](docs/reference/PLANNING_TOOLS.md)
+- [Historical versions and interface notes (Chinese)](docs/README_LEGACY.zh-CN.md)
+- [Official mod publishing guide](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)

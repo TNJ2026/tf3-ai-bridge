@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+server/uv.lock.bak
+
+# Local MCP configuration and credentials
+/.mcp.json
+.env
+.env.*
+!.env.example
+
+# Live-game surveys, execution evidence, and generated previews
+/exports/
+/output/
+/*.json
+!/.mcp.example.json
+/*.svg
+/*.png
+/*.html
+/server/.test-tmp*/
+/scripts/guangan_noise_trial_20261006.py

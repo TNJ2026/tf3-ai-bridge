@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tf3": {
+      "command": "uv",
+      "args": ["--directory", "C:/path/to/tf3-ai-bridge/server", "run", "tf3-mcp"]
+    }
+  }
+}

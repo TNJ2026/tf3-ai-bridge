@@ -1,0 +1,578 @@
+{
+  "schema": 1,
+  "name": "当前显示布局完整城市集合 · 中型乡村公路",
+  "anchorRole": "heliport",
+  "coordinateFrame": "local XY rotated with aviation facility; relative Z must be revalidated against destination terrain",
+  "sourceEvidence": {
+    "state": {
+      "speedup": 0,
+      "gameTime": 2053400,
+      "millisPerDay": 4000,
+      "date": {
+        "year": 1961,
+        "day": 28,
+        "month": 5
+      },
+      "timeOfDaySec": 52294,
+      "tickCount": 41146,
+      "loan": 0,
+      "player": 44942,
+      "world": 2,
+      "accountBalance": 0
+    },
+    "origin": {
+      "x": -1266.6389160156,
+      "y": -5069.5405273438,
+      "z": 0.98194885253906
+    },
+    "rotation": 45.0,
+    "facilities": {
+      "warehouse": 77816,
+      "road_depot": 77845,
+      "bus": 77806,
+      "truck": 40558,
+      "road_maintenance": 77801,
+      "heliport": 77815
+    }
+  },
+  "facilities": [
+    {
+      "role": "heliport",
+      "resource": "::/stations/air/heliport.con",
+      "localPosition": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "relativeRotation": 0.0,
+      "params": {
+        "modules": {
+          "1000": {
+            "name": "::/stations/air/heliport/landing_module.module",
+            "variant": 0
+          }
+        },
+        "year": 1960,
+        "seed": 1
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -55.21,
+          "y": -54.42
+        },
+        "max": {
+          "x": 52.95,
+          "y": 53.69
+        }
+      },
+      "upgradeReserveM": {
+        "maxY": 50
+      }
+    },
+    {
+      "role": "warehouse",
+      "resource": "::/warehouses/warehouse.con",
+      "localPosition": {
+        "x": 109.99981654889524,
+        "y": -42.000174780624754,
+        "z": 0.46012115478514015
+      },
+      "relativeRotation": 0.0,
+      "params": {
+        "modules": {
+          "642502540": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          },
+          "642502500": {
+            "name": "::/warehouses/wh_liquid.module",
+            "variant": 0
+          },
+          "632502540": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          },
+          "632502500": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          },
+          "652502540": {
+            "name": "::/warehouses/wh_universal.module",
+            "variant": 0
+          },
+          "652502500": {
+            "name": "::/warehouses/wh_liquid.module",
+            "variant": 0
+          }
+        },
+        "year": 1960,
+        "seed": 7,
+        "upgrade": true
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -52.84,
+          "y": -18.5
+        },
+        "max": {
+          "x": 68.94,
+          "y": 140.04
+        }
+      },
+      "upgradeReserveM": {
+        "maxX": 50,
+        "maxY": 30
+      }
+    },
+    {
+      "role": "truck",
+      "resource": "::/stations/street/modular_street_station/modular_terminal.con",
+      "localPosition": {
+        "x": 102.0771477233334,
+        "y": -105.9910942426355,
+        "z": 0.4826287031173401
+      },
+      "relativeRotation": -180.0481953133621,
+      "params": {
+        "modules": {
+          "20009901": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20209801": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_liquid.module",
+            "variant": 0
+          },
+          "20010101": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_flatbed.module",
+            "variant": 0
+          },
+          "20210001": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20209901": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20009801": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_liquid.module",
+            "variant": 0
+          },
+          "20010001": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20015503": {
+            "name": "::/stations/street/modular_street_station/entrance_exit.module",
+            "variant": 0
+          },
+          "20409801": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_liquid.module",
+            "variant": 0
+          },
+          "20409901": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          },
+          "20410101": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_flatbed.module",
+            "variant": 0
+          },
+          "20210101": {
+            "name": "::/stations/street/modular_street_station/cargo_platform_flatbed.module",
+            "variant": 0
+          },
+          "20410001": {
+            "name": "::/stations/street/modular_street_station/cargo_platform.module",
+            "variant": 0
+          }
+        },
+        "year": 1961,
+        "seed": 6,
+        "specialization": 1,
+        "tramTrack": 1,
+        "upgrade": true,
+        "platforms": 1
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -35.01,
+          "y": -28.01
+        },
+        "max": {
+          "x": 42.64,
+          "y": 37.13
+        }
+      },
+      "upgradeReserveM": {
+        "minX": 30,
+        "maxY": 40
+      }
+    },
+    {
+      "role": "bus",
+      "resource": "::/stations/street/modular_street_station/modular_terminal.con",
+      "localPosition": {
+        "x": -25.77538871543031,
+        "y": -105.88319831039455,
+        "z": 0.0
+      },
+      "relativeRotation": -180.0483595221886,
+      "params": {
+        "modules": {
+          "20409900": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20410000": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20209900": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20210000": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20009900": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20010000": {
+            "name": "::/stations/street/modular_street_station/passenger_platform.module",
+            "variant": 0
+          },
+          "20015503": {
+            "name": "::/stations/street/modular_street_station/entrance_exit.module",
+            "variant": 0
+          }
+        },
+        "year": 1961,
+        "seed": 5,
+        "tramTrack": 1,
+        "upgrade": true,
+        "platforms": 1
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -41.02,
+          "y": -32.01
+        },
+        "max": {
+          "x": 41.0,
+          "y": 50.01
+        }
+      },
+      "upgradeReserveM": {
+        "maxY": 20
+      }
+    },
+    {
+      "role": "road_depot",
+      "resource": "::/depots/road/road_depot/road_depot.con",
+      "localPosition": {
+        "x": -113.28727612741778,
+        "y": -110.16537206704979,
+        "z": 1.39649438858034
+      },
+      "relativeRotation": -180.4709419134476,
+      "params": {
+        "modules": {},
+        "year": 1961,
+        "seed": 4
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -17.81,
+          "y": -33.0
+        },
+        "max": {
+          "x": 38.75,
+          "y": 20.01
+        }
+      },
+      "upgradeReserveM": {
+        "maxX": 20,
+        "maxY": 20
+      }
+    },
+    {
+      "role": "road_maintenance",
+      "resource": "::/depots/road/road_maint_station.con",
+      "localPosition": {
+        "x": -112.71214765047462,
+        "y": -40.1679292185387,
+        "z": 1.39649438858034
+      },
+      "relativeRotation": -0.47093464933399043,
+      "params": {
+        "modules": {},
+        "year": 1961,
+        "seed": 3
+      },
+      "footprintBounds": {
+        "min": {
+          "x": -16,
+          "y": -16
+        },
+        "max": {
+          "x": 16,
+          "y": 16
+        }
+      },
+      "upgradeReserveM": {
+        "minX": 20,
+        "maxY": 20
+      },
+      "roadSnap": {
+        "localPoint": {
+          "x": 0,
+          "y": -16
+        },
+        "target": {
+          "x": -112.84365593280776,
+          "y": -56.167388758525604
+        },
+        "roadPoint": {
+          "x": -112.9422789545349,
+          "y": -68.16692282261913
+        },
+        "roadsideOffsetM": 11.99993934383651,
+        "requiredNativeVerification": true,
+        "basis": "Observed 12m offset retained after changing 24m town road to 22m medium country road; native snap not yet verified"
+      }
+    }
+  ],
+  "roads": [
+    {
+      "id": "ROAD0",
+      "node0": "N0",
+      "node1": "N3",
+      "position0": {
+        "x": -112.94218177789035,
+        "y": -68.16692362130466,
+        "z": 1.39649438858034
+      },
+      "position1": {
+        "x": -178.5810605498014,
+        "y": -67.62744396045365,
+        "z": -0.3866958618163999
+      },
+      "tangent0": {
+        "x": -65.638738507146,
+        "y": 0.5395228193121397,
+        "z": -1.1833839416504
+      },
+      "tangent1": {
+        "x": -65.63873580974789,
+        "y": 0.5391478809484411,
+        "z": -0.81659066677094
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    },
+    {
+      "id": "ROAD1",
+      "node0": "N4",
+      "node1": "N0",
+      "position0": {
+        "x": -25.74414205348638,
+        "y": -68.8831799775938,
+        "z": 0.0
+      },
+      "position1": {
+        "x": -112.94218177789035,
+        "y": -68.16692362130466,
+        "z": 1.39649438858034
+      },
+      "tangent0": {
+        "x": -87.19803972442165,
+        "y": 0.7162401718459606,
+        "z": -0.12625698745251
+      },
+      "tangent1": {
+        "x": -87.19803972442166,
+        "y": 0.7167310983371777,
+        "z": -1.5720709562302
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    },
+    {
+      "id": "ROAD2",
+      "node0": "N6",
+      "node1": "N4",
+      "position0": {
+        "x": 52.165697927691944,
+        "y": -68.94912597131167,
+        "z": 0.46805572509764015
+      },
+      "position1": {
+        "x": -25.74414205348638,
+        "y": -68.8831799775938,
+        "z": 0.0
+      },
+      "tangent0": {
+        "x": -77.91001261470518,
+        "y": 0.06577336026173697,
+        "z": -0.23006112873554
+      },
+      "tangent1": {
+        "x": -77.91002070690024,
+        "y": 0.06576526806667715,
+        "z": -0.46805626153946
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    },
+    {
+      "id": "ROAD3",
+      "node0": "N2",
+      "node1": "N6",
+      "position0": {
+        "x": 102.10796280166352,
+        "y": -68.99133485997473,
+        "z": 0.4826287031173401
+      },
+      "position1": {
+        "x": 52.165697927691944,
+        "y": -68.94912597131167,
+        "z": 0.46805572509764015
+      },
+      "tangent0": {
+        "x": -49.94244290219777,
+        "y": 0.042009281196754955,
+        "z": 0.055639114230871
+      },
+      "tangent1": {
+        "x": -49.942286453095676,
+        "y": 0.042165730298844295,
+        "z": -0.14747498929501
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    },
+    {
+      "id": "ROAD4",
+      "node0": "N5",
+      "node1": "N2",
+      "position0": {
+        "x": 130.07588317595938,
+        "y": -69.01472669808192,
+        "z": 0.46012115478514015
+      },
+      "position1": {
+        "x": 102.10796280166352,
+        "y": -68.99133485997473,
+        "z": 0.4826287031173401
+      },
+      "tangent0": {
+        "x": -27.9677234642114,
+        "y": 0.023610327361001993,
+        "z": 0.0028481164481491
+      },
+      "tangent1": {
+        "x": -27.96780843225738,
+        "y": 0.023525359315019756,
+        "z": 0.03115794993937
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    },
+    {
+      "id": "ROAD5",
+      "node0": "N3",
+      "node1": "N1",
+      "position0": {
+        "x": -178.5810605498014,
+        "y": -67.62744396045365,
+        "z": -0.3866958618163999
+      },
+      "position1": {
+        "x": -255.00003769838037,
+        "y": -67.00009385223429,
+        "z": -0.3319473266601499
+      },
+      "tangent0": {
+        "x": -76.41861299984309,
+        "y": 0.6276926776981497,
+        "z": -0.95069974660873
+      },
+      "tangent1": {
+        "x": -76.41862109203815,
+        "y": 0.6276845855030899,
+        "z": -0.11064910143614
+      },
+      "roadTemplate": "country/country_new_medium",
+      "roadStyle": "::/infrastructure/street/country/country_new_large.street",
+      "buildPhase": "frontage"
+    }
+  ],
+  "stationPortNodes": [
+    "N0",
+    "N2",
+    "N4"
+  ],
+  "externalBoundaries": [
+    {
+      "node": "N1",
+      "externalConstructionEvidence": [],
+      "outsideSurvey": false,
+      "policy": "reconnect_at_destination; do_not_copy_external_facility"
+    }
+  ],
+  "rolePortNodes": {
+    "truck": [
+      "N2"
+    ],
+    "bus": [
+      "N4"
+    ],
+    "road_depot": [
+      "N0"
+    ]
+  },
+  "sourceRoadConnected": {
+    "truck": true,
+    "bus": true,
+    "road_depot": true
+  },
+  "sourceCoverage": {
+    "heliport": true,
+    "truck": true
+  },
+  "nativeJointPreviewPassed": false,
+  "constructionAuthorized": false,
+  "requirements": [
+    "Fresh destination terrain and obstacles",
+    "Joint native proposal at destination before construction",
+    "Resolve new truck external port; never reuse source IDs",
+    "Verify all shared stock types and capacities",
+    "Verify road turns, airport auto links and external road reachability"
+  ],
+  "limits": [
+    "Existing expansion modules preserved; no extra upgrade modules invented",
+    "Expansion slots are structural possibilities, not reserved collision-free land",
+    "Road styles and tangents preserved; construction-owned entrance generated by native facility",
+    "Source external junctions must be redesigned for each destination",
+    "Source relative elevation is evidence only; destination terrain heights are sampled anew",
+    "Expanded bus footprint is a conservative bound, not exact native geometry",
+    "Medium country road changes lane profile; all source path evidence is invalid for a future build"
+  ],
+  "planningRevision": "city-displayed-medium-country-v4",
+  "placementMode": "joint",
+  "hydrateModules": true,
+  "sourceCapture": "exports/city_template_displayed_20261005/capture.json",
+  "validationScope": "Captured layout and offline compilation only; medium-country native proposal, walking and road connections remain unverified",
+  "footprintBasis": "Unchanged modules retain prior facility-local bounds; expanded bus uses conservative inverse-rotated current world AABB",
+  "upgradeReserveBasis": "Directional outward estimates, not measured upgrade dimensions; destination native preview required",
+  "requiresNativePortRefresh": true
+}

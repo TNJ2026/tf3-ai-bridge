@@ -1,0 +1,3 @@
+local CT=api.type.ComponentType;local out={}
+for _,id in ipairs(api.engine.system.streetSystem.getNodeSegments(60819)) do local e=api.engine.getComponent(id,CT.BASE_EDGE);if e.node0==61155 or e.node1==61155 then local tn=api.engine.getComponent(id,CT.TRANSPORT_NETWORK);out.edge=id;out.nodes=#tn.nodes;out.objects={};for _,ref in ipairs(e.objects) do local s=api.engine.getComponent(ref[1],CT.STATION);local r={id=ref[1],side=ref[2],owner=api.engine.system.streetSystem.getEdgeForEdgeObject(ref[1]),terminals={}};if s then for _,t in ipairs(s.terminals) do r.terminals[#r.terminals+1]={vehicle=B.toPlain(t.vehicleNodeId),persons=B.toPlain(t.personNodes)} end end;out.objects[#out.objects+1]=r end end end
+return B.json.encode(out)

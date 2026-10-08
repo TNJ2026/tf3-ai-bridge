@@ -1,0 +1,9 @@
+{
+  "name": "紧凑布局候选（保留全部扩展）",
+  "offsets": {
+    "truck": {"x": -20, "y": 0},
+    "warehouse": {"x": -20, "y": 0}
+  },
+  "frontExtension": 0,
+  "outerExtension": -20
+}

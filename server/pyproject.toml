@@ -1,0 +1,26 @@
+[project]
+name = "tf3-mcp"
+version = "0.1.0"
+description = "MCP server that controls Transport Fever 3 through the tf3_mcp_bridge mod"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=2.2,<3",
+    "Pillow>=11,<13",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "lupa>=2.0",
+]
+
+[project.scripts]
+tf3-mcp = "tf3_mcp.server:main"
+tf3-bridge = "tf3_mcp.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tf3_mcp"]
