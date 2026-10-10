@@ -2,7 +2,7 @@ import copy,sys,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from hub_execution import execute_collection,StopBatch,strict_road_preview
-from build_displayed_collection import layout
+from displayed_collection_layout import layout
 
 class Fake:
  def __init__(self):

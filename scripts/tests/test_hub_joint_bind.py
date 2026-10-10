@@ -3,11 +3,15 @@ from pathlib import Path
 from lupa import LuaRuntime,LuaError
 
 SETUP='''
+B={toPlain=function(v)return v end,json={encode=function(v)
+ assert(v.critical==false and type(v.messages)=='table')
+ return 'fixture proposal diagnostics'
+end}}
 local function e(a,b,m)return {conns={{entity=a},{entity=b}},transportModes=m}end
 nodes={{entity=-5},{entity=-10},{entity=-8}}
 edges={{entity=-15,comp={node0=-5,node1=-10}}}
 spec={portBindings={bus={roadNode=-10},truck={roadNode=-5}}}
-pd={entity2tn={
+pd={errorState={critical=false,messages={},warnings={},infos={}},entity2tn={
  [-501]={edges={e(-501,-501,{[0]=true,[3]=true})}},
  [-502]={edges={e(-502,-502,{[1]=true,[3]=true,[4]=true})}},
  [-30]={edges={e(-21,-20,{[2]=true,[3]=true,[4]=true})}},
@@ -65,7 +69,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(len(g.proposal.streetProposal.nodesToAdd),1)
   self.assertEqual(g.spec.portBindings.bus.nativeEntranceNode,-21)
  def test_missing_generated_port_stops_before_second_native_preview(self):
-  with self.assertRaises(LuaError):self.run_lua('pd.entity2tn[-40]=nil')
+  with self.assertRaisesRegex(LuaError,'Generated port ambiguous.*fixture proposal diagnostics'):self.run_lua('pd.entity2tn[-40]=nil')
  def test_existing_world_nodes_are_not_selected(self):
-  with self.assertRaises(LuaError):self.run_lua('pd.entity2tn[-30].edges[1].conns[1].entity=123')
+  with self.assertRaisesRegex(LuaError,'Generated port ambiguous.*fixture proposal diagnostics'):self.run_lua('pd.entity2tn[-30].edges[1].conns[1].entity=123')
 if __name__=='__main__':unittest.main()

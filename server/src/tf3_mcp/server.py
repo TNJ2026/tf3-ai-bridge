@@ -13,6 +13,8 @@ from .map_cache import MapCache
 from .planning_app import apps, TOOL_META, card_result
 from .subventions import SubventionAutoAccept, make_policy
 from .compact import compact_ping, compact_road, compact_status
+from .ui_log import UiLogRequests
+from .headless import HeadlessRequests
 from mcp.types import CallToolResult
 
 ALLOW_EVAL = os.environ.get("TF3_MCP_ALLOW_EVAL", "") == "1"
@@ -30,6 +32,149 @@ mcp = MCPServer(
 )
 
 _bridge: Bridge | None = None
+_ui_log_requests = UiLogRequests()
+
+
+def headless() -> HeadlessRequests:
+    directory = bridge().dir
+    configured = os.environ.get("TF3_MCP_HEADLESS_MOD")
+    if not configured:
+        raise ValueError("Set TF3_MCP_HEADLESS_MOD to the diagnostic mod's content/tf3_mcp_bridge directory")
+    from pathlib import Path
+    return HeadlessRequests(directory, Path(configured))
+
+
+@mcp.tool()
+async def headless_status() -> dict:
+    """Read the opt-in receiver and durable pending request. No game request, GUI
+    input, reload or fallback. bounded mode expires after about 34 minutes;
+    demand mode waits on a missing filename without consuming idle slots. Native
+    cache reclamation remains unverified; do not claim unlimited memory safety."""
+    try:
+        return headless().status()
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def send_headless_request(command: str, arguments: dict | None = None,
+                                kind: str = "read", expected_session: str | None = None) -> dict:
+    """Publish exactly one request without panel input/clicks. Same whitelist as
+    prepare_ui_read_request (kind=read) or prepare_ui_build_request (kind=build).
+    Engine operations require expected_session from a fresh headless_status plus
+    independent map verification. build_* commands preview; commit_* consumes a
+    same-session preview. create_line directly creates an empty line (no vehicle)
+    and waits for the native callback. buy_vehicles buys exactly one unassigned
+    vehicle; assign_vehicles assigns one separately. set_vehicle_stopped and
+    send_to_depot change one vehicle. sell_vehicles requires one vehicle physically
+    in its depot. get_validation_state reports the loaded command whitelist and
+    remaining durable mutation budget. Road/track curves, edge edits, fixed rail
+    multiple units and workflows use separate preview/commit steps. Structural-only
+    previews remain explicitly labelled. Test removal only permits objects built
+    and verified by this channel in the current session. Facility layout is paged;
+    review all pages before cloning large facilities. Terrain commits require an
+    independently verified backup_save; a filename alone is not backup proof.
+    Authorization and pre-mutation save required for these direct operations.
+    Durable intent precedes publication. Read the returned ID; unknown outcomes
+    block subsequent publication. No retry, GUI fallback, save or speed change."""
+    import asyncio
+    try:
+        return await asyncio.to_thread(headless().send, command, arguments,
+                                       kind=kind, expected_session=expected_session)
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def read_headless_result(request_id: str) -> dict:
+    """Read an existing durable request after service restart too. Pending and
+    timeout_unknown never authorize resubmission. Reloaded logs require manual
+    reconciliation. Successful replies reuse the existing framed log protocol."""
+    try:
+        return headless().read(request_id)
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def prepare_ui_read_request(command: str, arguments: dict | None = None) -> dict:
+    """Experimental UI/log fallback: game state, finances, map info, or lists of
+    towns, lines, vehicles, stations, depots and vehicle models. List limit: 1-500;
+    ownership lists accept mine_only. Models accept year (1-9999), carrier
+    (ROAD/RAIL/TRAM/WATER/AIR), include_unavailable and limit. Other args rejected.
+    Does NOT send it. Enter returned input in the mod panel and click Query once.
+    Read the matching ID with read_ui_query_result. No mutations, eval or automatic retries."""
+    try:
+        return _ui_log_requests.prepare(bridge().dir.parent / "crash_dump" / "stdout.txt", command, arguments)
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def prepare_ui_build_request(command: str, arguments: dict) -> dict:
+    """Prepare, never dispatch, an experimental engine-side UI construction request.
+    survey_build_site(x,y) reads nine terrain samples; list_facilities({}) resolves
+    current owned construction IDs (map industry IDs are not construction IDs).
+    build_warehouse(x,y,z,rotation?,module_count=1|4?) and
+    build_facility(source_entity,x,y,z,rotation?) ONLY preview.
+    build_helipad(x,y,z,rotation?) and build_heliport(x,y,z,rotation?) ONLY preview;
+    road access, shared stock, purchase and flight operation need separate validation.
+    commit_facility(preview_token) consumes a successful same-session UI preview once.
+    get_facility_config(entity) independently reads back the built configuration.
+    get_facility_access(entity, person_graph=True) optionally reads bounded existing HQ PERSON lanes and exact link parameters for directed graph auditing; without this option it reads native automatic links and attached road edges;
+    it does not run pathfinding or certify vehicle access, shared stock or throughput.
+    preview_headquarters_access(town,road,x,y,z,rotation?) returns a bounded PERSON
+    graph from one native placement proposal. Audit both entrance directions before
+    a separate build_headquarters preview; it creates no commit token or path query.
+    get_facility_inventory(entity) maps a construction, station or station group to
+    real STOCK_LIST IDs and deduplicated capacity, with per-station native catchables.
+    Missing catchable inventories are explicit unknowns; this does not prove delivery.
+    preview_road(start,end,street_type) previews a straight ground road without auto-snap;
+    endpoints are {node:id} or {x,y,z?}. commit_road(preview_token) consumes that
+    preview once within 60 seconds, rechecks endpoints and reruns native validation.
+    get_entity(id) reads current components; list_street_types(filter?) discovers roads.
+    get_vehicle_cargo(vehicle,cargo), get_stop_cargo(line,stop_index,cargo), and
+    get_stock_cargo(stock_list,cargo,stock_quality?) read one valid cargo resource ID.
+    stock_quality=true adds native quality per actual stock slot to diagnose count
+    scope differences; aggregate and slot counts remain separate, never inferred.
+    Stock reads require a real STOCK_LIST entity and cover at most 64 stock slots;
+    use list_map_entities(kind="STOCK_LIST",ids_only=true,snapshot="new") to discover
+    IDs without oversized component payloads. Vehicle/stop counts are current;
+    stock annualDelivered/annualShipped are engine yearly statistics, not interval
+    throughput. A decrease in onboard amount alone does not certify delivery.
+    reconcile_road_rejection(request_id) clears only a saved, proven pre-dispatch
+    missing-road-preview rejection; never clears native failures or retries it.
+    Requires user construction authorization and a pre-build save before commit.
+    create_line(station_groups,name) directly creates one empty line, with 2-8
+    current station-group IDs and a 1-80 UTF-8 byte name; no vehicle purchase.
+    Delayed/unknown results retain the durable mutation block; do not resubmit.
+    preview_consist(depot,models=[current model IDs]) reviews 2-8 standalone rail
+    parts and sums fresh native part quotes. commit_consist(preview_token) consumes
+    the session-bound 60-second preview once, checks quote/resource/owner again,
+    and purchases one consist without assigning it. Fixed multiple units are excluded;
+    native depot/model compatibility and actual delivery still require live acceptance.
+    buy_vehicles(depot,model,count=1) buys one vehicle without assignment; model is
+    a resource string, not a numeric index. assign_vehicles(vehicles=[id],line,
+    stop_index) is separate and checks the current stop index. set_vehicle_stopped
+    (vehicle,stopped) stops/resumes one vehicle; send_to_depot(vehicle) never sells.
+    Submit panel input once; read_ui_query_result reads the outcome. Never retry an
+    unknown result. Street stops, demolition and arbitrary Lua are excluded.
+    """
+    try:
+        return _ui_log_requests.prepare_build(bridge().dir.parent / "crash_dump" / "stdout.txt", command, arguments)
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def read_ui_query_result(request_id: str) -> dict:
+    """Read a prepared UI query result from the current log window. Pending or
+    timeout_unknown never permits a retry. A late result can still be read.
+    Reloaded/rewritten logs invalidate requests. IDs belong to this MCP process."""
+    try:
+        return _ui_log_requests.read(request_id)
+    except (ValueError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def bridge() -> Bridge:
@@ -298,6 +443,18 @@ async def build_heliport(x: float, y: float, z: float, rotation: float = 0,
 
 
 @mcp.tool()
+async def build_airfield(x: float, y: float, z: float, rotation: float = 0,
+                         name: str = "") -> dict:
+    """Preview the native small airfield without requiring an existing airport.
+    Fixed starter: hangar, main building and one terminal. Checks current era,
+    native permits, module resources, dry land and strict collisions. Apply once
+    with commit_facility; actual road, passenger and depot service need readback.
+    """
+    return await _call("build_airfield", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       x=x, y=y, z=z, rotation=rotation, name=name)
+
+
+@mcp.tool()
 async def commit_facility(preview_token: str) -> dict:
     """Apply a facility preview ONCE with strict native error checking and config readback.
     Have a pre-construction save; use an isolated test save for unvalidated replacement layouts.
@@ -309,6 +466,7 @@ async def commit_facility(preview_token: str) -> dict:
 @mcp.tool()
 async def bridge_status(verbose: bool = False) -> dict:
     """Check whether the game is connected: heartbeat age, bridge version, game time, paused flag.
+    When disconnected, compact output puts historical fields under lastKnown; they are not live state.
     verbose=True adds the full heartbeat and the Lua environment probe (libraries exposed to mods)."""
     status = bridge().heartbeat()
     status["bridgeDir"] = str(bridge().dir)
@@ -545,7 +703,7 @@ async def get_map_info() -> dict:
 
 
 @mcp.tool()
-async def list_map_entities(kind: str = "CONSTRUCTION", offset: int = 0, limit: int = 100, snapshot: str | None = None) -> dict:
+async def list_map_entities(kind: str = "CONSTRUCTION", offset: int = 0, limit: int = 100, snapshot: str | None = None, ids_only: bool = False) -> dict:
     """Read a page of whole-map entities, including other players' entities.
     Kinds: TOWN, INDUSTRY, CONSTRUCTION, TOWN_BUILDING, BASE_NODE, BASE_EDGE,
     STATION, STATION_GROUP, VEHICLE_DEPOT, TRANSPORT_VEHICLE, SIM_PERSON, LINE,
@@ -560,10 +718,13 @@ async def list_map_entities(kind: str = "CONSTRUCTION", offset: int = 0, limit: 
     return missing=true. Snapshots last 300 seconds; at most 4 are retained, each
     capped at 250000 IDs. Release when done. Without a snapshot, entity changes
     can shift offsets. Reloading the save invalidates snapshots.
+    ids_only=true omits component payloads, useful for large stock records.
     Unreadable fields are explicitly marked; this is not a complete save export."""
     args = dict(kind=kind, offset=offset, limit=limit)
     if snapshot is not None:
         args["snapshot"] = snapshot
+    if ids_only:
+        args["ids_only"] = True
     return await _call("list_map_entities", **args)
 
 
@@ -1039,8 +1200,11 @@ async def build_rail_station(
     preview: bool = True,
     allow_collisions: bool = False,
     name: str | None = None,
+    cargo: bool = True,
 ) -> dict:
-    """Build a through cargo railway station with 1..4 tracks and 80/120/160/240/320 m platforms.
+    """Build a through railway station with 1..4 tracks and 80/120/160/240/320 m platforms.
+    Defaults to cargo; cargo=False creates passenger platforms, stairs and an era-specific main building.
+    Passenger stations require specialization='universal'.
     Rotation is degrees counterclockwise; tracks run along local Y. Uses unelectrified simple track.
     Specialization: universal, liquid, bulk, flatbed or goods. Defaults to preview with cost/errors.
     Set preview=False to construct. Returns construction, stations, stationGroups and railPorts/roadPorts.
@@ -1048,7 +1212,7 @@ async def build_rail_station(
     """
     args: dict[str, Any] = {"x": x, "y": y, "tracks": tracks, "length": length,
         "rotation": rotation, "specialization": specialization, "preview": preview,
-        "allow_collisions": allow_collisions}
+        "allow_collisions": allow_collisions, "cargo": cargo}
     if name is not None:
         args["name"] = name
     return await _call("build_rail_station", _timeout=BUILD_TIMEOUT, **args)

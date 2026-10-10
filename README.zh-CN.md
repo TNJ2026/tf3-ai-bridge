@@ -92,7 +92,7 @@ $env:PYTHONPATH = 'server/src;scripts'
 server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 ```
 
-**当前并非所有测试都通过。** 最近一次完整收集被缺失的历史 `construct_roads` 模块阻断；排除该测试文件后，627项通过、15项失败、4项子测试通过。命令、失败范围与限制见[验证记录](docs/COMMIT_VALIDATION_20261008.md)。本项目仍是开发中的源码检查点。
+最新全套测试与编译检查结果见[当前验证记录](docs/TEST_VALIDATION_20261010.md)。离线测试不代表原生游戏行为或存档长期模拟稳定性已验收。
 
 ## 发布与文档
 
@@ -106,3 +106,6 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 - [规划工具](docs/reference/PLANNING_TOOLS.md)
 - [历史版本与接口说明](docs/README_LEGACY.zh-CN.md)
 - [官方模组发布指南](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
+
+
+**实机验收：** 已完成记录中的有限操作场景；铁路同一乘客下车按用户要求暂时跳过。固定翼部分为空载试飞，长期缓存回收、无限运行和所有车型／货品组合未获证明。详见[操作验收记录](docs/UI_OPERATION_ACCEPTANCE_20261009.md)。实验性[无 GUI 通道](docs/HEADLESS_TRANSPORT_20261009.md)需主动启用，源码默认配置中关闭。

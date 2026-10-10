@@ -92,7 +92,7 @@ $env:PYTHONPATH = 'server/src;scripts'
 server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 ```
 
-**The test suite is not currently fully passing.** The latest full collection was blocked by the missing historical `construct_roads` module. Excluding that test file produced 627 passes, 15 failures, and 4 passing subtests. See the [validation record](docs/COMMIT_VALIDATION_20261008.md) for the command, failure scope, and limitations. This project remains a development source checkpoint.
+See the [current validation record](docs/TEST_VALIDATION_20261010.md) for the latest full-suite results and compilation checks. Offline tests do not certify native game behavior or long-running save stability.
 
 ## Publishing and documentation
 
@@ -106,3 +106,6 @@ Publishing sources live in `mod/tf3_mcp_bridge/`; its directory name is retained
 - [Planning tools](docs/reference/PLANNING_TOOLS.md)
 - [Historical versions and interface notes (Chinese)](docs/README_LEGACY.zh-CN.md)
 - [Official mod publishing guide](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
+
+
+**Live acceptance:** the recorded finite operation scenarios have been tested; same-person railway alighting is deferred by user request. Some fixed-wing flights were empty, and long-term cache reclamation, unlimited operation and all vehicle/cargo combinations are not certified. See the [operation acceptance record](docs/UI_OPERATION_ACCEPTANCE_20261009.md). The experimental [headless transport](docs/HEADLESS_TRANSPORT_20261009.md) is opt-in and disabled in the default source configuration.

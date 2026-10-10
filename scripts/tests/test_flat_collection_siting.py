@@ -100,7 +100,7 @@ def test_pipeline_runs_flat_stage_before_layout_and_invalidates_changed_terrain(
     import plan_pipeline
     from types import SimpleNamespace
     root=tmp_path/'project';(root/'scripts').mkdir(parents=True);(root/'server/src/tf3_mcp').mkdir(parents=True);(root/'exports').mkdir()
-    script_names=['plan_pipeline.py','plan_flat_areas.py','planning_pipeline_core.py','plan_template_map.py','plan_network_complete.py','planning_flow.py','fullmap_workflow.py','fullmap_prepare.py','fullmap_hub_sets.py','fullmap_identity.py','planning_shared_hubs.py']
+    script_names=['plan_pipeline.py','plan_flat_areas.py','planning_pipeline_core.py','plan_template_map.py','plan_network_complete.py','planning_flow.py','fullmap_workflow.py','fullmap_prepare.py','fullmap_hub_sets.py','fullmap_identity.py','planning_shared_hubs.py','planning_operations.py']
     for name in script_names:(root/'scripts'/name).write_text('offline fixture',encoding='utf8')
     for name in ['flat_areas.py','site_planner.py','route_planner.py','planning_geometry.py']:(root/'server/src/tf3_mcp'/name).write_text('fixture',encoding='utf8')
     for kind,registry,roles in [('city','hub_template_default.json',['heliport','warehouse','truck','bus','road_depot']),('production','hub_template_production_default.json',['helipad','helipad2','warehouse','truck'])]:

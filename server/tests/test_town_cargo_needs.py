@@ -5,10 +5,10 @@ import pytest
 from test_e2e import MOCK_API, SCRIPT, lupa_mod
 
 FIXTURE = r"""
-NOW=100;REV=1;SENDS=0;os.clock=function()return NOW end
+NOW=100;REV=1;GEN=1;MODREV=1;SENDS=0;os.clock=function()return NOW end
 components[100][2].cargoNeeds={{},{{1,1}},{{2,1}}}
 api.res.cargoTypeRep={getAll=function()return {[0]='passengers',[1]='fish',[2]='fuel',[3]='clothes'}end}
-ug_require=function()return {makeEntityAndRevision=function(id)return {entity=id,revision=REV}end}end
+ug_require=function()return {makeEntityAndRevision=function(id)return {entity=id,revision={num={GEN,MODREV,REV}}}end}end
 api.cmd.makeTownUpdateCargoNeedsCmd=function(id,needs,update)return {id=id,needs=needs,update=update}end
 api.cmd.sendCommand=function(cmd,cb)
  SENDS=SENDS+1
@@ -16,7 +16,7 @@ api.cmd.sendCommand=function(cmd,cb)
  if FAIL then cb({},false);return end
  local weighted={};for i,ids in ipairs(cmd.needs)do weighted[i]={};for k,id in ipairs(ids)do assert(type(id)=='number');weighted[i][k]={id,1/k}end end
  cmd.weighted=weighted
- if DELAY then PENDING=cmd else components[cmd.id][2].cargoNeeds=weighted;REV=REV+1 end
+ if DELAY then PENDING=cmd else components[cmd.id][2].cargoNeeds=weighted;MODREV=MODREV+1 end
  UPDATE=cmd.update;cb({},true)
 end
 """
@@ -50,7 +50,7 @@ def test_invalid_never_dispatches(game,args):
     with pytest.raises(Exception):c('preview_town_cargo_needs',town=100,**args)
     assert lua.globals().SENDS==0
 
-@pytest.mark.parametrize('change',['NOW=161','REV=2','components[100][2].cargoNeeds[2][1][2]=0.5','components[100][2].cargoNeeds[2]={{2,1}}','components[1][4].gameTime=0','components[100]=nil'])
+@pytest.mark.parametrize('change',['NOW=161','GEN=2','MODREV=2','components[100][2].cargoNeeds[2][1][2]=0.5','components[100][2].cargoNeeds[2]={{2,1}}','components[1][4].gameTime=0','components[100]=nil'])
 def test_stale_preview_never_dispatches(game,change):
     lua,c=game;t=preview(c);lua.execute(change)
     with pytest.raises(Exception):c('commit_town_cargo_needs',preview_token=t)
@@ -83,3 +83,11 @@ def test_mcp_forwarding_and_validation(monkeypatch):
     asyncio.run(run())
     assert calls[1]==('preview_town_cargo_needs',dict(town=100,commercial=[],update_buildings=False))
     assert len(calls)==4
+
+
+def test_simulation_revision_tick_does_not_invalidate_town_identity(game):
+    lua,c=game
+    token=preview(c)
+    lua.execute('REV=REV+252')
+    r=c('commit_town_cargo_needs',preview_token=token)
+    assert r['verified'] and lua.globals().SENDS==1

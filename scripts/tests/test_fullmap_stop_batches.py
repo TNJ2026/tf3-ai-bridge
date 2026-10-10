@@ -7,7 +7,7 @@ from fullmap_stops import Stops,StopBatch
 class Harness(Stops):
  def __init__(self,path,rows):
   self.path=path;self.a=SimpleNamespace(action='verify',stop_ids=None,limit=0,read_batch_size=8)
-  self.p={'city_stops':[{'id':r['id']}for r in rows]};self.ledger={'items':{},'events':[]};self.rows=rows;self.checks=0;self.reads=0
+  self.p={'city_stops':[{'id':r['id'],'covered_building_hints':[101]}for r in rows]};self.ledger={'items':{},'events':[]};self.rows=rows;self.checks=0;self.reads=0
  async def session(self):self.checks+=1
  async def eval(self,code):
   start=self.reads*8;self.reads+=1;return self.rows[start:start+8]
@@ -30,6 +30,11 @@ class StopBatches(unittest.TestCase):
    with self.assertRaises(StopBatch):asyncio.run(h.run())
  def test_matching_stops_verify(self):
   with tempfile.TemporaryDirectory()as d:
-   h=Harness(Path(d)/'ledger.json',[{'id':'A','result':{'objects':[{'id':1},{'id':2}],'verified':True}}]);h.ledger['items']['A']={'attempts':1,'commit':{'stations':[{'id':1},{'id':2}]}}
+   h=Harness(Path(d)/'ledger.json',[{'id':'A','result':{'objects':[{'id':1,'catchables':[101]},{'id':2}],'verified':True}}]);h.ledger['items']['A']={'attempts':1,'commit':{'stations':[{'id':1},{'id':2}]}}
    asyncio.run(h.run());self.assertEqual(h.ledger['items']['A']['status'],'static_verified')
+ def test_matching_entities_without_required_coverage_reject(self):
+  with tempfile.TemporaryDirectory()as d:
+   h=Harness(Path(d)/'ledger.json',[{'id':'A','result':{'objects':[{'id':1},{'id':2}],'verified':True}}]);h.ledger['items']['A']={'attempts':1,'commit':{'stations':[{'id':1},{'id':2}]}}
+   with self.assertRaises(StopBatch):asyncio.run(h.run())
+   self.assertNotEqual(h.ledger['items']['A']['status'],'static_verified')
 if __name__=='__main__':unittest.main()

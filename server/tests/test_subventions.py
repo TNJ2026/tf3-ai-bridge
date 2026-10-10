@@ -10,7 +10,7 @@ from tf3_mcp.subventions import SubventionAutoAccept, evaluate, expectation, mak
 
 FIXTURE = r'''
 local CT=api.type.ComponentType
-CT.GAME_SCRIPT=110;CT.STATION=111;CT.INDUSTRY=112;CT.TOWN_BUILDING=113;CT.TRANSPORT_NETWORK=114
+CT.STOCK_LIST=109;CT.GAME_SCRIPT=110;CT.STATION=111;CT.INDUSTRY=112;CT.TOWN_BUILDING=113;CT.TRANSPORT_NETWORK=114
 components[1][CT.GAME_TIME].gameTime=1000000
 api.util={getDefaultDayDuration=function()return 4000 end,getDefaultYearDuration=function()return 1461000 end}
 api.res.cargoTypeRep={find=function(n)return n=="::/cargos/fish/fish.cargo" and 6 or -1 end,
@@ -37,6 +37,8 @@ api.engine.system.gameScriptSystem={getEntityForGameScript=function(n)
 -- forest 500 produces cargo 12; sawmill 600 is the target
 components[500]={[CT.INDUSTRY]={stockList=501,construction=502},[CT.NAME]={name="Forest"}}
 components[600]={[CT.INDUSTRY]={stockList=601,construction=602},[CT.NAME]={name="Sawmill"}}
+components[501]={[CT.STOCK_LIST]={}}
+components[601]={[CT.STOCK_LIST]={}}
 api.engine.util.stock={
  getCargoMaxProductionPerYear=function(s,c)return (s==501 and c==12) and 50 or 0 end,
  getCargoProducedPerYear=function(s,c)return (s==501 and c==12) and 20 or 0 end,
@@ -281,3 +283,51 @@ def test_pending_at_limit_and_concurrent_passes():
         r=await auto.run_once()
         assert r['accepted']==[1] and sent==[1]
     asyncio.run(run())
+
+@pytest.mark.parametrize("collection,status", [
+    ("activeSubventions", "Active"),
+    ("completedSubventions", "Complete"),
+    ("failedSubventions", "Failed"),
+])
+def test_native_accept_state_survives_bridge_recreation(game, collection, status):
+    """A lost local submission ledger cannot make a native accepted task proposed again."""
+    lua, call = game
+    call("accept_subvention", uid=7001)
+    assert len(events(lua)) == 1
+    lua.execute(f"local task=table.remove(SUB.proposedSubventions,1); "
+                f"task.acceptedTime=1000000; table.insert(SUB.{collection},task)")
+    # New bridge instance has no Lua-local submitted table from the first instance.
+    restarted = lua.execute(SCRIPT.read_text(encoding="utf8"))
+    commands = restarted["_internal"]["commands"]
+    result = commands["get_subventions"](lua.table_from({"assess": False}))
+    tasks = by_uid(json.loads(restarted["_internal"]["json"]["encode"](result)))
+    assert tasks[7001]["status"] == status
+    assert tasks[7001]["acceptedTime"] == 1000000
+    with pytest.raises(Exception, match="not proposed"):
+        commands["accept_subvention"](lua.table_from({"uid": 7001}))
+    assert len(events(lua)) == 1
+
+
+@pytest.mark.parametrize("invalid", ["nil", "-1", "99999", "600"])
+def test_assessment_never_queries_invalid_producer_stock(game, invalid):
+    lua, call = game
+    lua.execute("components[500][api.type.ComponentType.INDUSTRY].stockList="+invalid)
+    lua.execute("stockCalls=0;api.engine.util.stock.getCargoMaxProductionPerYear=function()stockCalls=stockCalls+1;error('invalid stock native call')end")
+    assert not by_uid(call("get_subventions"))[7001]["assessment"]["served"]
+    assert lua.globals().stockCalls == 0
+
+
+@pytest.mark.parametrize("invalid", ["nil", "-1", "99999", "600"])
+def test_assessment_never_queries_invalid_city_building_stock(game, invalid):
+    lua, call = game
+    lua.execute("""
+      local CT=api.type.ComponentType
+      SUB.proposedSubventions[1].id="::/game_mechanics/subventions/deliver_cargo_town/deliver_cargo_town.res"
+      SUB.proposedSubventions[1].data.stockListEntity=nil
+      SUB.proposedSubventions[1].data.townEntity={entity=100}
+      components[601]={[CT.TOWN_BUILDING]={town=100}};CATCH[711]={601}
+      stockCalls=0;api.engine.util.stock.getCargoMaxConsumptionPerYear=function()stockCalls=stockCalls+1;error('invalid stock native call')end
+    """)
+    lua.execute("components[601][api.type.ComponentType.TOWN_BUILDING].stockList="+invalid)
+    assert not by_uid(call("get_subventions"))[7001]["assessment"]["served"]
+    assert lua.globals().stockCalls == 0
