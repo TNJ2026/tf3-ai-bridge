@@ -7358,8 +7358,16 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    local adjacent=listOf(api.engine.system.streetSystem.getNodeSegments(node));table.sort(adjacent)
    endpoints[#endpoints+1]={node=node,adjacent=adjacent,frozen=isFrozenStreetNode(node),position=nodePosition(node)}
   end
-  return stableDataSignature({edge=toPlain(e,0,nil,"Network.BaseEdge"),owner=ownerOf(id),
-   endpoints=endpoints,a=networkNodeConfigSnapshot(getComponent(e.node0,"BASE_NODE_CONFIG")),b=networkNodeConfigSnapshot(getComponent(e.node1,"BASE_NODE_CONFIG"))})
+  local snapshot={edge=toPlain(e,0,nil,"Network.BaseEdge"),owner=ownerOf(id),
+   endpoints=endpoints,a=networkNodeConfigSnapshot(getComponent(e.node0,"BASE_NODE_CONFIG")),b=networkNodeConfigSnapshot(getComponent(e.node1,"BASE_NODE_CONFIG"))}
+  -- Native crosswalk edge references can enumerate in a different order on
+  -- consecutive reads (Yulin 32932). Compare membership with multiplicity,
+  -- not enumeration order. Sort only the detached snapshot, never native data.
+  -- Keep lane/phase ordering and every other state field under the same guard.
+  for _,cfg in pairs({a=snapshot.a,b=snapshot.b})do
+   if type(cfg.crosswalks)=="table" then table.sort(cfg.crosswalks)end
+  end
+  return stableDataSignature(snapshot)
  end
  local function reclaimReadBudget(ledger)
   local removed={}
@@ -7512,7 +7520,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{capabilityRevision="consolidated-20261011-v40",commands=names,
+   emit(req,true,{capabilityRevision="consolidated-20261011-v40",edgeEditSignaturePolicy="crosswalk-membership-v1",commands=names,
     roadGraph={command="preview_road_graph",nativeAcceptance="pending_isolated_test",isolatedTestRequired=true,
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},

@@ -1053,14 +1053,20 @@ async def find_facility_sites(snapshot_path: str, output_dir: str, requests: lis
     """Fast offline batch siting on ONE planning snapshot; no live queries, previews or construction.
     requests (1..20): [{name,kind:'facility'|'street_stop',target:{x,y},radius:300,
       current:{min:{x,y},max:{x,y}},reserved:{min:{x,y},max:{x,y}},basis:'dimensions source',
-      step:25,rotations:[0,90],max_height_range:5,min_separation:50,ranking:'flat_first'}].
+      step:25,rotations:[0,90],max_height_range:5,terrain_policy:'advisory',
+      min_separation:50,ranking:'flat_first'}].
     Footprint boxes are LOCAL offsets from placement origin; reserved must include current plus upgrade/access.
     street_stop requires edges:[snapshot edge IDs known to be streets]; searches param .25/.5/.75,
     local X along road tangent; ignores only its supporting edge, requires live street/terminal validation.
     reserved_areas are WORLD boxes already committed in other plans, never ignored as host edges.
-    Screens sampled land, height range, obstacle/upgrade bounds; defaults to flat-ground-first
+    Screens sampled land and obstacle/upgrade bounds; defaults to flat-ground-first
     ranking (sampled ground grade, height range, then distance). ranking='distance_height'
     explicitly retains distance + 20*heightRange. Ground grade is not a native build limit.
+    Buildings default to terrain_policy='advisory': max_height_range is a reference,
+    not a rejection threshold; higher ground relief remains eligible for native preview.
+    terrain_policy='strict' explicitly filters by max_height_range (always required for street_stop).
+    Neither mode changes terrain or guarantees adaptation. Water, unknown survey bounds,
+    collision reservations and separately requested road-access screening still apply.
     Returns up to 1..10 spatially separated ALTERNATIVES per request, not a simultaneous layout.
     Budget 1..20000 evaluations; narrow range/increase step if exceeded. Water facilities not supported.
     Saves candidate plan JSON and returns data only; no intermediate card. Export only the final plan using export_planning_report. Fresh entities and native

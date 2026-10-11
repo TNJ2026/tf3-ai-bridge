@@ -14,6 +14,42 @@ class NativeRecord:
         return self.fields[key]
 
 
+def test_validation_exposes_loaded_edge_signature_policy(tmp_path):
+    result=Channel(tmp_path).query('get_validation_state',{})
+    assert result['ok']
+    assert result['result']['edgeEditSignaturePolicy']=='crosswalk-membership-v1'
+
+
+@pytest.mark.parametrize('after,allowed', [
+    ([33739,32933,33909], True),  # Same live Yulin crossing IDs, different iteration order.
+    ([33739,32933], False),
+    ([33739,32933,33909,40000], False),
+    ([33739,32933,40000], False),
+    ([33739,32933,33909,33909], False),
+])
+def test_edge_edit_crosswalk_order_is_not_a_world_change(tmp_path,after,allowed):
+    c=Channel(tmp_path)
+    ct=c.lua.globals().api.type.ComponentType
+    ct['BASE_NODE_CONFIG']=997
+    edge=next(entity for entity,cs in c.lua.globals().components.items() if cs[ct.BASE_EDGE] is not None)
+    node=c.lua.globals().components[edge][ct.BASE_EDGE]['node0']
+    cfg=NativeRecord(laneConnections=c.lua.table(),crosswalks=c.lua.table_from([33909,32933,33739]),
+        trafficLightPreference=2,trafficLightConfig=NativeRecord(states=c.lua.table(),trafficLightType=-1),
+        doubleSlipSwitch=False,userModifiedTrafficLightStates=False)
+    c.lua.globals().components[node][ct.BASE_NODE_CONFIG]=cfg
+    p=c.query('preview_road_upgrade',{'edge':edge,'street_type':'town/town_old_medium'})
+    assert p['ok'],p
+    # Signature generation must not sort or write the actual native component.
+    assert list(cfg.fields['crosswalks'].values())==[33909,32933,33739]
+    cfg.fields['crosswalks']=c.lua.table_from(after)
+    result=c.query('commit_edge_edit',{'preview_token':p['result']['preview_token']})
+    assert result['ok']==allowed,result
+    assert c.lua.globals().dispatches==(1 if allowed else 0)
+    assert list(cfg.fields['crosswalks'].values())==after
+    assert not c.state['v']['uiConstruction']['pending']
+    assert not c.query('commit_edge_edit',{'preview_token':p['result']['preview_token']})['ok']
+
+
 def setup_native_lanes(c):
     c.lua.globals().native_lane = lambda: NativeRecord(
         speed=20, width=3, height=0, forward=True, offset=1.5,
