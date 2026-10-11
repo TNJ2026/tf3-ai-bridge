@@ -11,9 +11,11 @@ The submission includes guarded road graphs, paired highways, special road
 connections, headless routing/save/recovery, legacy receiver removal, and siting
 performance changes with their tests and documentation. Bounded roundabout
 construction, bus driving and save/reload acceptance are recorded separately in
-[ROUNDABOUT.md](reference/ROUNDABOUT.md). The user explicitly accepted the remaining
-unverified dynamic entry-yield behavior as non-blocking for this code submission;
-it is not recorded as a passed behavior test. Existing isolated-test guards remain.
+[ROUNDABOUT.md](reference/ROUNDABOUT.md). The user subsequently clarified that successful roundabout construction satisfies
+the requirement; traffic control, dynamic entry yielding and saturation behavior
+are outside acceptance scope, with no further traffic trials required. Historical
+observations remain evidence, not passed behavior tests. Existing isolated-test
+guards remain.
 
 ## v32 channel migration
 
