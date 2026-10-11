@@ -37,11 +37,11 @@ async def main(spec_path):
                 save()
                 for command in spec['commands']:
                     kind=command.get('kind','read')
-                    if kind=='build':assert spec.get('session')==session,'Engine request needs reviewed session'
+                    if kind in ('build','save'):assert spec.get('session')==session,'Operation needs reviewed session'
                     record=dict(command);state['requests'].append(record);save()
                     ticket=await call('send_headless_request',dict(command=command['command'],arguments=command.get('args',{}),kind=kind,expected_session=session))
                     record['ticket']=ticket;save()
-                    deadline=time.monotonic()+65
+                    deadline=time.monotonic()+(125 if kind=='save' else 65)
                     while True:
                         reply=await call('read_headless_result',{'request_id':ticket['id']})
                         if reply['status']=='received':

@@ -53,6 +53,49 @@ def test_no_publish_on_invalid_or_changed_session(host):
     assert not host.ledger.exists()
 
 
+@pytest.mark.parametrize('command,args', [
+    ('get_network_template', {'template':'highway/highway_new_small'}),
+    ('list_road_structures', {}),
+    ('commit_road_graph', {'preview_token':'x','backup_save':'isolated'}),
+    ('get_road_graph_operation', {'operation_id':'x'}),
+])
+def test_old_receiver_refuses_v35_before_publication(host,command,args):
+    with pytest.raises(ValueError,match='lacks v35'):
+        host.send(command,args,kind='build',expected_session='session')
+    assert not host.ledger.exists()
+    assert (host.mod / 'headless' / GEN / '1.lua').read_bytes()==b'return ""\n'
+
+
+@pytest.mark.parametrize('version',[None,36,37,38,39,40,41])
+def test_special_road_graph_requires_loaded_v37(host,version):
+    row=dict(generation=GEN,session='session',slot=1,status='ready',utc=100,clock=10,due=12,
+             inputLimits={'default':512,'preview_road_graph':8192})
+    if version is not None:row['roadGraphVersion']=version
+    host.log.write_text(TAG+json.dumps(row)+'\n')
+    args={'graph':{'nodes':[{'split':{'edge':123,'param':.5,'allow_structure':True}}],'edges':[]},'isolated_test':True}
+    if version in (37,38,39,40):
+        assert host.send('preview_road_graph',args,kind='build',expected_session='session')['status']=='published'
+    else:
+        with pytest.raises(ValueError,match='lacks v37'):
+            host.send('preview_road_graph',args,kind='build',expected_session='session')
+        assert not host.ledger.exists()
+        assert (host.mod/'headless'/GEN/'1.lua').read_bytes()==b'return ""\n'
+
+
+@pytest.mark.parametrize('version',[37,38,39,40,41])
+def test_v40_preservation_rejected_before_publication_on_old_receiver(host,version):
+    row=dict(generation=GEN,session='session',slot=1,status='ready',utc=100,clock=10,due=12,
+             roadGraphVersion=version,inputLimits={'default':512,'preview_road_graph':8192})
+    host.log.write_text(TAG+json.dumps(row)+'\n')
+    args={'graph':{'nodes':[{'split':{'edge':123,'param':.5,'preserve_crossings':True}}],'edges':[]},'isolated_test':True}
+    if version==40:
+        assert host.send('preview_road_graph',args,kind='build',expected_session='session')['status']=='published'
+    else:
+        with pytest.raises(ValueError,match='lacks v'):
+            host.send('preview_road_graph',args,kind='build',expected_session='session')
+        assert not host.ledger.exists()
+
+
 def test_atomic_write_failure_preserves_intent(host, monkeypatch):
     from tf3_mcp import headless
     original = headless.atomic

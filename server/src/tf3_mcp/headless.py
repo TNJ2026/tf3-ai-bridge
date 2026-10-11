@@ -6,6 +6,7 @@ userdata fallback, slot recycling, automatic reload or unknown-outcome retry.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -66,6 +67,62 @@ class HeadlessRequests:
 
     def _save(self, value):
         atomic(self.ledger, json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+
+    def _save_path(self, slot):
+        from .ui_log import validate_save_arguments
+        validate_save_arguments('save_game', {'slot': slot})
+        folder = self.directory.parent / 'save'
+        path = folder / (slot + '.sav')
+        if folder.is_symlink() or path.is_symlink():
+            raise ValueError('Save symlinks are not supported')
+        return path
+
+    @staticmethod
+    def _signature(path):
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return None
+        if not path.is_file():
+            raise ValueError('Save target is not a regular file')
+        return dict(size=stat.st_size, mtimeNs=stat.st_mtime_ns, inode=stat.st_ino)
+
+    def _verify_save(self, row):
+        response = row['nativeResponse']
+        elapsed = max(0, time.time() - row['created'])
+        pending = dict(id=row['id'], status='timeout_unknown' if elapsed >= 120 else 'pending',
+                       phase='verifying_save_file', retryAllowed=False, elapsedSeconds=round(elapsed, 2))
+        result = response.get('result', {})
+        if (not response['ok'] or result.get('requested') is not True
+                or result.get('slot') != row['saveSlot'] or result.get('session') != row['session']):
+            return dict(pending, status='timeout_unknown', phase='native_save_outcome_unknown', nativeResponse=response)
+        path = self._save_path(row['saveSlot'])
+        current = self._signature(path)
+        if not current or current['size'] <= 0 or current == row['saveBefore']:
+            row.pop('saveCandidate', None); row.pop('saveStableSince', None)
+            return pending
+        if row.get('saveCandidate') != current:
+            row['saveCandidate'] = current
+            row['saveStableSince'] = time.time()
+            return pending
+        if time.time() - row['saveStableSince'] < 1:
+            return pending
+        # Require the same live session after the write; an old/new map's file is not proof.
+        live = self.status()['receiver']
+        if live['session'] != row['session'] or live['generation'] != row['generation']:
+            raise ValueError('Session changed during save verification; do not replay')
+        digest = hashlib.sha256()
+        with path.open('rb') as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(block)
+        if self._signature(path) != current:
+            row.pop('saveCandidate', None); row.pop('saveStableSince', None)
+            return pending
+        row['saveVerification'] = dict(path=str(path), signature=current, sha256=digest.hexdigest(),
+                                       stableSeconds=time.time() - row['saveStableSince'], reloadVerified=False)
+        row['response'] = dict(response, result=dict(result, verified=True,
+                                verification='new_nonempty_stable_file', file=row['saveVerification']))
+        return dict(status='received', response=row['response'])
 
     def _archive(self, ledger):
         # Keep the hot ledger bounded, retaining immutable per-request evidence
@@ -135,10 +192,12 @@ class HeadlessRequests:
                 ticket = reader.prepare(self.log, command, arguments)
             elif kind == "build":
                 ticket = reader.prepare_build(self.log, command, arguments or {})
+            elif kind == 'save':
+                ticket = reader.prepare_save(self.log, command, arguments)
             else:
                 raise ValueError("Unsupported request kind")
-            if kind == "build" and not expected_session:
-                raise ValueError("Engine operations require an independently verified current session")
+            if kind in ('build', 'save') and not expected_session:
+                raise ValueError("Operations require an independently verified current session")
             # Wait for a fresh ready window rather than racing a nearly expired slot.
             deadline = time.monotonic() + 6
             while True:
@@ -150,6 +209,36 @@ class HeadlessRequests:
                 time.sleep(.05)
             if expected_session is not None and row["session"] != expected_session:
                 raise ValueError("Session changed; invalidate previous IDs and previews")
+            # Old loaded receivers do not advertise limits and only accept 512.
+            # Check before intent/slot publication, even if the host allows more.
+            limits = row.get('inputLimits', {'default': 512})
+            if command in {'get_network_template', 'list_road_structures', 'preview_road_graph',
+                           'commit_road_graph', 'get_road_graph_operation'} and limits.get('preview_road_graph') != 8192:
+                raise ValueError('Loaded receiver lacks v35 road graph capability; reload the installed receiver first; nothing submitted')
+            if command == 'preview_road_graph':
+                graph = arguments['graph']
+                special = (not graph['edges'] or any('junction' in n or 'crossing_resource' in n
+                           or any(k in n.get('split', {}) for k in ('preserve_objects', 'allow_structure'))
+                           for n in graph['nodes']))
+                if special and row.get('roadGraphVersion') not in (37, 38, 39, 40):
+                    raise ValueError('Loaded receiver lacks v37 special road graph capability; nothing submitted')
+                advanced = any(any(k in n.get('split', {}) for k in ('preserve_crossings', 'preserve_tunnel_chain'))
+                               or any(k in n.get('junction', {}) for k in ('blocked_turns', 'crosswalk_edges'))
+                               for n in graph['nodes'])
+                if advanced and row.get('roadGraphVersion') != 40:
+                    raise ValueError('Loaded receiver lacks v40 preservation capability; nothing submitted')
+            limit = limits.get(command, limits.get('default', 512))
+            if type(limit) is not int or not 1 <= limit <= 8192:
+                raise ValueError('Invalid receiver input limit; nothing submitted')
+            if len(ticket['input'].encode('utf-8')) > limit:
+                raise ValueError(f'Loaded receiver accepts {limit} bytes for {command}; nothing submitted')
+            save_before = None
+            if kind == 'save':
+                if row.get('saveGameAvailable') is not True:
+                    raise ValueError('Loaded receiver does not support headless saves; load the updated mod')
+                save_before = self._signature(self._save_path(arguments['slot']))
+                if save_before is not None and not arguments.get('overwrite', False):
+                    raise ValueError('Save already exists; explicit overwrite=true required')
             demand = row.get("mode") == "demand"
             if not demand and any(x["generation"] == row["generation"] and x["session"] != row["session"]
                    for x in ledger["requests"].values()):
@@ -169,11 +258,15 @@ class HeadlessRequests:
                             slot=row["slot"], expires=row["due"] + (20 if demand else 2),
                             kind=kind, input=ticket["input"])
             encoded = json.dumps(envelope, separators=(",", ":"), ensure_ascii=True)
+            if len(encoded.encode('utf-8')) > 16384:
+                raise ValueError('Headless envelope exceeds receiver limit; nothing submitted')
             # Lua decimal byte escapes avoid executing interpolation/long-bracket data.
             payload = ('return "' + ''.join('\\%03d' % c for c in encoded.encode('utf-8')) + '"\n').encode('ascii')
             _, inode, offset, cmd, anchor, _ = reader.pending[ticket["id"]]
             record = dict(envelope, id=ticket["id"], command=cmd, inode=inode,
                           offset=offset, anchor=anchor.hex(), created=time.time(), status="intent")
+            if kind == 'save':
+                record.update(saveSlot=arguments['slot'], saveBefore=save_before)
             ledger["requests"][ticket["id"]] = record
             ledger["pending"] = ticket["id"]
             high_water[key] = row['slot']
@@ -199,11 +292,30 @@ class HeadlessRequests:
                     raise ValueError("Archived response identity mismatch")
             if "response" in row:
                 return {"status": "received", "response": row["response"]}
+            if 'reconciliation' in row:
+                return dict(status='rejected', id=request_id, retryAllowed=False,
+                            reconciliation=row['reconciliation'])
+            from .headless_recovery import native_input_rejection
+            rejection = native_input_rejection(self, row)
+            if rejection:
+                row['reconciliation'] = rejection
+                row['status'] = 'rejected_before_dispatch'
+                if ledger['pending'] == request_id:
+                    ledger['pending'] = None
+                self._save(ledger)
+                return dict(status='rejected', id=request_id, retryAllowed=False,
+                            reconciliation=rejection)
             reader = UiLogRequests()
             reader.pending[request_id] = (self.log, row["inode"], row["offset"], row["command"],
                 bytes.fromhex(row["anchor"]), time.monotonic() - max(0, time.time() - row["created"]))
             result = reader.read(request_id)
             if result["status"] == "received":
+                if row['kind'] == 'save':
+                    row['nativeResponse'] = result['response']
+                    result = self._verify_save(row)
+                    if result['status'] != 'received':
+                        self._save(ledger)
+                        return result
                 row["response"] = result["response"]
                 row["status"] = "received"
                 # Engine maintains its own unresolved-commit latch independently.
@@ -212,3 +324,23 @@ class HeadlessRequests:
                 self._archive(ledger)
                 self._save(ledger)
             return result
+
+    def reconcile_legacy_input_rejection(self, request_id, receiver_source, *, apply=False):
+        """Explicit evidence audit; never fabricate a native response or replay."""
+        from .headless_recovery import legacy_input_rejection
+        with public_lock(self.directory):
+            ledger = self._load()
+            row = ledger['requests'].get(request_id)
+            if not row:
+                raise ValueError('Unknown request')
+            if 'reconciliation' in row:
+                return row['reconciliation']
+            if ledger.get('pending') != request_id or 'response' in row:
+                raise ValueError('Only the current unresolved request can be reconciled')
+            evidence = legacy_input_rejection(self, row, Path(receiver_source))
+            if apply:
+                row['reconciliation'] = evidence
+                row['status'] = 'rejected_before_dispatch'
+                ledger['pending'] = None
+                self._save(ledger)
+            return dict(evidence, applied=apply)

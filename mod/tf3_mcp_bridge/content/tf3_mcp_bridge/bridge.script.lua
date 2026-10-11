@@ -1765,8 +1765,12 @@ local function handleEngineEvent(state, param)
 	local text = nil
 	local checkpointProspection
 	local checkpointWorkflow
+	if req.cmd and req.cmd:find("road_graph",1,true) then
+		checkpointWorkflow=workflowStateBinders.roadGraph(state,req.facilityEpoch,req.id)
+	else
 	for key,bind in pairs(workflowStateBinders) do
 		if req.cmd and req.cmd:find(key,1,true) then checkpointWorkflow=bind(state,req.facilityEpoch,req.id);break end
+	end
 	end
 	if prospectionStateBind and req.cmd and req.cmd:find("prospection", 1, true) then
 		checkpointProspection = prospectionStateBind(state, req.facilityEpoch)
@@ -3393,7 +3397,7 @@ do
      end
     end
    end
-   assert(#out>0 and #out<=32,"Directed road lanes unavailable or excessive")
+   assert(#out<=32,"Directed road lanes excessive")
    return out
   end
   local from,to=endpoints(a,true),endpoints(b,false)
@@ -3404,6 +3408,12 @@ do
     lanes[#lanes+1]={segment0=c.segment0,segment1=c.segment1,lane0=c.lane0,lane1=c.lane1,withRoad=c.withRoad,withTram=c.withTram}
    end
    for _,id in pairs(config.crosswalks)do crosswalks[#crosswalks+1]=id end
+  end
+  if #from==0 or #to==0 then
+   return {node=node,fromEdge=a,toEdge=b,mode=args.mode,pathFound=false,directPathVerified=false,
+    steps={},laneConnections=lanes,crosswalks=crosswalks,configurationAvailable=config~=nil,
+    nativeQueries=0,directedLanesAvailable=false,reason=#from==0 and "no_supported_incoming_lane" or "no_supported_outgoing_lane",
+    scope="directed lane eligibility; native pathfinding not invoked"}
   end
   local path=api.engine.util.pathfinding.findPathNodeToNode(from,to,{mode})
   local steps={};local usesA,usesB=false,false;local direct=true
@@ -4562,6 +4572,10 @@ end
 
 -- A missing documented flag is recorded explicitly, never converted to false.
 -- If a future binding exposes it, its actual value participates in comparisons.
+COMPONENT_RECORDS["BASE_EDGE_STREET"]="Engine.Component.BaseEdgeStreet"
+RECORD_SCHEMAS["Engine.Component.BaseEdgeStreet"]={precedenceNode0="",precedenceNode1=""}
+COMPONENT_RECORDS["RAILROAD_CROSSING"]="Engine.Component.RailroadCrossing"
+RECORD_SCHEMAS["Engine.Component.RailroadCrossing"]={nodes={element=""},edges={element=""},typeIndex="",state="",stateTime=""}
 local function networkNodeConfigSnapshot(cfg)
  if cfg==nil then return nil end
  local out=toPlain(cfg,0,nil,"Network.BaseNodeConfig")
@@ -5592,7 +5606,7 @@ do
 end
 
 
--- Bounded native network construction. No junction rewrites, bridge/tunnel guesses,
+-- Bounded native network construction. No implicit junction rewrites, bridge/tunnel guesses,
 -- auto repair or pathfinding fan-out. Geometry receipt is distinct from service access.
 do
  local previews,serial={},0;local epoch,requestId;local operations={};local checkpoint=function()end
@@ -5616,11 +5630,126 @@ do
   end
   return {items=out,total=#ids,offset=offset,hasMore=offset+#out<#ids}
  end
- local function endpoint(spec,roadType,resetEmptyRail,resetEmptyRoad)
+
+ -- Opt-in degree-two road branches: add the branch AND its complete node
+ -- configuration in one proposal. Never mutate a live component or clear it
+ -- as a preliminary operation. Legacy build_road remains closed for junctions.
+ local function junctionLaneIndices(node,edge)
+  local lanes=listOf(edge.laneConfigs);local incoming,outgoing={},{}
+  assert(#lanes==4 or #lanes==6,"Junction requires a simple small/medium two-way road")
+  for i,lane in ipairs(lanes)do
+   local modes=lane.transportModes
+   assert(type(lane.forward)=="boolean","Road lane direction unavailable")
+   assert(not modes[api.type.enum.TransportMode.TRAM] and not modes[api.type.enum.TransportMode.ELECTRIC_TRAM],"Tram junction unsupported")
+   if modes[api.type.enum.TransportMode.CAR] or modes[api.type.enum.TransportMode.TRUCK] then
+    assert(modes[api.type.enum.TransportMode.CAR] and modes[api.type.enum.TransportMode.TRUCK],"Restricted road lanes unsupported")
+    local index=edge.node0==node and i-1 or #lanes-i
+    local target=lane.forward==(edge.node1==node) and incoming or outgoing
+    target[#target+1]=index
+   end
+  end
+  assert(#incoming==#outgoing and (#incoming==1 or #incoming==2),"Junction requires balanced vehicle lanes")
+  return incoming,outgoing
+ end
+ local function junctionEndpoint(id,n,adjacent)
+  assert(#adjacent==2,"Only a degree-two road node can gain one branch")
+  assert(not constructionOfNode(id),"Junction refuses construction-owned nodes")
+  table.sort(adjacent)
+  local edges,identity={},{}
+  for _,eid in ipairs(adjacent)do
+   local e=assert(getComponent(eid,"BASE_EDGE"),"Junction road missing")
+   assert(e.node0==id or e.node1==id,"Junction adjacency changed")
+   assert(e.roadType==api.type.enum.RoadType.STREET and e.type==api.type.enum.BaseEdgeType.NORMAL,"Junction requires normal ground roads")
+   assert(not constructionOfEdge(eid) and #listOf(e.objects)==0,"Junction refuses construction roads and edge objects")
+   local owner=ownerOf(eid);assert(not owner or owner<0 or owner==api.engine.util.getPlayer(),"Foreign junction road")
+   local incoming,outgoing=junctionLaneIndices(id,e)
+   edges[#edges+1]={id=eid,signature=stableDataSignature(toPlain(e,0,nil,"Network.BaseEdge")),incoming=incoming,outgoing=outgoing}
+   identity[#identity+1]={eid,toPlain(e,0,nil,"Network.BaseEdge"),owner}
+  end
+  assertStreetNetworkHealthy(id,"junction")
+  local cfg=assert(getComponent(id,"BASE_NODE_CONFIG"),"Explicit junction configuration required")
+  local snapshot=networkNodeConfigSnapshot(cfg)
+  assert(cfg.doubleSlipSwitch==false and cfg.userModifiedTrafficLightStates==false
+   and cfg.trafficLightPreference==api.type.enum.TrafficLightPreference.AUTO
+   and cfg.trafficLightConfig.trafficLightType==-1 and #listOf(cfg.trafficLightConfig.states)==0,"Custom junction signals unsupported")
+  local custom=readField(cfg,"userModifiedLaneConnections")
+  assert(custom==nil or custom==false,"Custom junction turns unsupported")
+  local allowed={[adjacent[1]]=edges[1],[adjacent[2]]=edges[2]};local walks={}
+  for _,eid in ipairs(cfg.crosswalks)do assert(allowed[eid] and not walks[eid],"Unknown or duplicate crosswalk");walks[eid]=true end
+  local directed,seen={},{}
+  local function contains(values,value)for _,v in ipairs(values)do if v==value then return true end end;return false end
+  for _,l in ipairs(cfg.laneConnections)do
+   local a,b=allowed[l.segment0],allowed[l.segment1]
+   assert(a and b and a~=b and l.withRoad==true and l.withTram==false,"Unexpected existing junction turn")
+   assert(contains(a.incoming,l.lane0) and contains(b.outgoing,l.lane1),"Existing turn has invalid directional lane")
+   local key=table.concat({l.segment0,l.segment1,l.lane0,l.lane1},":")
+   assert(not seen[key],"Duplicate junction turn");seen[key]=true;directed[l.segment0]=true
+  end
+  assert(directed[adjacent[1]] and directed[adjacent[2]],"Existing two-way turns missing")
+  local p=n.position
+  return {node=id,pos={x=p.x,y=p.y,z=p.z},junction=true,junctionEdges=edges,junctionConfig=snapshot,
+   signature=stableDataSignature({id,{x=p.x,y=p.y,z=p.z},identity,snapshot})}
+ end
+ local function junctionConfig(pt,newId,newEdge,readback)
+  local old=pt.junctionConfig;local row=readback and {comp={}} or api.type.BaseNodeLaneConnectionAndEntity.new();row.entity=pt.node
+  local turns={}
+  local function add(a,b,i,j)
+   local l=readback and {} or api.type.LaneConnection.new();l.segment0=a;l.segment1=b;l.lane0=i;l.lane1=j;l.withRoad=true;l.withTram=false
+   turns[#turns+1]=l
+  end
+  for _,l in ipairs(old.laneConnections)do add(l.segment0,l.segment1,l.lane0,l.lane1)end
+  local incoming,outgoing=junctionLaneIndices(pt.node,newEdge)
+  for _,edge in ipairs(pt.junctionEdges)do
+   for _,i in ipairs(edge.incoming)do for _,j in ipairs(outgoing)do add(edge.id,newId,i,j)end end
+   for _,i in ipairs(incoming)do for _,j in ipairs(edge.outgoing)do add(newId,edge.id,i,j)end end
+  end
+  row.comp.laneConnections=turns;row.comp.crosswalks=listOf(old.crosswalks)
+  row.comp.trafficLightPreference=old.trafficLightPreference
+  if readback then row.comp.trafficLightConfig=old.trafficLightConfig
+  else row.comp.trafficLightConfig=assert(getComponent(pt.node,"BASE_NODE_CONFIG"),"Junction config removed").trafficLightConfig end
+  row.comp.doubleSlipSwitch=old.doubleSlipSwitch;row.comp.userModifiedTrafficLightStates=old.userModifiedTrafficLightStates
+  return row
+ end
+ local function junctionConfigSignature(cfg)
+  local turns,walks={},listOf(cfg.crosswalks)
+  for _,l in ipairs(cfg.laneConnections)do
+   turns[#turns+1]=table.concat({l.segment0,l.segment1,l.lane0,l.lane1,tostring(l.withRoad),tostring(l.withTram)},":")
+  end
+  table.sort(turns);table.sort(walks)
+  return stableDataSignature({turns,walks,cfg.trafficLightPreference,cfg.doubleSlipSwitch,
+   cfg.userModifiedTrafficLightStates,cfg.trafficLightConfig.trafficLightType})
+ end
+ -- AUTO regenerates phases when degree/lanes change. Preserve the policy and
+ -- custom flags exactly, then validate generated phase structure independently.
+ -- Preview identity still includes the complete original phase snapshot.
+ local function junctionAutoSignalsValid(cfg)
+  if cfg.trafficLightPreference~=api.type.enum.TrafficLightPreference.AUTO
+   or cfg.userModifiedTrafficLightStates~=false or cfg.doubleSlipSwitch~=false
+   or cfg.trafficLightConfig.trafficLightType~=-1 then return false end
+  local custom=readField(cfg,"userModifiedLaneConnections")
+  if custom~=nil and custom~=false then return false end
+  local function finite(n)return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
+  local count=#listOf(cfg.laneConnections)
+  for _,phase in ipairs(cfg.trafficLightConfig.states)do
+   if not finite(phase.duration) or not finite(phase.minDuration) or phase.minDuration<0
+    or phase.duration<phase.minDuration or type(phase.canSkip)~="boolean" then return false end
+   local seen={}
+   for _,index in ipairs(phase.lockedLanes)do
+    if not finite(index) or index%1~=0 or index<0 or index>=count or seen[index] then return false end
+    seen[index]=true
+   end
+  end
+  return true
+ end
+ local function endpoint(spec,roadType,resetEmptyRail,resetEmptyRoad,connectJunctions)
   if spec.node then
    local id=spec.node;local n=assert(getComponent(id,"BASE_NODE"),"Network endpoint missing")
    assert(not isFrozenStreetNode(id),"Frozen internal node; resolve external port")
    local adjacent=listOf(api.engine.system.streetSystem.getNodeSegments(id))
+   if #adjacent~=1 and connectJunctions==true then
+    assert(roadType==api.type.enum.RoadType.STREET,"Road junction flag cannot modify rail")
+    return junctionEndpoint(id,n,adjacent)
+   end
    assert(#adjacent==1,"Only a current external dead end is supported")
    local e=assert(getComponent(adjacent[1],"BASE_EDGE"),"Endpoint edge missing")
    assert(e.roadType==roadType,"Endpoint transport type mismatch")
@@ -5690,11 +5819,12 @@ do
  end
  local function prepare(args)
   assert(not (args.reset_empty_road_ports and args.reset_empty_rail_ports),"Select only one scoped endpoint reset")
+  assert(not (args.connect_road_junctions and args.reset_empty_rail_ports),"Road junctions cannot use rail-port reset")
   local name,tpl=resolveStreetTemplate(args.template)
   assert(tpl.roadType==api.type.enum.RoadType.STREET or tpl.roadType==api.type.enum.RoadType.TRACK,"Unsupported network type")
-  local points={endpoint(args.start,tpl.roadType,args.reset_empty_rail_ports,args.reset_empty_road_ports)}
+  local points={endpoint(args.start,tpl.roadType,args.reset_empty_rail_ports,args.reset_empty_road_ports,args.connect_road_junctions)}
   for _,p in ipairs(args.via or {}) do assert(not p.node,"Interior junctions unsupported");points[#points+1]=endpoint(p,tpl.roadType) end
-  points[#points+1]=endpoint(args["end"],tpl.roadType,args.reset_empty_rail_ports,args.reset_empty_road_ports)
+  points[#points+1]=endpoint(args["end"],tpl.roadType,args.reset_empty_rail_ports,args.reset_empty_road_ports,args.connect_road_junctions)
   assert(not points[1].node or points[1].node~=points[#points].node,"Network self-loop refused")
   local tangents,lengths={},{};local total=0
   for i=1,#points-1 do
@@ -5731,7 +5861,7 @@ do
    edges[#edges+1]=e
   end
   p.streetProposal.nodesToAdd=nodes;p.streetProposal.edgesToAdd=edges
-  local resetNodes={};for _,pt in ipairs(points) do if pt.resetEmptyRail or pt.resetEmptyRoad then resetNodes[#resetNodes+1]=pt.node end end
+  local resetNodes={};for _,pt in ipairs(points) do if pt.resetEmptyRail or pt.resetEmptyRoad or pt.junction then resetNodes[#resetNodes+1]=pt.node end end
   p.streetProposal.nodeConfigsToRemove=resetNodes
   local addedConfigs={}
   for i,pt in ipairs(points)do if pt.resetEmptyRoad then
@@ -5746,6 +5876,10 @@ do
    config.comp.trafficLightConfig=getComponent(pt.node,"BASE_NODE_CONFIG").trafficLightConfig
    config.comp.doubleSlipSwitch=false;addedConfigs[#addedConfigs+1]=config
   end end
+  for i,pt in ipairs(points)do if pt.junction then
+   local edge=edges[i==1 and 1 or #edges]
+   addedConfigs[#addedConfigs+1]=junctionConfig(pt,edge.entity,edge.comp)
+  end end
   p.streetProposal.nodeConfigsToAdd=addedConfigs
   local geometry={};for _,pt in ipairs(points) do geometry[#geometry+1]=pt.pos end
   local signature={name,points[1].signature,points[#points].signature,toPlain(tpl.laneConfigs,0,nil,{element="LaneConfig"}),tpl.roadType,tpl.streetStyle,geometry}
@@ -5756,6 +5890,9 @@ do
   local check=previewProposal(proposal,roadIgnoreSet(points))
   check.preview=true;check.template=name;check.length=length;check.segments=#points-1
   check.serviceConnectivityVerified=false
+  check.junctions={};for _,pt in ipairs(points)do if pt.junction then
+   check.junctions[#check.junctions+1]={node=pt.node,existingEdges={pt.junctionEdges[1].id,pt.junctionEdges[2].id},atomicLaneConfiguration=true}
+  end end
   check.resetEmptyRailPorts={};for _,pt in ipairs(points) do if pt.resetEmptyRail then check.resetEmptyRailPorts[#check.resetEmptyRailPorts+1]=pt.node end end
   check.resetEmptyRoadPorts={};for _,pt in ipairs(points) do if pt.resetEmptyRoad then check.resetEmptyRoadPorts[#check.resetEmptyRoadPorts+1]={node=pt.node,requiredCrosswalks=pt.requiredCrosswalks} end end
   if check.ok==true and not check.critical and not check.blocked and not check.placementBlocked and #check.collisions==0 then
@@ -5828,17 +5965,718 @@ do
     if not verified then out.verified=false end
    end end
   end
+  out.junctions={}
+  if out.built then for _,pt in ipairs(points)do if pt.junction then
+   local freshEdge;local current={};for _,id in ipairs(listOf(api.engine.system.streetSystem.getNodeSegments(pt.node)))do current[id]=true end
+   for _,id in ipairs(out.edges)do local edge=getComponent(id,"BASE_EDGE")
+    if edge and (edge.node0==pt.node or edge.node1==pt.node)then assert(not freshEdge,"Ambiguous new junction branch");freshEdge=id end
+   end
+   local cfg=getComponent(pt.node,"BASE_NODE_CONFIG");local verified=freshEdge~=nil and cfg~=nil
+   local count=0;for _ in pairs(current)do count=count+1 end
+   verified=verified and count==3 and getComponent(pt.node,"TRANSPORT_NETWORK")~=nil
+   for _,e in ipairs(pt.junctionEdges)do
+    local edge=getComponent(e.id,"BASE_EDGE")
+    if not current[e.id] or not edge or not getComponent(e.id,"TRANSPORT_NETWORK")
+     or stableDataSignature(toPlain(edge,0,nil,"Network.BaseEdge"))~=e.signature then verified=false end
+   end
+   if verified then
+    local expected=junctionConfig(pt,freshEdge,getComponent(freshEdge,"BASE_EDGE"),true)
+    verified=junctionConfigSignature(cfg)==junctionConfigSignature(expected.comp) and junctionAutoSignalsValid(cfg)
+   end
+   out.junctions[#out.junctions+1]={node=pt.node,branch=freshEdge,configurationVerified=verified,
+    existingEdges={pt.junctionEdges[1].id,pt.junctionEdges[2].id},directedPathsVerified=false}
+   if not verified then out.verified=false end
+  end end end
   op.phase=out.verified and "verified" or "unconfirmed";checkpoint()
-  out.verificationScope="new edge count/template, transport-network components, and opted-in rail/road-port config and crosswalk readback; directed connections and service need separate acceptance"
+  out.verificationScope="new edge count/template, transport-network components, and opted-in port/junction configuration and preserved-road readback; directed connections and service need separate acceptance"
   return out
  end
  for _,name in ipairs({"list_network_templates","preview_network","commit_network"}) do ENGINE_COMMANDS[name]=true end
 end
 
+-- Explicit road graphs (v35). New topology is experimental until isolated native
+-- acceptance. No implicit crossing, deletion of objects, or frozen-node surgery.
+do
+ local saved,epoch,requestId,checkpoint
+ workflowStateBinders.roadGraph=function(state,session,id)
+  epoch=session;requestId=id;saved=(state:get() or {}).roadGraphAdapter
+  if not saved or saved.epoch~=session then saved={epoch=session,serial=0,previews={},operations={}} end
+  checkpoint=function()local root=state:get() or {};root.roadGraphAdapter=saved;state:set(root)end
+  return checkpoint
+ end
+ local function finite(n)return type(n)=="number" and n==n and math.abs(n)~=math.huge end
+ local function keys(t,allowed)
+  assert(type(t)=="table","Object required");for k in pairs(t)do assert(allowed[k],"Unknown graph field: "..tostring(k))end
+ end
+ local function array(t,low,high)
+  assert(type(t)=="table" and #t>=low and #t<=high,"Graph array exceeds bounds")
+  local count=0;for i in pairs(t)do assert(type(i)=="number" and i%1==0 and i>=1 and i<=#t,"Invalid array index");count=count+1 end
+  assert(count==#t,"Sparse graph array")
+ end
+ local function vec(v)
+  keys(v,{x=true,y=true,z=true});assert(finite(v.x) and finite(v.y) and finite(v.z),"Explicit finite xyz required")
+  return {x=v.x,y=v.y,z=v.z}
+ end
+ local function entity(v)assert(finite(v) and v%1==0 and v>=0 and v<2147483647,"Invalid entity");return v end
+ local function text(v)assert(type(v)=="string" and #v>0 and #v<=160,"Invalid resource");return v end
+ local function snapshot(id)return toPlain(assert(getComponent(id,"BASE_EDGE"),"Road missing"),0,nil,"Network.BaseEdge")end
+ local function edgeSet()
+  local out={};for _,ids in pairs(api.engine.system.streetSystem.getNode2SegmentMap())do for _,id in pairs(ids)do out[id]=true end end;return out
+ end
+ local function adjacencySignature()
+  local nodes={}
+  for id,ids in pairs(api.engine.system.streetSystem.getNode2SegmentMap())do
+   local edges={};for _,eid in pairs(ids)do edges[#edges+1]=eid end;table.sort(edges);nodes[id]=edges
+  end
+  return stableDataSignature(nodes)
+ end
+ local function road(id,split,allowRail)
+  local e=assert(getComponent(id,"BASE_EDGE"),"Road missing")
+  assert(e.roadType==api.type.enum.RoadType.STREET or (allowRail and e.roadType==api.type.enum.RoadType.TRACK),"Rail edges require an explicit crossing resource")
+  local owner=ownerOf(id);assert(not owner or owner<0 or owner==api.engine.util.getPlayer(),"Foreign road")
+  assert(getComponent(id,"TRANSPORT_NETWORK"),"Road transport network missing")
+  if split then
+   assert(not constructionOfEdge(id),"Cannot split construction-owned roads")
+   assert(#listOf(e.objects)==0 or split.preserve_objects==true,"Object split requires explicit preserve_objects")
+   if e.type~=api.type.enum.BaseEdgeType.NORMAL then
+    assert(split.allow_structure==true,"Structure split requires explicit allow_structure")
+    local rep=e.type==api.type.enum.BaseEdgeType.BRIDGE and api.res.bridgeTypeRep or e.type==api.type.enum.BaseEdgeType.TUNNEL and api.res.tunnelTypeRep
+    assert(rep and e.typeIndex>=0 and rep.get(e.typeIndex),"Unknown existing structure resource")
+    assert(#listOf(e.objects)==0,"Objects on structure splits require separate acceptance")
+   end
+  end
+  return e
+ end
+ local function lanes(id,e)
+  local all=listOf(e.laneConfigs);assert(#all>0 and #all<=32,"Native lane definitions unavailable")
+  local incoming,outgoing={},{}
+  for i,l in ipairs(all)do
+   assert(type(l.forward)=="boolean","Lane direction unavailable")
+   local modes={};for m=2,6 do if l.transportModes[m] then modes[m]=true end end
+   if next(modes) then
+    local target=l.forward==(e.node1==id) and incoming or outgoing
+    target[#target+1]={index=e.node0==id and i-1 or #all-i,modes=modes}
+   end
+  end
+  assert(#incoming+#outgoing>0,"No supported road/tram vehicle lanes")
+  return incoming,outgoing
+ end
+ local function compatible(a,b)
+  local r,t=false,false;for m=2,6 do if a.modes[m] and b.modes[m] then if m<=4 then r=true else t=true end end end
+  return r,t
+ end
+ local function hermite(e,u)
+  local p,t={},{};local u2,u3=u*u,u*u*u
+  for _,k in ipairs({"x","y","z"})do
+   p[k]=(2*u3-3*u2+1)*e.position0[k]+(u3-2*u2+u)*e.tangent0[k]+(-2*u3+3*u2)*e.position1[k]+(u3-u2)*e.tangent1[k]
+   t[k]=(6*u2-6*u)*e.position0[k]+(3*u2-4*u+1)*e.tangent0[k]+(-6*u2+6*u)*e.position1[k]+(3*u2-2*u)*e.tangent1[k]
+  end
+  return p,t
+ end
+ local function scale(v,s)return {x=v.x*s,y=v.y*s,z=v.z*s}end
+ local function defaultConfig(node)
+  local r=api.type.BaseNodeLaneConnectionAndEntity.new();r.entity=node
+  r.comp.trafficLightPreference=api.type.enum.TrafficLightPreference.AUTO
+  r.comp.doubleSlipSwitch=false;r.comp.userModifiedTrafficLightStates=false
+  return r
+ end
+ local function configSignature(c,map)
+  map=map or {};local turns,walks={},{}
+  for _,l in ipairs(c.laneConnections)do
+   turns[#turns+1]=table.concat({map[l.segment0] or l.segment0,map[l.segment1] or l.segment1,l.lane0,l.lane1,tostring(l.withRoad),tostring(l.withTram)},":")
+  end
+  for _,e in ipairs(c.crosswalks)do walks[#walks+1]=map[e] or e end;table.sort(turns);table.sort(walks)
+  return stableDataSignature({turns,walks,c.trafficLightPreference,c.doubleSlipSwitch,c.userModifiedTrafficLightStates,c.trafficLightConfig.trafficLightType})
+ end
+ local function remapObjectReferences(value,oldEdge,newEdge)
+  if type(value)~="table" then return value end
+  local out={};for k,v in pairs(value)do
+   out[k]=k=="entity" and v==oldEdge and newEdge or remapObjectReferences(v,oldEdge,newEdge)
+  end;return out
+ end
+ local function sameObjectValue(a,b,key)
+  if type(a)~=type(b)then return false end
+  if type(a)=="number" and (key=="x" or key=="y" or key=="z" or key=="w")then return math.abs(a-b)<.002 end
+  if type(a)~="table" then return a==b end
+  for k,v in pairs(a)do if not sameObjectValue(v,b[k],k)then return false end end
+  for k in pairs(b)do if a[k]==nil then return false end end;return true
+ end
+ -- Street-stop parameters are retained metadata, not recomputed after a split.
+ -- Resolve the real terminal anchor from native lane geometry (not opaque Node data).
+ local function stopAnchor(station,edge)
+  local net=assert(getComponent(edge,"TRANSPORT_NETWORK"),"Stop network missing")
+  local anchor
+  local function at(ref,mode)
+   assert(ref.entity==edge,"Stop terminal references another edge")
+   local found
+   for _,lane in ipairs(net.edges)do if lane.transportModes[mode] then
+    for i,conn in ipairs(lane.conns)do if conn.entity==edge and conn.index==ref.index then
+     local g=lane.geometry;assert(g.type==3,"Unverified stop network geometry type")
+     local v=g.cubicOffsetSpline.pos[i];local z=i==1 and g.height.x or g.height.y
+     assert(v and finite(v.x) and finite(v.y) and finite(z),"Stop network anchor unavailable")
+     local p={x=v.x,y=v.y,z=z}
+     if found then assert(sameObjectValue(found,p),"Inconsistent stop network anchor")else found=p end
+    end end
+   end end
+   assert(found,"Stop terminal has no native lane")
+   if anchor then assert(sameObjectValue(anchor,found),"Stop terminal anchors disagree")else anchor=found end
+  end
+  local terminals=listOf(station.terminals);assert(#terminals>0 and #terminals<=8,"Unsupported stop terminal count")
+  for _,t in ipairs(terminals)do
+   at(t.vehicleNodeId,api.type.enum.TransportMode.BUS)
+   for _,ref in ipairs(t.personNodes)do at(ref,api.type.enum.TransportMode.PERSON)end
+  end
+  return assert(anchor)
+ end
+ local function projectStop(e,anchor)
+  local function distance(u)local p=hermite(e,u);return (p.x-anchor.x)^2+(p.y-anchor.y)^2 end
+  local best,score=0,math.huge
+  for i=0,64 do local u=i/64;local d=distance(u);if d<score then best,score=u,d end end
+  local lo,hi=math.max(0,best-1/64),math.min(1,best+1/64)
+  for _=1,40 do local a,b=lo+(hi-lo)/3,hi-(hi-lo)/3;if distance(a)<distance(b)then hi=b else lo=a end end
+  local u=(lo+hi)/2;assert(u>0 and u<1 and distance(u)<.03^2,"Stop anchor does not project onto road")
+  return u
+ end
+ local function preservedStopPlacement(station,edge,value,wanted)
+  local anchor=stopAnchor(station,edge);local before=wanted.anchor
+  if math.abs(anchor.x-before.x)>=.002 or math.abs(anchor.y-before.y)>=.002 or math.abs(anchor.z-before.z)>.25 then return false end
+  -- Ground alignment can change height: require exactly the same vertical shift
+  -- in the model and its native terminal, plus bounded XY and orientation changes.
+  local expected=remapObjectReferences(wanted.before.transf,-1,-1)
+  assert(expected.columns and expected.columns[4],"Stop model transform missing")
+  expected.columns[4].z=expected.columns[4].z+anchor.z-before.z
+  return sameObjectValue(value.transf,expected)
+ end
+ local function signalPlan(spec,count)
+  keys(spec,{preference=true,traffic_light_type=true,states=true})
+  assert(spec.preference=="YES","Explicit signals require YES preference")
+  assert(finite(spec.traffic_light_type) and spec.traffic_light_type%1==0 and spec.traffic_light_type>=-1 and spec.traffic_light_type<10000,"Invalid signal type")
+  if spec.traffic_light_type>=0 then assert(api.res.trafficLightTypeRep and api.res.trafficLightTypeRep.get(spec.traffic_light_type),"Unknown signal resource")end
+  array(spec.states,1,64);local cfg=api.type.TrafficLightConfig.new();cfg.trafficLightType=spec.traffic_light_type;local phases={}
+  for _,v in ipairs(spec.states)do
+   keys(v,{locked_lanes=true,duration=true,min_duration=true,can_skip=true});array(v.locked_lanes,0,544)
+   assert(finite(v.duration) and finite(v.min_duration) and v.duration>0 and v.min_duration>=0 and v.duration>=v.min_duration and v.duration<=300 and type(v.can_skip)=="boolean","Invalid signal phase")
+   local seen={};for _,i in ipairs(v.locked_lanes)do assert(entity(i)<count and not seen[i],"Invalid or duplicate locked lane");seen[i]=true end
+   local phase=api.type.TrafficLightState.new();phase.lockedLanes=v.locked_lanes;phase.duration=v.duration;phase.minDuration=v.min_duration;phase.canSkip=v.can_skip;phases[#phases+1]=phase
+  end
+  cfg.states=phases;return cfg
+ end
+ local function extendSignals(old,oldCount,newCount,walkCount,duration)
+  assert(finite(duration) and duration>=3 and duration<=120,"Extension phase duration must be 3-120 seconds")
+  local count=newCount+walkCount;local phases={};local delta=newCount-oldCount
+  assert(#listOf(old.states)>0,"Custom signal states unavailable; supply an explicit signal plan")
+  for _,v in ipairs(old.states)do
+   local locks,seen={},{};for _,i in ipairs(v.lockedLanes)do
+    assert(entity(i)<oldCount+walkCount and not seen[i],"Old signal index invalid");seen[i]=true
+    locks[#locks+1]=i>=oldCount and i+delta or i
+   end
+   for i=oldCount,newCount-1 do locks[#locks+1]=i end
+   phases[#phases+1]={locked_lanes=locks,duration=v.duration,min_duration=v.minDuration,can_skip=v.canSkip}
+  end
+  -- Each new turn gets its own phase. Old timings/turns/crosswalk phases stay
+  -- intact and all conflicting old movements are locked during new phases.
+  for active=oldCount,newCount-1 do
+   local locks={};for i=0,count-1 do if i~=active then locks[#locks+1]=i end end
+   phases[#phases+1]={locked_lanes=locks,duration=duration,min_duration=1.5,can_skip=true}
+  end
+  return signalPlan({preference="YES",traffic_light_type=old.trafficLightType,states=phases},count)
+ end
+ local function prepare(args)
+  assert(args.isolated_test==true,"v35 topology requires explicit isolated_test=true until native acceptance")
+  local g=args.graph;keys(g,{nodes=true,edges=true});array(g.nodes,1,32);array(g.edges,0,48)
+  local p=api.type.SimpleProposal.new();local sp=p.streetProposal
+  local nodes,edges,remove,configs,removeConfigs={},{},{},{},{}
+  local pts,byId,oldEdges,oldConfigs,identities,splitEdges,remap={},{},{},{},{},{},{}
+  local objects,crossings,clones,explicitEdges={},{},{},{};local allowRail,preserveCrossings=false,false
+  for _,n in ipairs(g.nodes)do
+   if n.crossing_resource then allowRail=true end
+   if n.split and n.split.preserve_crossings==true then allowRail=true;preserveCrossings=true end
+  end
+  local serial=0;local function newId()serial=serial-1;return serial end
+  local function touch(id)
+   if byId[id] then return byId[id] end
+   local n=assert(getComponent(id,"BASE_NODE"),"Node missing")
+   assert(not isFrozenStreetNode(id),"Frozen internal node; use the external port")
+   assert(getComponent(id,"TRANSPORT_NETWORK"),"Node network missing")
+   local pt={id=id,pos={x=n.position.x,y=n.position.y,z=n.position.z},old={},added={}}
+   byId[id]=pt
+   if preserveCrossings then
+    local sys=api.engine.system.railRoadCrossingSystem
+    local rcid=sys and sys.getRailroadCrossingForNode(id)
+    if rcid and rcid>=0 then
+     local rc=assert(getComponent(rcid,"RAILROAD_CROSSING"),"Existing crossing component missing")
+     local rep=api.res.railroadCrossingTypeRep;local resource=rep.getAll()[rc.typeIndex]
+     assert(type(resource)=="string" and rep.get(rc.typeIndex),"Existing crossing resource unavailable")
+     assert(#listOf(rc.nodes)==1 and listOf(rc.nodes)[1]==id,"Multi-node crossing preservation not supported")
+     pt.crossing=rc.typeIndex;pt.preservedCrossing=true
+     crossings[id]={index=rc.typeIndex,resource=resource,originalEntity=rcid}
+    end
+   end
+   for _,eid in ipairs(listOf(api.engine.system.streetSystem.getNodeSegments(id)))do
+    local e=road(eid,nil,allowRail);assert(e.node0==id or e.node1==id,"Adjacency mismatch")
+    pt.old[#pt.old+1]={entity=eid,comp=e};oldEdges[eid]={value=snapshot(eid),owner=ownerOf(eid),street=toPlain(getComponent(eid,"BASE_EDGE_STREET"),0,nil,"Engine.Component.BaseEdgeStreet")}
+   end
+   assert(#pt.old>=1 and #pt.old<=8,"Unsupported existing road degree")
+   local cfg=getComponent(id,"BASE_NODE_CONFIG");pt.cfg=cfg
+   oldConfigs[id]={position=pt.pos,config=networkNodeConfigSnapshot(cfg)}
+   return pt
+  end
+  local function fresh(pos)
+   assert(api.engine.terrain.isValidCoordinate(V2(pos.x,pos.y)),"Graph node outside map")
+   local id=newId();local n=api.type.NodeAndEntity.new();n.entity=id;n.comp.position=V3(pos.x,pos.y,pos.z);nodes[#nodes+1]=n
+   local pt={id=id,pos=pos,old={},added={}};byId[id]=pt;return pt
+  end
+  for i,n in ipairs(g.nodes)do
+   keys(n,{node=true,position=true,split=true,junction=true,crossing_resource=true})
+   local count=(n.node~=nil and 1 or 0)+(n.position~=nil and 1 or 0)+(n.split~=nil and 1 or 0);assert(count==1,"Select exactly one graph node source")
+   local key,pt
+   if n.node~=nil then key="n"..entity(n.node);pt=touch(n.node)
+   elseif n.position then local pos=vec(n.position);key="p"..stableDataSignature(pos);pt=fresh(pos)
+   else
+    keys(n.split,{edge=true,param=true,preserve_objects=true,allow_structure=true,preserve_crossings=true,preserve_tunnel_chain=true});
+    for _,key in ipairs({"preserve_objects","allow_structure","preserve_crossings","preserve_tunnel_chain"})do assert(n.split[key]==nil or type(n.split[key])=="boolean","Invalid split opt-in")end;local id=entity(n.split.edge);local u=n.split.param
+    assert(finite(u) and u>=.05 and u<=.95,"Split param must be 0.05-0.95");key="s"..id
+    assert(not splitEdges[id],"Only one split per old edge")
+    local e=road(id,n.split,allowRail);touch(e.node0);touch(e.node1)
+    if n.split.preserve_tunnel_chain then
+     assert(n.split.allow_structure==true and e.type==api.type.enum.BaseEdgeType.TUNNEL,"Tunnel-chain preservation requires a tunnel split")
+     local queue,seen={id},{};local cursor=1
+     while cursor<=#queue do
+      local eid=queue[cursor];cursor=cursor+1
+      if not seen[eid] then
+       seen[eid]=true;assert(cursor<=18,"Tunnel chain exceeds 16 segments")
+       local part=road(eid,{allow_structure=true},allowRail);assert(#listOf(part.objects)==0,"Tunnel chain has objects")
+       touch(part.node0);touch(part.node1);clones[eid]=part
+       for _,nodeId in ipairs({part.node0,part.node1})do
+        local count=0
+        for _,neighbor in ipairs(listOf(api.engine.system.streetSystem.getNodeSegments(nodeId)))do
+         local other=assert(getComponent(neighbor,"BASE_EDGE"))
+         if other.type==api.type.enum.BaseEdgeType.TUNNEL then
+          count=count+1;assert(other.typeIndex==e.typeIndex and other.roadType==e.roadType,"Mixed tunnel chain resources")
+          if not seen[neighbor] then queue[#queue+1]=neighbor end
+         end
+        end
+        assert(count<=2,"Branched tunnel chain not supported")
+       end
+      end
+     end
+    end
+    local pos,tan=hermite(e,u);pt=fresh(pos);splitEdges[id]={point=pt,edge=e,param=u,tangent=tan};remove[#remove+1]=id
+   end
+   assert(not identities[key],"Duplicate graph node");identities[key]=true;pts[i]=pt
+   if n.junction then
+    keys(n.junction,{extend=true,phase_duration=true,signals=true,blocked_turns=true,crosswalk_edges=true});assert(next(n.junction),"Empty junction policy")
+    if n.junction.phase_duration~=nil then assert(finite(n.junction.phase_duration) and n.junction.phase_duration>=3 and n.junction.phase_duration<=120,"Invalid extension duration")end
+    assert(n.junction.extend==nil or n.junction.extend=="preserve","Unknown junction extension policy")
+    assert(n.junction.phase_duration==nil or n.junction.extend=="preserve","Phase duration requires preserve policy")
+    if n.junction.blocked_turns~=nil or n.junction.crosswalk_edges~=nil then
+     assert(pt.id<0 and not n.split and n.junction.signals and not n.junction.extend,"Initial turn/crosswalk plan requires a new road junction and explicit signals")
+     array(n.junction.blocked_turns or {},0,56);array(n.junction.crosswalk_edges or {},0,8)
+    end
+    pt.junction=n.junction
+   end
+   if n.crossing_resource then
+    assert(not n.junction and pt.id<0,"Crossing must use a fresh/split node and no custom junction plan")
+    local rep=assert(api.res.railroadCrossingTypeRep,"Railroad crossing resources unavailable")
+    local resource=text(n.crossing_resource);local index=rep.find(resource)
+    assert(index and index>=0 and rep.get(index),"Unknown railroad crossing resource")
+    pt.crossing=index;crossings[pt.id]={resource=resource,index=index}
+   end
+  end
+  local function attach(row)
+   local a,b=byId[row.comp.node0],byId[row.comp.node1]
+   assert(a and b,"Missing road endpoint");assert(dist2d(a.pos,b.pos)>=5,"Road fragment too short")
+   edges[#edges+1]=row;a.added[#a.added+1]=row;b.added[#b.added+1]=row
+  end
+  for id,s in pairs(splitEdges)do
+   local e,u=s.edge,s.param;local a,b=newId(),newId();local refs={[a]={},[b]={}}
+   for _,pair in ipairs(listOf(e.objects))do
+    local oid,kind=pair[1],pair[2];assert(not objects[oid],"Duplicate edge object")
+    assert(e.roadType==api.type.enum.RoadType.STREET and (kind==api.type.enum.EdgeObjectType.STOP_LEFT or kind==api.type.enum.EdgeObjectType.STOP_RIGHT),"Only existing street-stop objects accepted")
+    local eo=assert(getComponent(oid,"EDGE_OBJECT"),"Edge object component missing")
+    local station=assert(getComponent(oid,"STATION"),"Stop station missing")
+    local owner=ownerOf(oid);assert(not owner or owner<0 or owner==api.engine.util.getPlayer(),"Foreign stop object")
+    local group=api.engine.system.stationGroupSystem.getStationGroup(oid);assert(group and group>=0 and getComponent(group,"STATION_GROUP"),"Station group missing")
+    local lines={};local serving=listOf(api.engine.system.lineSystem.getLinesForStationGroup(group));assert(#serving<=32,"Stop has too many serving lines for atomic verification")
+    for _,line in ipairs(serving)do lines[line]=toPlain(assert(getComponent(line,"LINE"),"Serving line disappeared"),0,nil,"Engine.Component.Line")end
+    assert(api.engine.system.streetSystem.getEdgeForEdgeObject(oid)==id,"Edge object owner mismatch")
+    assert(finite(eo.param) and eo.param>0 and eo.param<1,"Invalid edge object parameter")
+    local anchor=stopAnchor(station,id);local projected=projectStop(e,anchor)
+    assert(dist2d(anchor,s.point.pos)>=20,"Split too close to stop; preserve at least 20 metres")
+    local target=projected<u and a or b;refs[target][#refs[target]+1]={oid,kind}
+    objects[oid]={edge=target,sourceEdge=id,group=group,lines=lines,param=eo.param,anchor=anchor,
+     projectedSourceParam=projected,projectedChildParam=projected<u and projected/u or (projected-u)/(1-u),
+     before=toPlain(eo,0,nil,"Engine.Component.EdgeObject"),station=toPlain(station,0,nil,"Station"),owner=ownerOf(oid)}
+   end
+   -- Value-copy native component before replacing geometry; never edit live userdata.
+   for _,r in ipairs({{id=a,node0=e.node0,node1=s.point.id,p0=vec(toPlain(e.position0,0,nil,"Vec3f")),p1=s.point.pos,t0=scale(e.tangent0,u),t1=scale(s.tangent,u)},
+    {id=b,node0=s.point.id,node1=e.node1,p0=s.point.pos,p1=vec(toPlain(e.position1,0,nil,"Vec3f")),t0=scale(s.tangent,1-u),t1=scale(e.tangent1,1-u)}})do
+    local row=api.type.SegmentAndEntity.new();row.entity=r.id;row.type=e.roadType==api.type.enum.RoadType.TRACK and 1 or 0
+    -- Assign fields rather than aliasing Lua-table fixtures or an engine component.
+    row.comp.node0=r.node0;row.comp.node1=r.node1;row.comp.position0=V3(r.p0.x,r.p0.y,r.p0.z);row.comp.position1=V3(r.p1.x,r.p1.y,r.p1.z)
+    row.comp.tangent0=V3(r.t0.x,r.t0.y,r.t0.z);row.comp.tangent1=V3(r.t1.x,r.t1.y,r.t1.z)
+    row.comp.type=e.type;row.comp.typeIndex=e.typeIndex;row.comp.laneConfigs=e.laneConfigs;row.comp.roadTemplate=e.roadTemplate
+    row.comp.roadStyle=e.roadStyle;row.comp.roadType=e.roadType;row.comp.roadDevelopmentLocked=e.roadDevelopmentLocked
+    row.comp.edgeDecorations=e.edgeDecorations;row.comp.objects=refs[r.id]
+    local street=getComponent(id,"BASE_EDGE_STREET");if street then row.streetEdge=street end
+    attach(row)
+   end
+   remap[e.node0]=remap[e.node0] or {};remap[e.node0][id]=a
+   remap[e.node1]=remap[e.node1] or {};remap[e.node1][id]=b
+  end
+  -- Replace connected tunnel neighbors without moving or splitting them. Their
+  -- geometry participates in the same native collision/structure proposal.
+  for id,e in pairs(clones)do if not splitEdges[id] then
+   local row=api.type.SegmentAndEntity.new();row.entity=newId();row.type=e.roadType==api.type.enum.RoadType.TRACK and 1 or 0
+   row.comp.node0=e.node0;row.comp.node1=e.node1;row.comp.position0=e.position0;row.comp.position1=e.position1
+   row.comp.tangent0=e.tangent0;row.comp.tangent1=e.tangent1;row.comp.type=e.type;row.comp.typeIndex=e.typeIndex
+   row.comp.laneConfigs=e.laneConfigs;row.comp.roadTemplate=e.roadTemplate;row.comp.roadStyle=e.roadStyle
+   row.comp.roadType=e.roadType;row.comp.roadDevelopmentLocked=e.roadDevelopmentLocked;row.comp.edgeDecorations=e.edgeDecorations;row.comp.objects={}
+   local street=getComponent(id,"BASE_EDGE_STREET");if street then row.streetEdge=street end
+   attach(row);remove[#remove+1]=id;splitEdges[id]={preservedNeighbor=true}
+   for _,nodeId in ipairs({e.node0,e.node1})do remap[nodeId]=remap[nodeId] or {};remap[nodeId][id]=row.entity end
+  end end
+  assert(#edges<=48,"Expanded structure proposal exceeds 48 segments")
+  local used,pairsSeen,resources={},{},{};local total=0
+  for specIndex,spec in ipairs(g.edges)do
+   keys(spec,{from=true,to=true,template=true,tangent0=true,tangent1=true,structure=true,structure_resource=true})
+   local ai,bi=entity(spec.from)+1,entity(spec.to)+1;local a,b=pts[ai],pts[bi];assert(a and b and ai~=bi,"Invalid graph edge indices")
+   local pair=math.min(ai,bi)..":"..math.max(ai,bi);assert(not pairsSeen[pair],"Duplicate graph edge");pairsSeen[pair]=true;used[ai]=true;used[bi]=true
+   for _,old in ipairs(a.old)do assert(not ((old.comp.node0==a.id and old.comp.node1==b.id) or (old.comp.node1==a.id and old.comp.node0==b.id)),"Graph duplicates an existing road edge")end
+   local len=dist2d(a.pos,b.pos);assert(len>=10 and len<=200,"Each graph span must be 10-200 metres")
+   assert(math.abs(b.pos.z-a.pos.z)/len<=.12,"Graph grade exceeds bound");total=total+len
+   local name,tpl=resolveStreetTemplate(text(spec.template));assert(tpl.roadType==api.type.enum.RoadType.STREET or (allowRail and tpl.roadType==api.type.enum.RoadType.TRACK),"Rail templates require an explicit crossing")
+   resources[name]={lanes=toPlain(tpl.laneConfigs,0,nil,{element="LaneConfig"}),style=tpl.streetStyle}
+   local delta={x=b.pos.x-a.pos.x,y=b.pos.y-a.pos.y,z=b.pos.z-a.pos.z}
+   local t0,t1=spec.tangent0 and vec(spec.tangent0) or delta,spec.tangent1 and vec(spec.tangent1) or delta
+   for _,t in ipairs({t0,t1})do local l=math.sqrt(t.x*t.x+t.y*t.y);assert(l>=len*.25 and l<=len*2 and (t.x*delta.x+t.y*delta.y)/(l*len)>.5,"Sharp or reversing graph tangent")end
+   local row=newStreetEdge(newId(),a.id,b.id,a.pos,b.pos,t0,t1,name,tpl)
+   if tpl.roadType==api.type.enum.RoadType.TRACK then row.type=1;row.comp.roadType=api.type.enum.RoadType.TRACK end
+   local structure=spec.structure or "ground"
+   if structure=="ground" then
+    assert(spec.structure_resource==nil,"Ground road has structure resource")
+    assert(not api.engine.terrain.isOnWater(V2(a.pos.x,a.pos.y)) and not api.engine.terrain.isOnWater(V2(b.pos.x,b.pos.y)),"Ground road node in water")
+   else
+    assert(structure=="bridge" or structure=="tunnel","Unknown road structure")
+    local rep=assert(structure=="bridge" and api.res.bridgeTypeRep or api.res.tunnelTypeRep,"Structure repository unavailable")
+    local resource=text(spec.structure_resource);local index=rep.find(resource);assert(index and index>=0 and rep.get(index),"Unknown native structure resource")
+    row.comp.type=structure=="bridge" and api.type.enum.BaseEdgeType.BRIDGE or api.type.enum.BaseEdgeType.TUNNEL;row.comp.typeIndex=index
+    resources[structure..":"..resource]={index=index}
+   end
+   attach(row);explicitEdges[specIndex]=row
+  end
+  assert(#edges<=48,"Expanded graph exceeds 48 segments")
+  for i=1,#pts do assert(used[i] or g.nodes[i].split,"Unused graph node")end
+  assert(total<=3000,"Graph batch exceeds 3000 metres")
+  -- At every affected node: retain old turns (remapping split references), then
+  -- add only the turns involving genuinely new arms. Implicit old config is
+  -- materialized from native lane directions. Pedestrian routing remains native.
+  for id,pt in pairs(byId)do
+   local adjacent,existing={},{};local replacements=remap[id] or {}
+   for _,row in ipairs(pt.old)do if not splitEdges[row.entity] then adjacent[#adjacent+1]=row;existing[row.entity]=true end end
+   for _,row in ipairs(pt.added)do adjacent[#adjacent+1]=row end
+   assert(#adjacent<=8,"Road junction exceeds eight arms")
+   table.sort(adjacent,function(a,b)return a.entity<b.entity end)
+   local roads,tracks={},{}
+   for _,row in ipairs(adjacent)do local target=row.comp.roadType==api.type.enum.RoadType.TRACK and tracks or roads;target[#target+1]=row end
+   if #tracks>0 and #roads>0 then
+    assert(pt.crossing~=nil and #tracks==2 and #roads==2 and not pt.cfg,"Mixed networks require an explicit two-road/two-track crossing")
+    if pt.preservedCrossing then
+     assert(#pt.old==4,"Existing crossing topology changed")
+     local expected={};for _,r in ipairs(pt.old)do expected[replacements[r.entity] or r.entity]=true end
+     for _,r in ipairs(adjacent)do assert(expected[r.entity],"Cannot add arms to a preserved crossing")end
+    end
+    local function direction(row)
+     local e=row.comp;assert(e.type==api.type.enum.BaseEdgeType.NORMAL,"Level crossing must be ground infrastructure")
+     local t=id==e.node0 and e.tangent0 or e.tangent1;local sign=id==e.node0 and 1 or -1
+     local len=math.sqrt(t.x*t.x+t.y*t.y);assert(len>0 and math.abs(t.z)/len<=.03,"Crossing slope exceeds 3 percent")
+     return {x=sign*t.x/len,y=sign*t.y/len}
+    end
+    local function dot(a,b)return a.x*b.x+a.y*b.y end
+    local ra,rb,ta,tb=direction(roads[1]),direction(roads[2]),direction(tracks[1]),direction(tracks[2])
+    assert(dot(ra,rb)<-.98 and dot(ta,tb)<-.98 and math.abs(dot(ra,ta))<.71,"Crossing requires straight pairs and 45-135 degree intersection")
+    crossings[id].edges=adjacent
+   elseif pt.crossing~=nil then error("Crossing requires both road and railway",0)end
+   if #tracks>0 then
+    -- Native railway/crossing connectivity is generated from topology. Only
+    -- default empty rail endpoint configs may be removed; custom ones stay blocked.
+    if pt.cfg then
+     local cfg=pt.cfg
+     assert(#listOf(cfg.laneConnections)==0 and #listOf(cfg.crosswalks)==0 and not cfg.doubleSlipSwitch and not cfg.userModifiedTrafficLightStates,"Custom rail node config not accepted")
+     removeConfigs[#removeConfigs+1]=id
+    end
+    assert(not pt.junction,"Road signal plan cannot target rail nodes")
+   elseif #adjacent>=2 or pt.cfg then
+    local cfg=pt.cfg;local out=defaultConfig(id);local turns,walks,seen={},{},{}
+    local incoming,outgoing={},{}
+    for _,r in ipairs(adjacent)do incoming[r.entity],outgoing[r.entity]=lanes(id,r.comp) end
+    local function add(a,b,i,j,r,t)
+     local key=table.concat({a,b,i,j},":");assert(not seen[key],"Duplicate turn");seen[key]=true
+     assert(#turns<512,"Junction exceeds 512 explicit vehicle turns")
+     local l=api.type.LaneConnection.new();l.segment0=a;l.segment1=b;l.lane0=i;l.lane1=j;l.withRoad=r;l.withTram=t;turns[#turns+1]=l
+    end
+    local function lane(list,index)for _,l in ipairs(list or {})do if l.index==index then return l end end end
+    if cfg then
+     assert(#pt.old<2 or #listOf(cfg.laneConnections)>0,"Existing multi-arm node has explicit empty turns; investigate before editing")
+     local hasNewArm=#adjacent>#pt.old
+     if hasNewArm and not(pt.junction and pt.junction.extend=="preserve") then
+      assert(cfg.doubleSlipSwitch==false and cfg.userModifiedTrafficLightStates==false and cfg.trafficLightPreference==api.type.enum.TrafficLightPreference.AUTO
+       and cfg.trafficLightConfig.trafficLightType==-1,"Adding arms to custom signals requires an explicit signal plan")
+      local custom=readField(cfg,"userModifiedLaneConnections");assert(custom==nil or custom==false,"Adding arms to custom turns requires explicit turn plan")
+     end
+     out.comp.trafficLightPreference=cfg.trafficLightPreference;out.comp.trafficLightConfig=cfg.trafficLightConfig
+     out.comp.doubleSlipSwitch=cfg.doubleSlipSwitch;out.comp.userModifiedTrafficLightStates=cfg.userModifiedTrafficLightStates
+     local custom=readField(cfg,"userModifiedLaneConnections");if custom~=nil then out.comp.userModifiedLaneConnections=custom end
+     for _,l in ipairs(cfg.laneConnections)do
+      local a,b=replacements[l.segment0] or l.segment0,replacements[l.segment1] or l.segment1
+      local la,lb=lane(incoming[a],l.lane0),lane(outgoing[b],l.lane1);assert(la and lb and a~=b,"Old turn does not match native lanes")
+      local r,t=compatible(la,lb);assert((not l.withRoad or r) and (not l.withTram or t),"Old turn mode mismatch")
+      add(a,b,l.lane0,l.lane1,l.withRoad,l.withTram)
+     end
+     local walkSeen={};for _,e in ipairs(cfg.crosswalks)do local v=replacements[e] or e;assert(incoming[v] and not walkSeen[v],"Unknown or duplicate crosswalk");walkSeen[v]=true;walks[#walks+1]=v end
+     removeConfigs[#removeConfigs+1]=id
+    end
+    for old,new in pairs(replacements)do existing[new]=true end
+    for _,a in ipairs(adjacent)do for _,b in ipairs(adjacent)do if a.entity~=b.entity and (not cfg or not(existing[a.entity] and existing[b.entity])) then
+     for _,i in ipairs(incoming[a.entity])do for _,j in ipairs(outgoing[b.entity])do
+      local r,t=compatible(i,j);if r or t then local k=table.concat({a.entity,b.entity,i.index,j.index},":");if not seen[k] then add(a.entity,b.entity,i.index,j.index,r,t)end end
+     end end
+    end end end
+    local policy=pt.junction
+    if policy and (policy.blocked_turns~=nil or policy.crosswalk_edges~=nil) then
+     local function arm(index)
+      assert(finite(index) and index%1==0 and index>=0,"Invalid explicit edge index")
+      local row=assert(explicitEdges[index+1],"Unknown explicit edge index")
+      assert(row.comp.node0==id or row.comp.node1==id,"Explicit edge is not incident to junction")
+      assert(row.comp.roadType==api.type.enum.RoadType.STREET,"Road-only junction policy")
+      return row
+     end
+     local blocked={}
+     for _,pair in ipairs(policy.blocked_turns or {})do
+      keys(pair,{from_edge=true,to_edge=true});local a,b=arm(pair.from_edge).entity,arm(pair.to_edge).entity
+      local key=a..":"..b;assert(a~=b and not blocked[key],"Duplicate or self blocked turn");blocked[key]=true
+     end
+     local kept,found={},{}
+     for _,turn in ipairs(turns)do local key=turn.segment0..":"..turn.segment1
+      if blocked[key] then found[key]=true else kept[#kept+1]=turn end
+     end
+     for key in pairs(blocked)do assert(found[key],"Blocked turn does not exist")end
+     assert(#kept>0,"Cannot block all junction turns");turns=kept
+     local seenWalk={}
+     for _,index in ipairs(policy.crosswalk_edges or {})do
+      local row=arm(index);assert(not seenWalk[row.entity],"Duplicate crosswalk")
+      local directions={}
+      for _,lane in ipairs(row.comp.laneConfigs)do if lane.transportModes[api.type.enum.TransportMode.PERSON]then directions[tostring(lane.forward)]=true end end
+      assert(directions['true'] and directions['false'],"Crosswalk needs pedestrian lanes on both sides")
+      seenWalk[row.entity]=true;walks[#walks+1]=row.entity
+     end
+    end
+    out.comp.laneConnections=turns;out.comp.crosswalks=walks
+    assert(not cfg or not cfg.doubleSlipSwitch,"Double slip switch is not a road junction")
+    if policy and policy.signals then
+     out.comp.trafficLightPreference=api.type.enum.TrafficLightPreference.YES
+     out.comp.trafficLightConfig=signalPlan(policy.signals,#turns+#walks);out.comp.userModifiedTrafficLightStates=true
+    elseif cfg and #turns>#listOf(cfg.laneConnections) and policy and policy.extend=="preserve" and
+      (cfg.userModifiedTrafficLightStates or cfg.trafficLightPreference==api.type.enum.TrafficLightPreference.YES or cfg.trafficLightConfig.trafficLightType~=-1) then
+     assert(not cfg.doubleSlipSwitch,"Double slip switch is not a road junction")
+     out.comp.trafficLightConfig=extendSignals(cfg.trafficLightConfig,#listOf(cfg.laneConnections),#turns,#walks,policy.phase_duration or 10)
+     out.comp.userModifiedTrafficLightStates=true
+    end
+    configs[#configs+1]=out
+   end
+  end
+  local rc={};for id,v in pairs(crossings)do rc[id]=v.index end;if next(rc)then sp.node2rcType=rc end
+  sp.nodesToAdd=nodes;sp.edgesToAdd=edges;if #remove>0 then sp.edgesToRemove=remove end;sp.nodeConfigsToAdd=configs;sp.nodeConfigsToRemove=removeConfigs
+  -- Deterministic ordering is part of the token identity, irrespective of hash iteration.
+  table.sort(edges,function(a,b)return a.entity<b.entity end);table.sort(configs,function(a,b)return a.entity<b.entity end);table.sort(remove);table.sort(removeConfigs)
+  local crossingIdentity={};for id,c in pairs(crossings)do crossingIdentity[id]={index=c.index,resource=c.resource,originalEntity=c.originalEntity}end
+  local identity={graph=g,edges=oldEdges,configs=oldConfigs,resources=resources,objects=objects,crossings=crossingIdentity}
+  return {proposal=p,points=byId,oldEdges=oldEdges,oldConfigs=oldConfigs,splitEdges=splitEdges,objects=objects,crossings=crossings,signature=stableDataSignature(identity),length=total}
+ end
+ local function check(design)
+  if #listOf(design.proposal.streetProposal.edgesToRemove)>0 then
+   -- Known engine assertion: do not call makeProposalData with removed segments.
+   return {ok=true,structural_only=true,nativePreviewPassed=false,collisionsUnchecked=true,collisions={}}
+  end
+  local r=previewProposal(design.proposal);r.nativePreviewPassed=r.ok==true;return r
+ end
+ commands.get_network_template=function(args)
+  local name,tpl=resolveStreetTemplate(args.template)
+  return {resource=name,roadType=enumName("RoadType",tpl.roadType),laneConfigs=toPlain(tpl.laneConfigs,0,nil,{element="LaneConfig"}),streetStyle=tpl.streetStyle}
+ end
+ commands.list_road_structures=function(args)
+  local result={};for _,kind in ipairs({"bridge","tunnel","crossing"})do
+   local rep=kind=="bridge" and api.res.bridgeTypeRep or kind=="tunnel" and api.res.tunnelTypeRep or api.res.railroadCrossingTypeRep;local rows={}
+   if rep then for id,name in pairs(rep.getAll())do rows[#rows+1]={id=id,resource=name}end;table.sort(rows,function(a,b)return a.id<b.id end)end
+   result[kind]=rows
+  end;return result
+ end
+ commands.preview_road_graph=function(args)
+  local d=prepare(args);local r=check(d);r.preview=true;r.nativeAcceptance="pending_isolated_test";r.serviceConnectivityVerified=false
+  r.specialCases={objects={},crossings={},preservedTunnelNeighbors={}};for id,v in pairs(d.splitEdges)do if v.preservedNeighbor then r.specialCases.preservedTunnelNeighbors[#r.specialCases.preservedTunnelNeighbors+1]=id end end;for id,o in pairs(d.objects)do r.specialCases.objects[#r.specialCases.objects+1]={id=id,targetEdge=o.edge,nativeParam=o.param,projectedSourceParam=o.projectedSourceParam,projectedChildParam=o.projectedChildParam}end
+  for id,c in pairs(d.crossings)do r.specialCases.crossings[#r.specialCases.crossings+1]={node=id,resource=c.resource,index=c.index}end
+  r.junctionPlans={};for _,c in ipairs(d.proposal.streetProposal.nodeConfigsToAdd)do
+   r.junctionPlans[#r.junctionPlans+1]={node=c.entity,turnCount=#listOf(c.comp.laneConnections),crosswalkCount=#listOf(c.comp.crosswalks),customSignals=c.comp.userModifiedTrafficLightStates}
+  end
+  r.length=d.length;r.segments=#d.proposal.streetProposal.edgesToAdd;r.replacedEdges=#listOf(d.proposal.streetProposal.edgesToRemove)
+  if r.ok and not r.critical and not r.blocked and not r.placementBlocked and #r.collisions==0 then
+   saved.serial=saved.serial+1;local token="road-graph:"..epoch..":"..saved.serial
+   saved.previews[token]={args=args,signature=d.signature,clock=assert(wallClock()),player=api.engine.util.getPlayer()};checkpoint();r.preview_token=token
+  end;return r
+ end
+ commands.commit_road_graph=function(args)
+  local r=saved.previews[args.preview_token];saved.previews[args.preview_token]=nil
+  local op={id=requestId,phase="pre_dispatch",built=false,verified=false,directedPathsVerified=false,serviceConnectivityVerified=false}
+  saved.operations[args.preview_token]=op;checkpoint();assert(r,"Unknown or consumed road graph preview")
+  local now=assert(wallClock());assert(now>=r.clock and now-r.clock<=60,"Road graph preview expired");assert(r.player==api.engine.util.getPlayer(),"Player changed")
+  local d=prepare(r.args);assert(d.signature==r.signature,"Road graph identity changed")
+  local c=check(d);assert(c.ok and not c.critical and not c.blocked and not c.placementBlocked and #c.collisions==0,"Road graph no longer buildable")
+  assert(type(args.backup_save)=="string" and #args.backup_save>0,"Record isolated preconstruction backup slot")
+  local expectedConfigs={};for _,row in ipairs(d.proposal.streetProposal.nodeConfigsToAdd)do expectedConfigs[row.entity]=networkNodeConfigSnapshot(row.comp)end
+  local before=edgeSet();local adjacencyBefore=adjacencySignature()
+  op.phase="dispatching";op.backup_save=args.backup_save;checkpoint()
+  local callbackSeen,nativeRejected=false,false
+  applyProposal(d.proposal,false,function(ok,res)
+   callbackSeen=true;nativeRejected=ok==false;op.built=ok==true
+   -- Bounded fields from the callback only; never evaluate a second removal proposal.
+   local pd=tryField(function()return res.data end) or tryField(function()return res.proposalData end) or res
+   local errors=tryField(function()return pd.errorState end)
+   op.nativeResult={callbackSeen=true,success=ok==true,explicitRejection=ok==false,
+    critical=tryField(function()return errors.critical end),messages={},collisions={}}
+   for i,v in ipairs(listOf(tryField(function()return errors.messages end)))do
+    if i>32 then break end;if type(v)=="string" then op.nativeResult.messages[#op.nativeResult.messages+1]=v:sub(1,512)end
+   end
+   for i,v in ipairs(listOf(tryField(function()return pd.collisionInfo.collisionEntities end)))do
+    if i>64 then break end;local id=tryField(function()return v.entity end)
+    if finite(id) and id%1==0 then op.nativeResult.collisions[#op.nativeResult.collisions+1]=id end
+   end
+  end)
+  if callbackSeen and nativeRejected then
+   -- A negative callback alone is not rollback proof. Re-read the complete touched
+   -- graph (including stops/lines/configs), and require global edge/adjacency identity.
+   local readOk,unchanged=pcall(function()
+    return stableDataSignature(edgeSet())==stableDataSignature(before)
+     and adjacencySignature()==adjacencyBefore
+     and prepare(r.args).signature==d.signature
+   end)
+   if readOk and unchanged then
+    op.phase="rejected_unchanged";op.rejectionVerified=true;op.retryAllowed=false
+    op.verificationScope="explicit native rejection; original touched graph and global street adjacency unchanged"
+    checkpoint();return op
+   end
+  end
+  if op.built then
+   local after=edgeSet();local fresh={};for id in pairs(after)do if not before[id] then fresh[#fresh+1]=id end end
+   local map,used={},{};local sp=d.proposal.streetProposal;local verified=#fresh==#sp.edgesToAdd
+   local function close(a,b)return a and b and math.abs(a.x-b.x)<.02 and math.abs(a.y-b.y)<.02 and math.abs(a.z-b.z)<.02 end
+   for _,n in ipairs(sp.nodesToAdd)do
+    local found
+    for id in pairs(api.engine.system.streetSystem.getNode2SegmentMap())do local comp=getComponent(id,"BASE_NODE")
+     if comp and close(comp.position,n.comp.position)then assert(not found,"Ambiguous graph node receipt");found=id end
+    end
+    if not found or not getComponent(found,"TRANSPORT_NETWORK") then verified=false else map[n.entity]=found end
+   end
+   for _,row in ipairs(sp.edgesToAdd)do
+    local e=row.comp;local found
+    for _,id in ipairs(fresh)do local got=getComponent(id,"BASE_EDGE")
+     if got and got.node0==(map[e.node0] or e.node0) and got.node1==(map[e.node1] or e.node1)
+      and got.roadTemplate==e.roadTemplate and got.type==e.type and got.typeIndex==e.typeIndex
+      and got.roadStyle==e.roadStyle and got.roadDevelopmentLocked==e.roadDevelopmentLocked
+      and stableDataSignature(toPlain(got.edgeDecorations))==stableDataSignature(toPlain(e.edgeDecorations))
+      and stableDataSignature(toPlain(got.objects))==stableDataSignature(toPlain(e.objects))
+      and close(got.position0,e.position0) and close(got.position1,e.position1) and close(got.tangent0,e.tangent0) and close(got.tangent1,e.tangent1)
+      and stableDataSignature(toPlain(got.laneConfigs,0,nil,{element="LaneConfig"}))==stableDataSignature(toPlain(e.laneConfigs,0,nil,{element="LaneConfig"})) then
+       assert(not found and not used[id],"Ambiguous graph edge receipt");found=id
+     end
+    end
+    if not found or not getComponent(found,"TRANSPORT_NETWORK") then verified=false else map[row.entity]=found;used[found]=true end
+   end
+   for id,old in pairs(d.oldEdges)do
+    if d.splitEdges[id] then if getComponent(id,"BASE_EDGE") then verified=false end
+    elseif not getComponent(id,"BASE_EDGE") or stableDataSignature(snapshot(id))~=stableDataSignature(old.value) or ownerOf(id)~=old.owner
+     or stableDataSignature(toPlain(getComponent(id,"BASE_EDGE_STREET"),0,nil,"Engine.Component.BaseEdgeStreet"))~=stableDataSignature(old.street) then verified=false end
+   end
+   op.junctions={}
+   for _,row in ipairs(sp.nodeConfigsToAdd)do
+    local id=map[row.entity] or row.entity;local cfg=getComponent(id,"BASE_NODE_CONFIG")
+    local good=cfg~=nil and getComponent(id,"TRANSPORT_NETWORK")~=nil
+    local expected=expectedConfigs[row.entity]
+    if good then
+     good=configSignature(cfg)==configSignature(expected,map)
+     local custom=readField(cfg,"userModifiedLaneConnections");local wanted=expected.userModifiedLaneConnections
+     if (custom==true)~=(wanted==true) then good=false end
+     if expected.userModifiedTrafficLightStates then
+      local actualTurns={};for _,l in ipairs(cfg.laneConnections)do actualTurns[#actualTurns+1]={l.segment0,l.segment1,l.lane0,l.lane1,l.withRoad,l.withTram}end
+      local wantedTurns={};for _,l in ipairs(expected.laneConnections)do wantedTurns[#wantedTurns+1]={map[l.segment0] or l.segment0,map[l.segment1] or l.segment1,l.lane0,l.lane1,l.withRoad,l.withTram}end
+      if stableDataSignature(actualTurns)~=stableDataSignature(wantedTurns)then good=false end
+     end
+     if expected.userModifiedTrafficLightStates or expected.trafficLightPreference~=api.type.enum.TrafficLightPreference.AUTO then
+      if stableDataSignature(toPlain(cfg.trafficLightConfig,0,nil,"Engine.Component.TrafficLightConfig"))~=stableDataSignature(expected.trafficLightConfig)then good=false end
+     end
+     local pt=d.points[row.entity];local adjacency={};local count=0
+     for _,e in ipairs(pt.old)do if not d.splitEdges[e.entity] then adjacency[e.entity]=true;count=count+1 end end
+     for _,e in ipairs(pt.added)do adjacency[map[e.entity] or e.entity]=true;count=count+1 end
+     local actual=listOf(api.engine.system.streetSystem.getNodeSegments(id));if #actual~=count then good=false end
+     for _,eid in ipairs(actual)do if not adjacency[eid] then good=false end end
+    end
+    if good then
+     local count=#listOf(cfg.laneConnections)+#listOf(cfg.crosswalks)
+     for _,phase in ipairs(cfg.trafficLightConfig.states)do
+      if not finite(phase.duration) or not finite(phase.minDuration) or phase.minDuration<0 or phase.duration<phase.minDuration or type(phase.canSkip)~="boolean" then good=false end
+      local seen={};for _,v in ipairs(phase.lockedLanes)do if not finite(v) or v%1~=0 or v<0 or v>=count or seen[v]then good=false end;seen[v]=true end
+     end
+    end
+    op.junctions[#op.junctions+1]={node=id,configurationVerified=good,directedPathsVerified=false};if not good then verified=false end
+   end
+   op.preservedObjects={}
+   for id,wanted in pairs(d.objects)do
+    local eo=getComponent(id,"EDGE_OBJECT");local st=getComponent(id,"STATION");local good=eo~=nil and st~=nil
+    if good then
+     local value=toPlain(eo,0,nil,"Engine.Component.EdgeObject");local old=wanted.before
+     local placementRead,placementGood=pcall(preservedStopPlacement,st,map[wanted.edge],value,wanted)
+     good=math.abs(value.param-wanted.param)<.0001 and value.edgeObjectConstruction==old.edgeObjectConstruction
+      and placementRead and placementGood and stableDataSignature(value.params)==stableDataSignature(old.params)
+      and sameObjectValue(toPlain(st,0,nil,"Station"),remapObjectReferences(wanted.station,wanted.sourceEdge,map[wanted.edge])) and ownerOf(id)==wanted.owner
+      and api.engine.system.stationGroupSystem.getStationGroup(id)==wanted.group
+      and api.engine.system.streetSystem.getEdgeForEdgeObject(id)==map[wanted.edge]
+    end
+    for line,beforeLine in pairs(wanted.lines)do
+     local currentLine=getComponent(line,"LINE")
+     if not currentLine or stableDataSignature(toPlain(currentLine,0,nil,"Engine.Component.Line"))~=stableDataSignature(beforeLine)then good=false end
+    end
+    op.preservedObjects[#op.preservedObjects+1]={id=id,edge=map[wanted.edge],stationGroup=wanted.group,verified=good};if not good then verified=false end
+   end
+   op.railroadCrossings={}
+   for node,wanted in pairs(d.crossings)do
+    local actual=map[node] or node;local rcid=api.engine.system.railRoadCrossingSystem.getRailroadCrossingForNode(actual)
+    local rc=rcid and rcid>=0 and getComponent(rcid,"RAILROAD_CROSSING");local good=rc and rc.typeIndex==wanted.index or false
+    local current={};for _,e in ipairs(listOf(api.engine.system.streetSystem.getNodeSegments(actual)))do current[e]=true end
+    local count=0;for _ in pairs(current)do count=count+1 end;good=good and count==4
+    for _,e in ipairs(wanted.edges)do if not current[map[e.entity] or e.entity]then good=false end end
+    op.railroadCrossings[#op.railroadCrossings+1]={node=actual,entity=rcid,verified=good,directedPathsVerified=false};if not good then verified=false end
+   end
+   op.edges=fresh;op.entityMap=map;op.verified=verified
+  end
+  op.phase=op.verified and "verified" or "unconfirmed";checkpoint();return op
+ end
+ commands.get_road_graph_operation=function(args)
+  local op=saved.operations[args.operation_id]
+  if not op then for _,candidate in pairs(saved.operations)do if candidate.id==args.operation_id then assert(not op,"Ambiguous graph operation");op=candidate end end end
+  return assert(op,"Unknown graph operation")
+ end
+ for _,name in ipairs({"get_network_template","list_road_structures","preview_road_graph","commit_road_graph","get_road_graph_operation"})do ENGINE_COMMANDS[name]=true end
+end
+
+
 -- Engine-side UI construction transport. Deliberately separate from read queries.
 local uiBuild = {}
 do
- local schemas={
+ local SAVED_MUTATION_LIMIT=1024 -- finite lifetime budget; retain every mutation receipt for replay suppression
+ local schemas={get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+  get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
+  begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
+  read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
+  preview_line_edit={line="entity",stops="line_edits"},
   preview_line_terminal={line="entity",stop_index="stop_index",station_index="stop_index",terminal="terminal_index"},
   preview_headquarters_access={town="entity",road="entity",x="number",y="number",z="number",rotation="number"},
   preview_subvention={uid="entity"},commit_subvention={preview_token="token"},get_subvention_operation={operation_id="token"},
@@ -5861,7 +6699,8 @@ do
   preview_prospection={town="entity",resource="text"},commit_prospection={preview_token="token"},get_prospection_operation={operation_id="token"},
   preview_loan={action="loan_action",offer_type="text",loan_id="entity"},commit_loan={preview_token="token"},get_loan_operation={operation_id="token"},
 
-  list_network_templates={search="text",offset="offset",limit="page_limit"},preview_network={start="endpoint",["end"]="endpoint",via="via_points",template="text",reset_empty_rail_ports="bool",reset_empty_road_ports="bool"},commit_network={preview_token="token"},
+  get_network_template={template="text"},list_road_structures={},preview_road_graph={graph="road_graph",isolated_test="bool"},commit_road_graph={preview_token="token",backup_save="save_slot"},get_road_graph_operation={operation_id="token"},
+  list_network_templates={search="text",offset="offset",limit="page_limit"},preview_network={start="endpoint",["end"]="endpoint",via="via_points",template="text",reset_empty_rail_ports="bool",reset_empty_road_ports="bool",connect_road_junctions="bool"},commit_network={preview_token="token"},
   get_vehicle_cargo={vehicle="entity",cargo="entity",include_entities="bool",offset="offset",limit="page_limit"},get_sim_entity={id="entity"},get_stop_cargo={line="entity",stop_index="stop_index",cargo="entity"},get_stock_cargo={stock_list="entity",cargo="entity",stock_quality="bool",diagnostic="bool"},
   list_multiple_units={offset="offset",limit="page_limit"},preview_multiple_unit={depot="entity",resource="text"},
   preview_consist={depot="entity",models="model_ids"},commit_consist={preview_token="token"},
@@ -5889,7 +6728,7 @@ do
   build_airfield={x="number",y="number",z="number",rotation="number"},
   preview_road={start="endpoint",["end"]="endpoint",street_type="text"},
   reconcile_road_rejection={request_id="request_id"},reconcile_network_rejection={request_id="request_id"},reconcile_depot_rejection={request_id="request_id"},reconcile_town_cargo_rejection={request_id="request_id"},
-  commit_road={preview_token="token"},get_entity={id="entity"},list_street_types={filter="text"},
+  commit_road={preview_token="token"},get_entity={id="entity",components="component_names"},list_street_types={filter="text"},
   survey_build_site={x="number",y="number"},list_facilities={},
   build_warehouse={x="number",y="number",z="number",rotation="number",module_count="modules"},
   build_facility={source_entity="entity",x="number",y="number",z="number",rotation="number"},
@@ -5898,7 +6737,7 @@ do
  }
  -- Only audited world-read commands may release incorrectly charged legacy slots.
  -- Previews, mutations, unknown commands and unresolved non-read requests stay protected.
- local pureEngineReads={preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
+ local pureEngineReads={get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
   list_facilities=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,check_road_junction_path=true,check_network_junction_path=true,
   list_cargo_types=true,get_terrain=true,find_nearby=true,list_facility_resources=true,
   list_industry_resources=true,list_prospections=true,get_prospections=true,get_loans=true,
@@ -5916,6 +6755,36 @@ do
    if (k~="x" and k~="y" and k~="z") or type(v)~="number" or v~=v or math.abs(v)==math.huge then return false end
   end
   return true
+ end
+ function uiBuild.validLineEdits(value)
+  if type(value)~="table" or #value<2 or #value>32 then return false end
+  local count=0
+  for index,stop in pairs(value) do
+   count=count+1
+   if type(index)~="number" or index%1~=0 or index<1 or index>#value or type(stop)~="table" then return false end
+   if (stop.source_index~=nil)==(stop.station_group~=nil) then return false end
+   local allowed={source_index=true,station_group=true,station=true,terminal=true,loads=true,max_load=true,force_unload=true,extra_wait=true}
+   for k,v in pairs(stop) do
+    if not allowed[k] then return false end
+    if k=="source_index" or k=="station_group" or k=="station" or k=="terminal" or k=="extra_wait" then
+     local max=k=="source_index" and 31 or k=="station_group" and 2147483646 or k=="extra_wait" and 600 or 63
+     if type(v)~="number" or v%1~=0 or v<0 or v>max then return false end
+    elseif k=="force_unload" then if type(v)~="boolean" then return false end
+    elseif k=="max_load" then if type(v)~="number" or v~=v or v<0 or v>1 then return false end
+    elseif k=="loads" then
+     if type(v)~="table" or #v>8 then return false end
+     local seen,n={},0
+     for i,c in pairs(v) do
+      n=n+1
+      if type(i)~="number" or i%1~=0 or i<1 or i>#v or type(c)~="number" or c%1~=0 or c<0 or c>255 or seen[c] then return false end
+      seen[c]=true
+     end
+     if n~=#v then return false end
+    end
+   end
+   if stop.station_group~=nil and (stop.station==nil or stop.terminal==nil or stop.loads==nil) then return false end
+  end
+  return count==#value
  end
  local function validate(cmd,args)
   local schema=schemas[cmd]
@@ -5957,7 +6826,31 @@ do
     for _,v in ipairs({value.min,value.max}) do local n=0;for k,x in pairs(v) do n=n+1;if (k~="x" and k~="y") or type(x)~="number" or x~=x or math.abs(x)==math.huge then groups=false end end;if n~=2 then groups=false end end
     groups=groups and count==2 and value.min.x<value.max.x and value.min.y<value.max.y
    end
-   local valid=(kind=="game_speed" and type(value)=="number" and ({[0]=true,[1]=true,[2]=true,[4]=true})[value])
+   local componentNames=false
+   if kind=="component_names" and type(value)=="table" and #value>=1 and #value<=16 then
+    componentNames=true;local n,seen=0,{}
+    for i,v in pairs(value) do
+     n=n+1
+     if type(i)~="number" or i%1~=0 or i<1 or i>#value or type(v)~="string" or #v>64 or not v:match("^[A-Z][A-Z0-9_]*$") or seen[v] then componentNames=false end
+     seen[v]=true
+    end
+    componentNames=componentNames and n==#value
+   end
+   local entityIds=false
+   if kind=="entity_ids" and type(value)=="table" and #value>=1 and #value<=16 then
+    entityIds=true;local n,seen=0,{}
+    for i,v in pairs(value) do
+     n=n+1
+     if type(i)~="number" or i%1~=0 or i<1 or i>#value or type(v)~="number" or v%1~=0 or v<0 or v>=2147483647 or seen[v] then entityIds=false end
+     seen[v]=true
+    end
+    entityIds=entityIds and n==#value
+   end
+   local valid=entityIds or componentNames or (kind=="line_edits" and uiBuild.validLineEdits(value))
+    or (kind=="snapshot_kind" and (value=="planning" or value=="route"))
+    or (kind=="snapshot_spacing" and type(value)=="number" and value>=25 and value<=2000)
+    or (kind=="byte_offset" and type(value)=="number" and value%1==0 and value>=0 and value<=8388608)
+    or (kind=="game_speed" and type(value)=="number" and ({[0]=true,[1]=true,[2]=true,[4]=true})[value])
     or (kind=="terminal_index" and type(value)=="number" and value%1==0 and value>=0 and value<=63)
     or (kind=="save_slot" and type(value)=="string" and #value>=1 and #value<=80 and value:match("^[%w_-]+$"))
     or (kind=="loan_action" and (value=="borrow" or value=="repay"))
@@ -5983,6 +6876,7 @@ do
     or (kind=="modules" and (value==1 or value==4))
     or (kind=="text" and type(value)=="string" and #value>=1 and #value<=160)
     or (kind=="request_id" and type(value)=="string" and #value==32 and value:match("^[0-9a-f]+$"))
+    or (kind=="road_graph" and type(value)=="table")
     or (kind=="endpoint" and endpoint(value))
     or (kind=="token" and type(value)=="string" and #value>=1 and #value<=128)
    assert(valid,"Invalid construction argument: "..tostring(key))
@@ -5994,7 +6888,7 @@ do
    or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection") and {"request_id"}
    or cmd=="preview_road" and {"start","end","street_type"} or cmd=="get_entity" and {"id"}
    or cmd=="survey_build_site" and {"x","y"} or (cmd=="list_facilities" or cmd=="list_street_types") and {} or {"entity"}
-  local extraRequired={set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
+  local extraRequired={get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
    check_network_junction_path={"node","from_edge","to_edge","mode"},
    preview_road_upgrade={"edge","street_type"},preview_street_stop={"edge","param","side","two_sided"},commit_edge_edit={"preview_token"},
    preview_facility_module={"entity","slot","resource"},preview_facility_parameter={"entity","key","value"},build_headquarters={"town","x","y","z"},
@@ -6002,7 +6896,7 @@ do
    preview_town_cargo_needs={"town"},commit_town_cargo_needs={"preview_token"},get_town_cargo_operation={"operation_id"},
    preview_prospection={"town","resource"},commit_prospection={"preview_token"},get_prospection_operation={"operation_id"},
    preview_loan={"action"},commit_loan={"preview_token"},get_loan_operation={"operation_id"},
-list_network_templates={},preview_network={"start","end","template"},commit_network={"preview_token"},list_multiple_units={},preview_multiple_unit={"depot","resource"},get_vehicle_cargo={"vehicle","cargo"},get_sim_entity={"id"},get_stop_cargo={"line","stop_index","cargo"},get_stock_cargo={"stock_list","cargo"},preview_consist={"depot","models"},commit_consist={"preview_token"},check_road_junction_path={"node","from_edge","to_edge","mode"},delete_line={"line"},sell_vehicles={"vehicles"},list_cargo_types={},
+get_network_template={"template"},list_road_structures={},preview_road_graph={"graph","isolated_test"},commit_road_graph={"preview_token","backup_save"},get_road_graph_operation={"operation_id"},list_network_templates={},preview_network={"start","end","template"},commit_network={"preview_token"},list_multiple_units={},preview_multiple_unit={"depot","resource"},get_vehicle_cargo={"vehicle","cargo"},get_sim_entity={"id"},get_stop_cargo={"line","stop_index","cargo"},get_stock_cargo={"stock_list","cargo"},preview_consist={"depot","models"},commit_consist={"preview_token"},check_road_junction_path={"node","from_edge","to_edge","mode"},delete_line={"line"},sell_vehicles={"vehicles"},list_cargo_types={},
    preview_depot={"x","y","rotation","carrier"},preview_station={"x","y","rotation","cargo","size"},
    preview_rail_station={"x","y","rotation","tracks","length","specialization"},commit_structure={"preview_token"},
    preview_line_stop={"line","stop_index","loads","max_load","force_unload","extra_wait"},commit_line_stop={"preview_token"},
@@ -6030,7 +6924,7 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
   return cmd and schemas[cmd]~=nil
  end
  uiBuild.forward=function(text,continualRead)
-  if type(text)~="string" or #text>512 then return "Invalid construction request" end
+  if type(text)~="string" or #text>uiBuild.inputLimit(text) then return "Invalid construction request" end
   local id,cmd,raw=text:match("^([0-9a-f]+) ([a-z_]+) (.+)$")
   if not id then id,cmd=text:match("^([0-9a-f]+) ([a-z_]+)$");raw="{}" end
   if not id or #id~=32 or not raw:match("^%s*{") then return "Invalid construction request" end
@@ -6121,6 +7015,56 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
   return stableDataSignature({group=stop.stationGroup,station=station,terminal=args.terminal,
    vehicleNode=toPlain(node,0,nil,"NodeId"),personNodes=toPlain(terminal.personNodes,0,nil,{element="NodeId"}),cargoLoad=terminal.cargoLoad,cargoUnload=terminal.cargoUnload,
    passengersLoad=terminal.passengersLoad,passengersUnload=terminal.passengersUnload})
+ end
+ function uiBuild.lineSignature(line)
+  local out={customFilters=line.customFilters,reservationPriority=line.reservationPriority,stops={}}
+  local stops=orderedVector(line.stops);assert(#stops>=2 and #stops<=32,"Line edit supports 2 to 32 stops")
+  for _,stop in ipairs(stops) do
+   assert(#orderedVector(stop.waypoints)<=64 and #orderedVector(stop.alternativeTerminals)<=64,"Complex stop exceeds bound")
+   out.stops[#out.stops+1]=toPlain(stop,0,nil,"Engine.Component.Line.Stop")
+  end
+  return stableDataSignature(out)
+ end
+ function uiBuild.editLine(args)
+  requireEntity(args,"line","LINE");assert(ownerOf(args.line)==api.engine.util.getPlayer(),"Line is not owned")
+  local old=getComponent(args.line,"LINE");local signature=uiBuild.lineSignature(old)
+  local previous=orderedVector(old.stops);local c=api.type.Line.new();c.customFilters=true;c.reservationPriority=old.reservationPriority
+  local stops,terminals={},{}
+  local cargos=api.res.cargoTypeRep.getAll(true)
+  for _,edit in ipairs(args.stops) do
+   local s=api.type.Line.Stop.new();local cfg=api.type.Line.StopConfig.new()
+   if edit.source_index~=nil then
+    local source=assert(previous[edit.source_index+1],"Source stop index out of range")
+    for _,k in ipairs(stopFields) do if source[k]~=nil then s[k]=source[k] end end
+    for _,k in ipairs(configFields) do if source.stopConfig[k]~=nil then cfg[k]=source.stopConfig[k] end end
+    cfg.load=orderedVector(source.stopConfig.load);cfg.maxLoad=orderedVector(source.stopConfig.maxLoad)
+    s.waypoints=orderedVector(source.waypoints);s.alternativeTerminals=orderedVector(source.alternativeTerminals)
+   else
+    s.stationGroup=edit.station_group;s.station=edit.station;s.terminal=edit.terminal
+    s.waypoints={};s.alternativeTerminals={};s.maxAdditionalWaitingTime=0
+    cfg.load={};cfg.maxLoad={};cfg.forceUnload=false;cfg.destroyForConfigChange=false;cfg.destroyForRefresh=false
+   end
+   if edit.station~=nil then s.station=edit.station end
+   if edit.terminal~=nil then s.terminal=edit.terminal end
+   if edit.extra_wait~=nil then s.maxAdditionalWaitingTime=edit.extra_wait end
+   if edit.force_unload~=nil then cfg.forceUnload=edit.force_unload end
+   if edit.loads~=nil then
+    local loads={};for id in pairs(cargos) do loads[id+1]=false end
+    for _,id in ipairs(edit.loads) do assert(cargos[id]~=nil,"Unknown cargo ID");loads[id+1]=true end
+    cfg.load=loads
+   end
+   if edit.max_load~=nil or edit.source_index==nil then
+    local maximum={};for id in pairs(cargos) do maximum[id+1]=edit.max_load or 1 end;cfg.maxLoad=maximum
+   end
+   s.stopConfig=cfg;stops[#stops+1]=s
+   local snap={stops={{stationGroup=s.stationGroup}}}
+   terminals[#terminals+1]=terminalSelection(snap,{stop_index=0,station_index=s.station,terminal=s.terminal})
+   for _,alt in ipairs(orderedVector(s.alternativeTerminals)) do
+    terminals[#terminals+1]=terminalSelection(snap,{stop_index=0,station_index=alt.station,terminal=alt.terminal})
+   end
+  end
+  c.stops=stops
+  return c,signature,stableDataSignature(terminals)
  end
  local function makeConsist(args)
   local depot=requireEntity(args,"depot","VEHICLE_DEPOT")
@@ -6300,6 +7244,32 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
    annualMaxConsumption=api.engine.util.stock.getCargoMaxConsumptionPerYear(id,cargo),
    scope="native annual consumption and maximum; not instantaneous rate or interval delivery"}
  end
+ commands.get_town_population=function(args)
+  local town=requireEntity(args,"town","TOWN")
+  local u=api.engine.util.town.getTownCapacityUsage(town)
+  local r=assert(u[api.type.enum.LandUseType.RESIDENTIAL+1],"Residential capacity usage unavailable")
+  assert(type(r.used)=="number" and type(r.capacity)=="number","Invalid native population")
+  return {town=town,population=r.used,residentialCapacity=r.capacity,gameTime=cargoReadTime()}
+ end
+ ENGINE_COMMANDS.get_town_population=true
+ commands.get_town_building_stats=function(args)
+  local out={};local cargos=api.res.cargoTypeRep.getAll(true)
+  for _,id in ipairs(args.ids) do
+   local b=assert(getComponent(id,"TOWN_BUILDING"),"Town building removed or changed")
+   local stock=b.stockList;local row={id=id,town=b.town,stock_list=stock,cargos={}}
+   if type(stock)=="number" and stock>=0 and api.engine.entityExists(stock) and getComponent(stock,"STOCK_LIST") then
+    row.available=true
+    for cargo in pairs(cargos) do
+     local demand=api.engine.util.stock.getCargoMaxConsumptionPerYear(stock,cargo)
+     if demand>0 then row.cargos[#row.cargos+1]={cargo=cargo,demand=demand,
+      consumed=api.engine.util.stock.getCargoConsumedPerYear(stock,cargo),delivered=api.engine.util.stock.getCargoTypeDeliveredPerYear(stock,cargo)} end
+    end
+   else row.available=false;row.reason="no_valid_stock_list" end
+   out[#out+1]=row
+  end
+  return {items=out,gameTime=cargoReadTime(),scope="engine annual counters, not per-round flow; invalid stocks not queried"}
+ end
+ ENGINE_COMMANDS.get_town_building_stats=true
  commands.get_town_deliveries=function(args)
   local town=requireEntity(args,"town","TOWN")
   local interval=math.floor(api.util.getDefaultYearDuration()/2+.5)
@@ -6414,9 +7384,39 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
   local root=state:get() or {};local ledger=root.uiConstruction or {requests={},tokens={},count=0}
   reclaimReadBudget(ledger);root.uiConstruction=ledger;state:set(root)
   if ledger.requests[req.id] then return end -- durable engine duplicate suppression
-  if ledger.count>=256 and not pureEngineReads[req.cmd] then emit(req,false,"Saved construction request limit reached");return end
+  if ledger.count>=SAVED_MUTATION_LIMIT and not pureEngineReads[req.cmd] then emit(req,false,"Saved construction request limit reached");return end
   ledger.requests[req.id]={status="started",cmd=req.cmd};ledger.count=ledger.count+1
   root.uiConstruction=ledger;state:set(root)
+  if req.cmd=="begin_snapshot" or req.cmd=="read_snapshot_page" or req.cmd=="release_snapshot" then
+   local ok,value=pcall(function()
+    local a=req.args
+    if req.cmd=="begin_snapshot" then
+     local args={spacing=a.spacing,whole_map=a.whole_map,start_construction=a.start_construction,end_construction=a.end_construction}
+     local command
+     if a.snapshot_kind=="planning" then
+      assert(a.start_construction==nil and a.end_construction==nil and a.whole_map==nil,"Planning snapshot accepts bounds/spacing only")
+      args={bounds=a.bounds,spacing=a.spacing};command="get_planning_snapshot"
+     else
+      assert(a.bounds==nil and a.start_construction~=nil and a.end_construction~=nil and a.start_construction~=a.end_construction,"Route snapshot needs distinct station constructions")
+      assert((a.spacing or 100)<=250,"Route spacing exceeds 250")
+      command="get_route_snapshot"
+     end
+     local result=commands[command](args)
+     local encoded=json.encode(result);assert(#encoded<=8388608,"Snapshot exceeds 8 MiB; reduce survey area")
+     ledger.snapshotBuffer={token=req.id,epoch=req.facilityEpoch,data=encoded,clock=assert(wallClock())}
+     return {snapshot=req.id,bytes=#encoded,session=req.facilityEpoch,state=result.state,encoding="hex_utf8_json",pageBytes=24000}
+    end
+    local t=assert(ledger.snapshotBuffer,"Snapshot missing or released")
+    assert(t.epoch==req.facilityEpoch and t.token==a.snapshot,"Snapshot session/token mismatch")
+    local now=assert(wallClock());assert(now>=t.clock and now-t.clock<=600,"Snapshot expired")
+    if req.cmd=="release_snapshot" then ledger.snapshotBuffer=nil;return {released=true,snapshot=a.snapshot} end
+    assert(a.offset<=#t.data,"Snapshot offset out of range")
+    local last=math.min(#t.data,a.offset+24000)
+    return {snapshot=a.snapshot,offset=a.offset,nextOffset=last,totalBytes=#t.data,hex=hexEncode(t.data:sub(a.offset+1,last)),hasMore=last<#t.data,session=req.facilityEpoch}
+   end)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok}
+   state:set(root);emit(req,ok,value);return
+  end
   if req.cmd=="preview_road_upgrade" or req.cmd=="preview_street_stop" or req.cmd=="commit_edge_edit" then
    local ok,value=pcall(function()
     assert(not ledger.pending,"Previous mutation unresolved")
@@ -6512,8 +7512,12 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{capabilityRevision="consolidated-20261010-v29",commands=names,
-    durableRequestCount=ledger.count,pending=ledger.pending,mutationLimit=256,
+   emit(req,true,{capabilityRevision="consolidated-20261011-v40",commands=names,
+    roadGraph={command="preview_road_graph",nativeAcceptance="pending_isolated_test",isolatedTestRequired=true,
+     nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
+     specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
+    roadJunctionBranch={command="preview_network",flag="connect_road_junctions",existingDegree=2,nativeAcceptance="pending_isolated_test"},
+    durableRequestCount=ledger.count,pending=ledger.pending,mutationLimit=SAVED_MUTATION_LIMIT,
     session=req.facilityEpoch,verification="capabilities only, not live feature acceptance"});return
   end
   local structureCommands={preview_depot="build_depot",preview_station="build_station",preview_rail_station="build_rail_station"}
@@ -6573,6 +7577,17 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
     ledger.consistPreviews=ledger.consistPreviews or {}
     ledger.consistPreviews[token]={args=req.args,signature=signature,created=now,epoch=req.facilityEpoch}
     result.preview=true;result.preview_token=token;return result
+   end)
+   ledger.requests[req.id]={status=ok and "returned" or "rejected",cmd=req.cmd,ok=ok}
+   state:set(root);emit(req,ok,value);return
+  end
+  if req.cmd=="preview_line_edit" then
+   local ok,value=pcall(function()
+    assert(not ledger.pending,"Previous mutation unresolved")
+    local config,signature,terminalSignature=uiBuild.editLine(req.args)
+    local token="ui-line:"..req.id;ledger.linePreviews=ledger.linePreviews or {}
+    ledger.linePreviews[token]={edit=true,args=req.args,signature=signature,terminalSignature=terminalSignature,created=assert(wallClock()),epoch=req.facilityEpoch}
+    return {preview=true,preview_token=token,line=req.args.line,stopCount=#req.args.stops,cost=0,configurationOnly=true,pathVerified=false,retainedComplexStops=true}
    end)
    ledger.requests[req.id]={status=ok and "returned" or "rejected",cmd=req.cmd,ok=ok}
    state:set(root);emit(req,ok,value);return
@@ -6644,12 +7659,24 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
       state:set(root)
       assert(p and p.epoch==req.facilityEpoch,"Unknown, consumed or stale line preview")
       local now=wallClock();assert(now and now>=p.created and now-p.created<=60,"Line preview expired")
-      local snap,signature=lineSnapshot(p.args.line)
-      assert(signature==p.signature,"Line configuration changed since preview")
-      assert(terminalSelection(snap,p.args)==p.terminalSignature,"Station/terminal identity changed since preview")
-      local config=lineWithConfig(snap,p.args);expectedLine=p.args.line
+      local config
+      if p.edit then
+       local signature,terminalSignature
+       config,signature,terminalSignature=uiBuild.editLine(p.args)
+       assert(signature==p.signature and terminalSignature==p.terminalSignature,"Line or terminal changed since preview")
+      else
+       local snap,signature=lineSnapshot(p.args.line)
+       assert(signature==p.signature,"Line configuration changed since preview")
+       assert(terminalSelection(snap,p.args)==p.terminalSignature,"Station/terminal identity changed since preview")
+       config=lineWithConfig(snap,p.args)
+      end
+      expectedLine=p.args.line
+      local expectedSignature=p.edit and uiBuild.lineSignature(config) or nil
       overrideHandler=function(_,reply)
-       return sendGameCommand(api.cmd.makeLineUpdateCmd(expectedLine,config),reply,function()return {updated=true,line=expectedLine,stop_index=p.args.stop_index}end)
+       return sendGameCommand(api.cmd.makeLineUpdateCmd(expectedLine,config),reply,function()
+        if expectedSignature then assert(uiBuild.lineSignature(getComponent(expectedLine,"LINE"))==expectedSignature,"Line readback mismatch; reconcile without retry") end
+        return {updated=true,line=expectedLine,stop_index=p.args.stop_index,configurationVerified=expectedSignature~=nil,pathVerified=false}
+       end)
       end
      else
      requireEntity({vehicle=req.args.vehicles[1]},"vehicle","TRANSPORT_VEHICLE")
@@ -6824,7 +7851,7 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
    elseif workflows[req.cmd] or req.cmd=="preview_facility_module" or req.cmd=="preview_facility_parameter" then
     assert(not ledger.pending,"Previous mutation unresolved")
    end
-   if req.cmd=="commit_facility" or req.cmd=="commit_road" or req.cmd=="commit_network" then
+   if req.cmd=="commit_facility" or req.cmd=="commit_road" or req.cmd=="commit_network" or req.cmd=="commit_road_graph" then
     assert(not ledger.pending,"Previous construction outcome unresolved; reconcile before further commits")
     local token=req.args.preview_token;local epoch=ledger.tokens[token]
     ledger.tokens[token]=nil
@@ -6868,6 +7895,9 @@ list_network_templates={},preview_network={"start","end","template"},commit_netw
    ledger.tokens[value.preview_token]=req.facilityEpoch
   end
   if ledger.pending==req.id and ok and type(value)=="table" and value.built==true and value.verified==true then ledger.pending=nil end
+  if ledger.pending==req.id and req.cmd=="commit_road_graph" and ok and type(value)=="table"
+   and value.id==req.id and value.built==false and value.phase=="rejected_unchanged" and value.rejectionVerified==true
+   and value.nativeResult and value.nativeResult.explicitRejection==true and value.retryAllowed==false then ledger.pending=nil end
   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,error=not ok and tostring(value):sub(1,2048) or nil}
   root=state:get() or {};root.uiConstruction=ledger;state:set(root)
   emit(req,ok,value)
@@ -6958,13 +7988,55 @@ end
 -- cached filenames or automatically dispatch after a session reload.
 local HEADLESS_GENERATION = "disabled"
 local HEADLESS_ON_DEMAND = false
-local headless = {slot=1,due=nil,stopped=false,seen={},order={}}
+-- Same command-specific limit in the ingress and the construction dispatcher.
+function uiBuild.inputLimit(text)
+	return type(text)=="string" and (text:match("^[0-9a-f]+ preview_line_edit ") or text:match("^[0-9a-f]+ preview_road_graph ")) and 8192 or 512
+end
+local headless = {slot=1,due=nil,stopped=false,seen={},order={},saveIds={},saveCount=0}
+function headless.canSave()
+	-- Native bindings can be callable tables with a hidden metatable.
+	return type(app)=="table" and (type(app.saveGame)=="function" or type(app.saveGame)=="table")
+end
+-- Saving runs in the application/GUI state without a visible panel or engine event.
+-- Keep the callback empty; the host verifies that the .sav was actually written.
+function headless.save(input)
+	local id,cmd,raw=input:match("^([0-9a-f]+) ([a-z_]+) (.+)$")
+	assert(id and #id==32 and cmd=="save_game","Invalid save request")
+	assert(raw:match("^%s*{"),"Save arguments must be an object")
+	local args=json.decode(raw)
+	assert(type(args)=="table","Invalid save arguments")
+	for k,v in pairs(args) do
+		assert(k=="slot" or (k=="overwrite" and type(v)=="boolean"),"Unknown save argument")
+	end
+	local slot=args.slot
+	assert(type(slot)=="string" and #slot>=1 and #slot<=80 and slot:match("^[A-Za-z0-9][A-Za-z0-9_%-]*$"),"Invalid save slot")
+	local lower=slot:lower()
+	assert(not ({con=true,prn=true,aux=true,nul=true})[lower] and not lower:match("^com%d$") and not lower:match("^lpt%d$"),"Reserved save slot")
+	assert(not headless.saveIds[id] and headless.saveCount<256,"Save request duplicate or limit reached")
+	assert(headless.canSave(),"Native save API unavailable")
+	local current=commands.get_game_state({})
+	assert(current.speedup==0,"Pause the game before saving")
+	headless.saveIds[id]=true;headless.saveCount=headless.saveCount+1
+	app.saveGame(slot,function() end,false,true)
+	local encoded=json.encode({id=id,cmd=cmd,ok=true,result={requested=true,verified=false,
+		slot=slot,session=terrainEpoch,gameTime=current.gameTime,verification="host_file_check_required"}})
+	local payload=hexEncode(encoded)
+	local total=math.max(1,math.ceil(#payload/1500))
+	for part=1,total do
+		print("[TNJ_UI_READ_V1] id="..id.." part="..part.." total="..total.." hex="..payload:sub((part-1)*1500+1,part*1500))
+	end
+	return "Result logged"
+end
 local function headlessTick()
 	if HEADLESS_GENERATION=="disabled" or headless.stopped then return end
 	local function emit(status,extra)
 		local row=extra or {};row.status=status;row.session=terrainEpoch
 		row.generation=HEADLESS_GENERATION;row.slot=headless.slot
 		row.mode=HEADLESS_ON_DEMAND and "demand" or "bounded"
+		row.saveGameAvailable=headless.canSave()
+		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
+		row.saveRequestCount=headless.saveCount;row.saveRequestLimit=256
+		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192};row.roadGraphVersion=40
 		if HEADLESS_ON_DEMAND then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua" end
 		row.utc=os.time();row.clock=wallClock()
 		log("[TNJ_HEADLESS_V1]",json.encode(row))
@@ -6984,23 +8056,30 @@ local function headlessTick()
 		assert(type(chunk)=="function",tostring(why))
 		local value=chunk()
 		if not HEADLESS_ON_DEMAND and value=="" then return end
-		assert(type(value)=="string" and #value<=4096,"Invalid headless payload")
+		assert(type(value)=="string" and #value<=16384,"Invalid headless payload")
 		local req=json.decode(value)
 		assert(type(req)=="table" and req.session==terrainEpoch and req.generation==HEADLESS_GENERATION and req.slot==headless.slot,"Headless session/slot mismatch")
 		assert(type(req.expires)=="number" and now<=req.expires and req.expires<=headless.due+(HEADLESS_ON_DEMAND and 60 or 5),"Expired headless request")
-		assert(type(req.input)=="string" and #req.input<=512,"Invalid request input")
-		local id=req.input:match("^([0-9a-f]+) ")
+		assert(type(req.input)=="string","Invalid request input")
+		local id,cmd=req.input:match("^([0-9a-f]+) ([a-z_]+)")
 		assert(id and #id==32 and not headless.seen[id],"Duplicate or invalid request ID")
 		headless.seen[id]=true -- reserve before invoking either existing dispatcher
 		headless.order[#headless.order+1]=id
 		if #headless.order>256 then headless.seen[table.remove(headless.order,1)]=nil end
 		consumed=true
+		if #req.input>uiBuild.inputLimit(req.input) then
+			-- Identity/envelope validated, but no dispatcher has been called.
+			-- Consume this slot and return a real rejection; never replay it.
+			emit("rejected",{id=id,command=cmd,reason="input_too_large",inputBytes=#req.input,inputLimit=uiBuild.inputLimit(req.input),dispatchAttempted=false})
+			return
+		end
 		emit("consumed",{id=id})
 		local status
 		if req.kind=="build" then
 			assert(uiBuild.recognizes(req.input),"Unsupported construction command")
 			status=uiBuild.forward(req.input,HEADLESS_ON_DEMAND)
 		elseif req.kind=="read" then status=handleUiRead(req.input,HEADLESS_ON_DEMAND)
+		elseif req.kind=="save" then status=headless.save(req.input)
 		else error("Unsupported request kind") end
 		emit("dispatched",{id=id,detail=status})
 		assert(status=="Submitted; inspect log" or status=="Result logged","Dispatch failed or unknown: "..tostring(status))

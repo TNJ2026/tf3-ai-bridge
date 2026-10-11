@@ -19,6 +19,20 @@ SCHEMAS = {
 ALLOWED = set(SCHEMAS)
 
 
+def validate_save_arguments(command: str, arguments: dict | None) -> dict:
+    if command != 'save_game' or not isinstance(arguments, dict):
+        raise ValueError('Expected save_game arguments')
+    if not {'slot'} <= arguments.keys() <= {'slot', 'overwrite'}:
+        raise ValueError('Expected slot and optional overwrite only')
+    slot = arguments['slot']
+    if (not isinstance(slot, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', slot)
+            or re.fullmatch(r'(?i:con|prn|aux|nul|com[0-9]|lpt[0-9])', slot)):
+        raise ValueError('Invalid save slot; use 1-80 ASCII letters, digits, underscores or hyphens')
+    if type(arguments.get('overwrite', False)) is not bool:
+        raise ValueError('overwrite must be a boolean')
+    return dict(arguments)
+
+
 def validate_arguments(command: str, arguments: dict | None) -> dict:
     if command not in ALLOWED:
         raise ValueError("Supported read-only commands: " + ", ".join(sorted(ALLOWED)))
@@ -36,6 +50,14 @@ def validate_arguments(command: str, arguments: dict | None) -> dict:
             raise ValueError(f"Invalid or unsupported argument: {key}")
     return dict(arguments)
 BUILD_SCHEMAS = {
+    "get_town_population": {"town":"entity"},
+    "get_town_building_stats": {"ids":"entity_ids"},
+    "get_component_collection": {"id":"entity", "component":"text", "field":"text", "offset":"offset", "limit":"page_limit"},
+    "begin_snapshot": {"snapshot_kind":"snapshot_kind", "bounds":"bounds", "spacing":"snapshot_spacing", "start_construction":"entity", "end_construction":"entity", "whole_map":"bool"},
+    "read_snapshot_page": {"snapshot":"token", "offset":"byte_offset"},
+    "release_snapshot": {"snapshot":"token"},
+    "preview_line_edit": {"line":"entity", "stops":"line_edits"},
+
     "set_game_speed": {"speed":"game_speed", "expected_speed":"game_speed"},
     "preview_headquarters_access": {"town":"entity", "road":"entity", "x":"number", "y":"number", "z":"number", "rotation":"number"},
     "preview_line_terminal": {"line":"entity", "stop_index":"stop_index", "station_index":"stop_index", "terminal":"terminal_index"},
@@ -61,7 +83,12 @@ BUILD_SCHEMAS = {
     "preview_loan": {"action":"loan_action", "offer_type":"text", "loan_id":"entity"},
     "commit_loan": {"preview_token":"token"}, "get_loan_operation": {"operation_id":"token"},
     "list_network_templates": {"search":"text", "offset":"offset", "limit":"page_limit"},
-    "preview_network": {"start":"endpoint", "end":"endpoint", "via":"via_points", "template":"text", "reset_empty_rail_ports":"bool", "reset_empty_road_ports":"bool"},
+    "get_network_template": {"template":"text"},
+    "list_road_structures": {},
+    "preview_road_graph": {"graph":"road_graph", "isolated_test":"bool"},
+    "commit_road_graph": {"preview_token":"token", "backup_save":"save_slot"},
+    "get_road_graph_operation": {"operation_id":"token"},
+    "preview_network": {"start":"endpoint", "end":"endpoint", "via":"via_points", "template":"text", "reset_empty_rail_ports":"bool", "reset_empty_road_ports":"bool", "connect_road_junctions":"bool"},
     "commit_network": {"preview_token":"token"},
     "list_multiple_units": {"offset":"offset", "limit":"page_limit"},
     "preview_multiple_unit": {"depot":"entity", "resource":"text"},
@@ -107,7 +134,7 @@ BUILD_SCHEMAS = {
     "reconcile_network_rejection": {"request_id": "request_id"},
     "reconcile_town_cargo_rejection": {"request_id": "request_id"},
     "reconcile_depot_rejection": {"request_id": "request_id"},
-    "get_entity": {"id": "entity"},
+    "get_entity": {"id": "entity", "components":"component_names"},
     "get_vehicle_motion": {"vehicle": "entity", "resolve_native_path": "bool"},
     "list_street_types": {"filter": "text"},
     "survey_build_site": {"x": "number", "y": "number"},
@@ -133,6 +160,7 @@ def validate_build_arguments(command, arguments):
         required.discard("via")
         required.discard("reset_empty_rail_ports")
         required.discard("reset_empty_road_ports")
+        required.discard("connect_road_junctions")
     if command == "list_street_types":
         required = set()
     if command == "get_vehicle_motion":
@@ -141,7 +169,7 @@ def validate_build_arguments(command, arguments):
         required = {"vehicle", "cargo"}
         if ("offset" in arguments or "limit" in arguments) and arguments.get("include_entities") is not True:
             raise ValueError("Entity pagination requires include_entities=true")
-    optional_required = {'get_facility_config':{'entity'}, 'get_facility_access':{'entity'}, 'get_stock_cargo':{'stock_list','cargo'}, 'preview_headquarters_access':{'town','road','x','y','z'}, 'get_facility_layout':{'entity'}, 'preview_flatten_terrain':{'bounds','target_height'}, 'preview_industry':{'resource','x','y'}, 'preview_town_cargo_needs':{'town'}, 'preview_loan':{'action'}, 'list_network_templates':set(), 'list_multiple_units':set(), 'list_facility_resources':set(), 'list_map_entities':set(),
+    optional_required = {'get_entity':{'id'}, 'begin_snapshot':{'snapshot_kind'}, 'get_facility_config':{'entity'}, 'get_facility_access':{'entity'}, 'get_stock_cargo':{'stock_list','cargo'}, 'preview_headquarters_access':{'town','road','x','y','z'}, 'get_facility_layout':{'entity'}, 'preview_flatten_terrain':{'bounds','target_height'}, 'preview_industry':{'resource','x','y'}, 'preview_town_cargo_needs':{'town'}, 'preview_loan':{'action'}, 'list_network_templates':set(), 'list_multiple_units':set(), 'list_facility_resources':set(), 'list_map_entities':set(),
                          'get_terrain_grid':set(), 'get_map_data':set(), 'get_subventions':set()}
     required = optional_required.get(command, required)
     if command in ('preview_depot', 'preview_station'):
@@ -158,7 +186,16 @@ def validate_build_arguments(command, arguments):
         raise ValueError("Missing required construction arguments")
     for key, value in arguments.items():
         kind = schema.get(key)
-        valid = ((kind == "game_speed" and type(value) is int and value in {0,1,2,4})
+        from .channel_schemas import component_names, line_edits
+        from .road_graph import road_graph
+        valid = ((kind == 'entity_ids' and isinstance(value,list) and 1<=len(value)<=16 and all(type(v) is int and 0<=v<2147483647 for v in value) and len(set(value))==len(value))
+                 or (kind == 'component_names' and component_names(value))
+                 or (kind == 'line_edits' and line_edits(value))
+                 or (kind == 'road_graph' and road_graph(value))
+                 or (kind == 'snapshot_kind' and value in ('planning','route'))
+                 or (kind == 'snapshot_spacing' and type(value) in (int,float) and math.isfinite(value) and 25<=value<=2000)
+                 or (kind == 'byte_offset' and type(value) is int and 0<=value<=8388608)
+                 or (kind == "game_speed" and type(value) is int and value in {0,1,2,4})
                  or (kind == "terminal_index" and type(value) is int and 0<=value<=63)
                  or (kind == "terrain_mode" and isinstance(value, str) and value in {"surface", "base"})
                  or (kind == "bounds" and valid_terrain_bounds(value))
@@ -236,6 +273,11 @@ class UiLogRequests:
     def prepare_build(self, path: Path, command: str, arguments: dict) -> dict:
         return self._prepare(path, command, validate_build_arguments(command, arguments))
 
+    def prepare_save(self, path: Path, command: str, arguments: dict) -> dict:
+        ticket = self._prepare(path, command, validate_save_arguments(command, arguments))
+        ticket['instruction'] = 'Headless save only; no panel dispatch. Read the original ID until file verification completes.'
+        return ticket
+
     def _prepare(self, path, command, arguments):
         if len(self.pending) >= 256:
             raise ValueError("Session request limit reached")
@@ -245,8 +287,8 @@ class UiLogRequests:
             anchor = f.read(stat.st_size - f.tell())
         request_id = uuid.uuid4().hex
         suffix = " " + json.dumps(arguments, separators=(",", ":"), sort_keys=True) if arguments else ""
-        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > 512:
-            raise ValueError("UI request exceeds 512 bytes")
+        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > (8192 if command in ("preview_line_edit", "preview_road_graph") else 512):
+            raise ValueError("UI request exceeds command byte limit")
         self.pending[request_id] = (path, stat.st_ino, stat.st_size, command, anchor, self.clock())
         return {"id": request_id, "input": f"{request_id} {command}{suffix}",
                 "status": "prepared_not_sent", "instruction": "Enter input in AI Bridge query and click Send once; then read this ID. No automatic UI dispatch."}

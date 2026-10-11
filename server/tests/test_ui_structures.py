@@ -37,8 +37,8 @@ def test_structure_preview_commit(tmp_path,command,args,mode):
         lua.globals().testState=state
         lua.execute("""
           local requests={}
-          for i=1,256 do requests[tostring(i)]={cmd=(mode=='read_budget' and i<256) and 'get_entity' or 'commit_structure',status='returned'}end
-          testState.v.uiConstruction={requests=requests,tokens={},count=256}
+          for i=1,1024 do requests[tostring(i)]={cmd=(mode=='read_budget' and i<1024) and 'get_entity' or 'commit_structure',status='returned'}end
+          testState.v.uiConstruction={requests=requests,tokens={},count=1024}
         """)
     log=tmp_path/'stdout.txt';log.touch();reader=UiLogRequests();output=[]
     lua.globals().print=lambda *v:output.append(' '.join(map(str,v)))
@@ -53,12 +53,12 @@ def test_structure_preview_commit(tmp_path,command,args,mode):
     _,p=query(command,args)
     if mode=='full_budget':
         assert not p['ok'] and lua.globals().mutations==0
-        assert state['v']['uiConstruction']['count']==256
+        assert state['v']['uiConstruction']['count']==1024
         _,read=query('get_entity',{'id':220})
         assert read['ok'],read
         _,again=query(command,args)
         assert not again['ok'] and lua.globals().mutations==0
-        assert state['v']['uiConstruction']['count']==256
+        assert state['v']['uiConstruction']['count']==1024
         return
     assert p['ok'],p
     assert lua.globals().mutations==0

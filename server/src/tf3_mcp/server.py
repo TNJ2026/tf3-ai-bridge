@@ -33,6 +33,65 @@ mcp = MCPServer(
 
 _bridge: Bridge | None = None
 _ui_log_requests = UiLogRequests()
+_headless_client = None
+_operations_monitor = None
+
+
+def transport_mode():
+    mode = os.environ.get('TF3_MCP_TRANSPORT', 'headless' if os.environ.get('TF3_MCP_HEADLESS_MOD') else 'file')
+    if mode not in ('file', 'headless'):
+        raise ToolError('TF3_MCP_TRANSPORT must be file or headless')
+    return mode
+
+
+def headless_client():
+    global _headless_client
+    if _headless_client is None:
+        from .headless_client import HeadlessClient
+        _headless_client = HeadlessClient(headless())
+    return _headless_client
+
+
+@mcp.tool()
+async def bind_headless_session(expected_session: str) -> dict:
+    """Explicitly bind the current session after reload and map/entity reconciliation.
+    Reads state and map; invalidates route cache. Does not replay pending work."""
+    result = await headless_client().bind(expected_session)
+    _map_cache.invalidate()
+    return result
+
+
+@mcp.tool()
+async def execute_vehicle_batch(batch_id: str, operations: list[dict], expected_session: str) -> dict:
+    """Execute 1..64 authorized single-vehicle operations, persisted before dispatch.
+    Each item is {command,arguments}. buy_vehicles requires count=1. A later
+    assign_vehicles may use purchase_index instead of vehicles to reference an
+    earlier purchase. Same batch_id reads its journal, NEVER repeats or resumes it.
+    Stops on unknown, partial result or readback mismatch. This does not authorize
+    purchases, new spending or resuming a stopped batch; review budget first."""
+    from .headless_workflows import VehicleBatches
+    return await VehicleBatches(headless_client(), bridge().dir).execute(batch_id, operations, expected_session)
+
+
+@mcp.tool()
+async def operations_monitor(action: str = 'status', interval_seconds: float = 60) -> dict:
+    """Read-only new-channel monitoring: status | run_once | start | stop.
+    Never starts implicitly. start requires user monitoring authorization.
+    Collects map/towns, paged vehicle/line identities, finance and opportunities;
+    reports changed faults/opportunities only, skips busy rounds, no catch-up.
+    Stops on errors. No construction, purchases, speed changes, saves or acceptance.
+    Writes local rounds; this tool does not itself deliver desktop notifications.
+    Platform occupancy and full recipe/stock/age chain diagnosis remain unknown."""
+    global _operations_monitor
+    from .headless_workflows import OperationsMonitor
+    if _operations_monitor is None:
+        _operations_monitor = OperationsMonitor(headless_client(), bridge().dir)
+    if action == 'status': return _operations_monitor.status()
+    if action == 'stop': return await _operations_monitor.stop()
+    if action == 'run_once': return await _operations_monitor.once()
+    if action == 'start': return await _operations_monitor.start(interval_seconds)
+    raise ToolError('Unknown monitor action')
+
 
 
 def headless() -> HeadlessRequests:
@@ -59,7 +118,12 @@ async def headless_status() -> dict:
 @mcp.tool()
 async def send_headless_request(command: str, arguments: dict | None = None,
                                 kind: str = "read", expected_session: str | None = None) -> dict:
-    """Publish exactly one request without panel input/clicks. Same whitelist as
+    """Publish exactly one request without panel input/clicks. kind=save accepts
+    save_game(slot, overwrite=False) only; requires a loaded save-capable receiver,
+    verified expected_session and paused game. read_headless_result waits for a
+    new nonempty stable .sav file, not just the native requested acknowledgement.
+    Existing slots require explicit overwrite=True. Never automatically reloads.
+    Same whitelist as
     prepare_ui_read_request (kind=read) or prepare_ui_build_request (kind=build).
     Engine operations require expected_session from a fresh headless_status plus
     independent map verification. build_* commands preview; commit_* consumes a
@@ -76,7 +140,7 @@ async def send_headless_request(command: str, arguments: dict | None = None,
     independently verified backup_save; a filename alone is not backup proof.
     Authorization and pre-mutation save required for these direct operations.
     Durable intent precedes publication. Read the returned ID; unknown outcomes
-    block subsequent publication. No retry, GUI fallback, save or speed change."""
+    block subsequent publication. No retry, GUI fallback or implicit save/speed change."""
     import asyncio
     try:
         return await asyncio.to_thread(headless().send, command, arguments,
@@ -89,7 +153,10 @@ async def send_headless_request(command: str, arguments: dict | None = None,
 async def read_headless_result(request_id: str) -> dict:
     """Read an existing durable request after service restart too. Pending and
     timeout_unknown never authorize resubmission. Reloaded logs require manual
-    reconciliation. Successful replies reuse the existing framed log protocol."""
+    reconciliation. Saves remain pending until a new nonempty stable file is
+    independently verified; an unchanged/missing file never clears the pending lock.
+    A verified saved file is not proof that loading it will succeed.
+    Successful replies reuse the existing framed log protocol."""
     try:
         return headless().read(request_id)
     except (ValueError, OSError) as exc:
@@ -196,10 +263,12 @@ BUILD_TIMEOUT = 30.0  # build commands may try several placements
 
 
 async def _call(cmd: str, _timeout: float | None = None, _engine: bool = False, **args: Any) -> Any:
-    mutation = (cmd.startswith("build_") or cmd in {"upgrade_road", "commit_industry", "commit_facility", "commit_prospection", "commit_flatten_terrain", "bulldoze", "eval"}) and not args.get("preview", False)
+    mutation = (cmd.startswith(("build_", "commit_")) or cmd in {"upgrade_road", "bulldoze", "eval"}) and not args.get("preview", False)
     try:
+        if transport_mode() == 'headless':
+            return await headless_client().call(cmd, args)
         return await bridge().call(cmd, args, timeout=_timeout, engine=_engine)
-    except BridgeError as e:
+    except (BridgeError, ValueError, RuntimeError) as e:
         # surface as a tool error the agent can read and react to
         raise ToolError(str(e)) from e
     finally:
@@ -250,6 +319,12 @@ async def commit_flatten_terrain(preview_token: str) -> dict:
     path = bridge().dir.parent / "save" / (slot + ".sav")
     if path.exists():
         raise ToolError("Backup slot unexpectedly exists; no terrain submission")
+    if transport_mode() == 'headless':
+        saved = await _call('save_game', slot=slot, overwrite=False)
+        if saved.get('verified') is not True:
+            raise ToolError('Backup not verified; terrain was not submitted')
+        result = await _call('commit_flatten_terrain', preview_token=preview_token, backup_save=slot)
+        return dict(result, backup_save=slot, backup_path=saved['file']['path'])
     await _call("eval", code=f'app.saveGame("{slot}",function() end,false,true);return {{requested=true}}')
     previous = None
     stable_since = None
@@ -468,6 +543,11 @@ async def bridge_status(verbose: bool = False) -> dict:
     """Check whether the game is connected: heartbeat age, bridge version, game time, paused flag.
     When disconnected, compact output puts historical fields under lastKnown; they are not live state.
     verbose=True adds the full heartbeat and the Lua environment probe (libraries exposed to mods)."""
+    if transport_mode() == 'headless':
+        status = await headless_status()
+        row = status['receiver']
+        return dict(status, transport='headless', connected=row['status']=='ready' and status['ageSeconds']<=5,
+                    bridgeDir=str(bridge().dir))
     status = bridge().heartbeat()
     status["bridgeDir"] = str(bridge().dir)
     return status if verbose else compact_status(status)
@@ -582,7 +662,10 @@ async def get_subventions(assess: bool = True) -> dict:
 
 
 async def _subvention_call(cmd: str, **args: Any) -> Any:
-    return await _call(cmd, _engine=True, **args)
+    result = await _call(cmd, _engine=True, **args)
+    if transport_mode() == 'headless' and cmd == 'get_subventions':
+        result = dict(result, transportSession=headless_client().session)
+    return result
 
 
 _autoaccept = SubventionAutoAccept(_subvention_call, lambda: bridge().dir / "subvention_autoaccept.json")
@@ -1030,6 +1113,15 @@ async def plan_rail_connection(
         raise ToolError("Choose two different station constructions")
     if not 1 <= max_candidates <= 10:
         raise ToolError("max_candidates must be 1..10")
+    if transport_mode() == 'headless':
+        try:
+            current = await headless_client().status()
+            if (_map_cache.snapshot and _map_cache.snapshot.get('headlessSession')
+                    != current['receiver']['session']):
+                _map_cache.invalidate()
+        except (ValueError, RuntimeError) as exc:
+            _map_cache.invalidate()
+            raise ToolError(str(exc)) from exc
     snapshot, status = await _map_cache.refresh(start_construction, end_construction, spacing=spacing)
     import asyncio
     result = await asyncio.to_thread(plan_staged, snapshot, max_candidates)
@@ -1266,6 +1358,61 @@ if ALLOW_EVAL:
         take effect in the live game. engine=True runs it in the engine state instead of the GUI state
         (needed e.g. to remove or replace existing streets; there command callbacks run synchronously)."""
         return await _call("eval", _engine=engine, code=code)
+
+
+@mcp.tool()
+async def get_network_template(template: str) -> dict:
+    """Read current native lane directions, widths, modes and style for a road template."""
+    return await _call("get_network_template", template=template)
+
+
+@mcp.tool()
+async def list_road_structures() -> dict:
+    """List native bridge, tunnel and railroad-crossing resources (v37 for crossings).
+    Resource existence is not construction acceptance."""
+    return await _call("list_road_structures")
+
+
+@mcp.tool()
+async def preview_road_graph(graph: dict, isolated_test: bool = False) -> dict:
+    """Preview explicit road topology (zero-based node indices). Experimental adapter requires
+    an isolated save and isolated_test=True. Supports endpoints, split points, intersections,
+    one-way lanes, ramps and explicit bridge/tunnel resources. Splits get structural checking
+    only because native removal previews can assert. v37 adds opted-in stop-object
+    and structure splits, explicit crossing_resource nodes, and junction signal plans.
+    Query runtime capabilities first; v40 adds crossing/tunnel-chain preservation and
+    constrained turns/crosswalks. Bounded native scenarios passed; see ROAD_GRAPH.md
+    and ROUNDABOUT.md for accepted cases and remaining limits.
+    No frozen internals/object deletion.
+    Return token is single-use for 60 seconds; commit separately, then verify directed paths."""
+    return await _call("preview_road_graph", graph=graph, isolated_test=isolated_test)
+
+
+@mcp.tool()
+async def preview_dual_highway(centerline: list[dict], template: str, median_gap: float = 4,
+                               drive_side: str = "right", isolated_test: bool = False) -> dict:
+    """Create and preview two opposite one-way highway carriageways from native lane widths.
+    Centerline contains explicit xyz points, 10-200 m spans. Returns four independent ports;
+    connecting ramps must be explicitly designed. Does not build or prove vehicle access."""
+    from .road_graph import paired_highway
+    native = await _call("get_network_template", template=template)
+    plan = paired_highway(centerline, native['resource'], native['laneConfigs'], median_gap, drive_side)
+    plan['preview'] = await _call("preview_road_graph", graph=plan['graph'], isolated_test=isolated_test)
+    return plan
+
+
+@mcp.tool()
+async def commit_road_graph(preview_token: str, backup_save: str) -> dict:
+    """Submit an isolated-test road graph exactly once; backup_save identifies the verified
+    preconstruction save. Unknown/partial outcome stays pending: never resend. Static verified
+    does not establish directed vehicle paths or long-term simulation safety."""
+    return await _call("commit_road_graph", _timeout=BUILD_TIMEOUT, preview_token=preview_token, backup_save=backup_save)
+
+
+@mcp.tool()
+async def get_road_graph_operation(operation_id: str) -> dict:
+    """Read stored graph operation result using its preview token; never resubmit."""
+    return await _call("get_road_graph_operation", operation_id=operation_id)
 
 
 def main() -> None:

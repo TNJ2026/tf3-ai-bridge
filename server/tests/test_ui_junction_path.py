@@ -28,12 +28,15 @@ def test_directed_path_is_fresh_bounded_and_strict(case):
     ''')
     s=SOURCE.read_text(encoding='utf-8');start=s.index(' commands.check_road_junction_path=');end=s.index(' ENGINE_COMMANDS.check_road_junction_path=true',start)
     lua.execute(s[start:end]);args=lua.table_from(dict(node=10,from_edge=21 if case=='reverse' else 20,to_edge=20 if case=='reverse' else 21,mode='AIR' if case=='bad_mode' else 'BUS'))
-    if case in ['stale','no_lanes','native_error','bad_mode']:
+    if case in ['stale','native_error','bad_mode']:
         with pytest.raises(LuaError):lua.globals().commands.check_road_junction_path(args)
         assert lua.globals().calls==(1 if case=='native_error' else 0)
     else:
         r=lua.globals().commands.check_road_junction_path(args)
-        assert lua.globals().calls==1
+        assert lua.globals().calls==(0 if case=='no_lanes' else 1)
+        if case=='no_lanes':
+            assert r['reason']=='no_supported_incoming_lane' and not r['directedLanesAvailable']
+            assert not r['pathFound'] and r['nativeQueries']==0
         assert r['directPathVerified']==(case in ['ok','reverse'])
         assert r['configurationAvailable'] and r['laneConnections'][1]['segment0']==20
 
@@ -74,8 +77,11 @@ def test_rail_tram_query_respects_native_direction_and_modes(tmp_path,mode,direc
     if direction=='stale':c.lua.globals().STALE=True
     reverse='reverse' in direction
     r=c.query('check_network_junction_path',dict(node=90000,from_edge=90002 if reverse else 90001,to_edge=90001 if reverse else 90002,mode=mode))
-    if direction in ['oneway_reverse','missing_flag_reverse','wrong_mode','stale']:
+    if direction=='stale':
         assert not r['ok'] and c.lua.globals().pathCalls==0,r
+    elif direction in ['oneway_reverse','missing_flag_reverse','wrong_mode']:
+        assert r['ok'] and not r['result']['directPathVerified'] and not r['result']['directedLanesAvailable'],r
+        assert r['result']['nativeQueries']==0 and c.lua.globals().pathCalls==0
     else:
         assert r['ok'] and r['result']['directPathVerified'],r
         assert c.lua.globals().pathCalls==1 and c.lua.globals().lastMode==c.lua.globals().api.type.enum.TransportMode[mode]

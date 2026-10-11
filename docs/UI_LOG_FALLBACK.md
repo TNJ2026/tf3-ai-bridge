@@ -1,5 +1,15 @@
 # Experimental GUI/log fallback
 
+## Current UI (2026-10-10)
+
+The input field, Send button and remaining status indicator have all been removed
+at the user's request. The game-bar plugin resource, script and stylesheet are
+removed from the source and local installation, so AI Bridge no longer adds a
+widget or uses space in the bottom information bar after a fresh game load.
+The headless transport and existing event handlers are unchanged. Historical
+manual-panel instructions below no longer describe the current UI. Removal has
+been checked on disk; visual verification still requires a fresh game load.
+
 The GUI/event/game-query/log path passed live acceptance in build 40420 for `get_game_state`, `list_towns`, `list_lines`, `list_vehicles` and `list_stations`. All five were exercised through a separate real MCP stdio client/server and the loaded game. Initial network lists were empty. After the user created a route, a follow-up live pass returned one line, two ROAD vehicles, five station groups and one depot, with matching cross-references.
 
 ## Protocol
