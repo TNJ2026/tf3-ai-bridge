@@ -30,7 +30,6 @@
 - `strategy/`：发展顺序、生产布局、运输与仓储平衡、分期方案模板。经营建议与当前地图事实分开记录。
 - `guides/`：会话确认、授权范围、预览与提交、读回验证、操作协调和异常处置。
 - `reference/`：工具参数、调用顺序、结果解释、支持范围与验证边界。
-- `history/`：旧地图案例；不可直接重用其中的状态、编号、坐标或建造顺序。目前收录[牡丹江调查案例](history/MUDANJIANG_CASE.md)。
 
 根目录 [README](../README.md) 保留安装、API 概览与版本演进；[AGENTS](../AGENTS.md) 是 agent 的入口规则。工具签名以 [server.py](../server/src/tf3_mcp/server.py) 为准；游戏侧行为还须核对当前部署的桥接与存档。
 
