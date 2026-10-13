@@ -1,10 +1,10 @@
-> 历史接口与版本说明，保留用于追溯。当前安装入口见 [英文 README](../README.md) 或 [中文 README](../README.zh-CN.md)。历史能力描述不覆盖当前保护限制。
+> 首次公开发布前的开发记录，仅供技术追溯，不是已发布版本列表或当前操作指南。文中的 0.x 版本号为内部桥接迭代编号。当前安装入口见 [英文 README](../README.md) 或 [中文 README](../README.zh-CN.md)，接口用法与保护限制以对应参考文档为准。
 
-# Transport Fever 3 AI Bridge
+# Transport Fever 3 AI Bridge 开发记录
 
 通过 **Agent → MCP → 模组** 控制《狂热运输3》(Transport Fever 3)。
 
-文档分类入口见 [docs 导航](../docs/README.md)，包括发展策略、执行指南与接口参考。实时规划和建造前请先阅读 [agent 入口](../AGENTS.md) 与 [规划、建造及防崩溃执行手册](../docs/guides/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
+文档分类入口见 [docs 导航](../docs/README.md)，包括发展策略、执行指南与接口参考。实时规划和建造前请先阅读 [agent 入口](../AGENTS.md) 与 [规划、建造及防崩溃执行手册](../docs/guides/AGENT_PLAYBOOK.md)。下文各内部迭代章节保留开发阶段的能力说明，实际执行还需核对当前接口与手册中的验证边界。
 
 设施选址可使用 [`find_facility_sites`](../docs/reference/SITE_SELECTION.md)：一份地图快照批量筛选停靠点、仓库与车站候选，检查升级预留并保存候选方案 JSON，减少逐点查询游戏和原生预览。
 
@@ -28,21 +28,12 @@ Agent ──MCP(stdio)──> server/ (Python) ──文件──> mod/tf3_mcp_b
 
 - `mod/tf3_mcp_bridge/` — 游戏模组。`content/tf3_mcp_bridge/bridge.gs.lua` 注册 game script，`bridge.script.lua` 是全部逻辑（JSON、userdata 通信、命令分发）。引擎侧脚本会热重载；GUI 侧（通信循环所在）要重新载入存档才生效。改脚本时要整体替换文件，否则游戏可能读到改了一半的内容。
 - `server/` — Python MCP Server（`mcp` 2.x）和命令行测试工具 `tf3-bridge`。
-- `scripts/install_mod.ps1` — 把模组以目录联接方式装进 Steam 的 `userdata\<id>\3493540\local\mods`。
+- `scripts/install_mod.ps1` — 本地开发安装脚本，使用目录联接；不是 Mod Hub 发布流程。
 - `.mcp.example.json` — MCP 配置示例；复制为本地 `.mcp.json` 并填写仓库绝对路径，本地配置不提交。
 
-## 使用
+## 当前使用入口
 
-1. 安装模组：`powershell -ExecutionPolicy Bypass -File scripts\install_mod.ps1`
-2. 启动游戏 → 新游戏（或读档）→ **添加模组** 里激活 **Transport Fever 3 AI Bridge** → 进入存档。发布版 ID 为 `tnj_tf3_ai_bridge`；旧版 `tf3_mcp_bridge_1` 使用相同通信目录，不要同时启用。旧存档的模组依赖不会自动迁移。
-3. 检查连通：
-   ```
-   cd server
-   uv run tf3-bridge status
-   uv run tf3-bridge ping
-   uv run tf3-bridge get_game_state
-   ```
-4. 将 `.mcp.example.json` 复制为 `.mcp.json`，把示例中的绝对路径替换为本机 `server` 目录；在 Claude Code 里打开本目录，配置会注册 `tf3` MCP Server。其他 MCP 客户端使用对应的配置入口。示例不默认开放任意 Lua eval。
+安装、MCP 配置和连接验证统一参照 [中文 README](../README.zh-CN.md#在-agent-中快速开始) 或 [英文 README](../README.md#quick-start-with-an-agent)。模组 ID 为 `tnj_tf3_ai_bridge`。本页不再维护独立安装步骤。
 
 ## 发布文件
 
@@ -310,7 +301,7 @@ build_rail_station(x=6200, y=2000, tracks=2, length=160,
 没有候选时返回诊断，不自动反复调用游戏；可扩大走廊或进行更细的路径搜索。
 当前采用有限的曲线候选搜索，不能保证找到所有可行线路或全局最优解。
 
-可直接使用脚本（当前运行的旧版 mod 可加 `--hotload`，一次只读 eval 加载本地实现）：
+开发阶段曾使用以下 `--hotload` 命令临时加载只读实现，仅作记录，不作为当前连接或升级流程：
 
 ```powershell
 server/.venv/Scripts/python.exe scripts/plan_rail_route.py --start 120586 --end 116328 --hotload --output route_candidates.json
@@ -318,7 +309,7 @@ server/.venv/Scripts/python.exe scripts/plan_rail_route.py --snapshot route_cand
 ```
 
 重放同一快照不访问游戏。快照不跨施工复用：实体编号、道路和地形都可能变化。
-新增 MCP 工具需 MCP 进程重启后列出；mod 重载后可原生调用 `get_route_snapshot`，无需 hotload。
+当前使用时重启 MCP 服务并加载匹配的游戏模组，通过原生 `get_route_snapshot` 读取；不要将历史热加载示例作为默认入口。
 
 ### 地图缓存与分阶段规划（0.8.0）
 
@@ -342,7 +333,7 @@ server/.venv/Scripts/python.exe scripts/plan_rail_route.py --snapshot route_cand
 
 本进程的施工/拆除/道路升级使缓存失效并唤醒后台刷新；手动改动在下次轮询发现。
 这不是逐帧变更订阅。缓存命中规划不查游戏，施工前必须重新同步并执行原生预览。
-MCP 进程启动后可运行新工具；现有旧版游戏 mod 可用脚本临时加载当前只读采集实现：
+以下为开发阶段临时加载采集实现的历史命令，不属于当前安装步骤：
 
 ```powershell
 server/.venv/Scripts/python.exe scripts/watch_map_cache.py --start 120586 --end 116328 --hotload --once

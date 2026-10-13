@@ -1,5 +1,23 @@
 # 游戏内鼠标坐标面板
 
+## 当前行为
+
+坐标面板默认隐藏（`PANEL_VISIBLE = false`），底部信息栏不显示坐标控件。仅隐藏显示，原生扩展注册、同步 `react.onStep` 坐标采样、状态更新、异常诊断和完整面板实现均保留。隐藏分支返回没有子控件的 `BoxLayout`，不会停止采样。
+
+保留的显示实现使用中英文提示，坐标保留一位小数，单位为米；X/Y 为世界平面坐标，Z 为地面高度。没有游戏内显示开关。不包含镜头定位、施工、改速或存档写入。
+
+文件：
+
+- `mod/tf3_mcp_bridge/content/tf3_mcp_bridge/gui/coordinates.res.lua`：原生扩展资源注册。
+- `mod/tf3_mcp_bridge/content/tf3_mcp_bridge/gui/coordinates.script.lua`：隐藏开关、GUI 面板和只读采样。
+- `mod/tf3_mcp_bridge/content/tf3_mcp_bridge/gui/coordinates.css.lua`：局部样式。
+
+离线回归覆盖默认隐藏时不创建坐标控件且采样继续，以及启用保留显示分支后的行为；这不等于实机像素验收。英文游戏测试范围见[英文兼容验证](ENGLISH_COMPATIBILITY.md)。GUI 资源修改需要重新加载后生效，不自动读档或恢复监控。
+
+## 开发阶段记录（2026-10-12）
+
+以下按当时的实现与验证状态保留，涉及常驻显示、折叠或待重载的描述均不是当前行为。
+
 2026-10-12：用户已确认坐标可正常显示。按最新要求改为单行常驻、移除展开／折叠按钮，并在信息栏扩展项目中排到最右侧；新布局已安装，待重新加载显示。
 
 面板使用游戏原生 `GameBarInfoDisplayExtension`，在底部信息栏常驻单行显示 `X  12.3    Y  -45.6    Z  7.8 米`，没有展开／折叠按钮。原生 `getPlugins` 按 `order` 升序排列；本项设为 10000，排在现有信息项之后。在同步 GUI `react.onStep` 回调中读取鼠标地面坐标，仅当显示文本变化时更新状态。保留一位小数，X/Y 是世界平面坐标，Z 是地面高度，单位都是米。

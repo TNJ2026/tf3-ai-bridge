@@ -41,7 +41,7 @@ The mod exchanges request, response, and heartbeat files with the server using `
 
 Planning reports and cards support English and Simplified Chinese. Set `TF3_UI_LANGUAGE` to `en`, `zh-CN`, or `auto` in the MCP server's environment, then restart the server. Automatic selection uses process locale overrides (`LC_ALL`, `LC_MESSAGES`, `LANG`), then the system locale, with English as the fallback. It does not detect the game's language. Saved plans retain their presentation language; regenerate a plan to change it. Cards initially use the browser/host locale, then the report's language when available.
 
-Native entity names, resource IDs, and custom titles remain unchanged. The in-game coordinate panel uses bilingual hints. This is not a translation of every tool description or document.
+Native entity names, resource IDs, and custom titles remain unchanged. The in-game coordinate panel is hidden by default; coordinate sampling and the bilingual display implementation are retained. This is not a translation of every tool description or document.
 
 Facility-siting and railway-plan labels also follow this language setting. Snapshot/plan JSON imports and recovery configuration accept UTF-8 with or without a BOM. `TF3_RECOVERY_CONFIG` supports user-directory and environment-variable expansion; reading configuration does not enable recovery or monitoring.
 
@@ -116,7 +116,6 @@ Publishing sources live in `mod/tf3_mcp_bridge/`; its directory name is retained
 
 - [Documentation index](docs/README.md)
 - [Planning tools](docs/reference/PLANNING_TOOLS.md)
-- [Historical versions and interface notes (Chinese)](docs/README_LEGACY.zh-CN.md)
 - [Official mod publishing guide](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
 
 
