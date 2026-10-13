@@ -9,6 +9,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from .bridge import Bridge, BridgeError
+from .localization import translate as tr_text
 from .map_cache import MapCache
 from .planning_app import apps, TOOL_META, card_result
 from .subventions import SubventionAutoAccept, make_policy
@@ -59,6 +60,19 @@ async def bind_headless_session(expected_session: str) -> dict:
     result = await headless_client().bind(expected_session)
     _map_cache.invalidate()
     return result
+
+
+@mcp.tool()
+async def isolate_previous_session_save(request_id: str, expected_session: str) -> dict:
+    """Explicit recovery after the user has loaded another session, for an unknown SAVE only.
+    Requires user authorization. Preserves the old request as outcome unknown and permanently
+    quarantines its save slot against save/load. Never retries, assumes success, loads a save,
+    or resumes monitoring. Reads new native identity and pending before unlocking writes.
+    Cannot isolate construction, purchases, loans or load requests. Interrupted identity
+    verification remains gated and may be continued with these same arguments.
+    """
+    _map_cache.invalidate()
+    return await headless_client().isolate_previous_save(request_id, expected_session)
 
 
 @mcp.tool()
@@ -132,7 +146,7 @@ def _configured_recovery():
     configured = os.environ.get('TF3_RECOVERY_CONFIG')
     if not configured:
         raise ToolError('TF3_RECOVERY_CONFIG is not configured; no game operation sent')
-    config = json.loads(Path(configured).read_text(encoding='utf-8'))
+    config = json.loads(Path(os.path.expandvars(configured)).expanduser().read_text(encoding='utf-8-sig'))
     directory = Path(config['stateDirectory'])
     if not directory.is_absolute():
         raise ToolError('Recovery stateDirectory must be absolute')
@@ -165,7 +179,7 @@ async def recovery_control(action: str = 'status', incident_id: str | None = Non
         if action == 'status':
             return dict(configured=False, monitorEnabled=False, launchEnabled=False)
         raise ToolError('TF3_RECOVERY_CONFIG is not configured; no game operation sent')
-    config = json.loads(Path(configured).read_text(encoding='utf-8'))
+    config = json.loads(Path(os.path.expandvars(configured)).expanduser().read_text(encoding='utf-8-sig'))
     directory = Path(config['stateDirectory'])
     if not directory.is_absolute():
         raise ToolError('Recovery stateDirectory must be absolute')
@@ -1196,7 +1210,7 @@ async def plan_global_development(snapshot_path: str, focus_town: int, output_di
 @mcp.tool()
 async def plan_local_development(snapshot_path: str, output_dir: str, sites: list[dict] | None = None,
                                  corridors: list[dict] | None = None, supply_chains: list[dict] | None = None,
-                                 title: str = '局部布局规划') -> CallToolResult:
+                                 title: str | None = None) -> CallToolResult:
     """Offline local layout validation and road/rail corridor search; never builds or assumes ports connect.
     Need candidate positions first? Use find_facility_sites to batch-screen this same snapshot locally.
     sites=[{name,current:{min:{x,y},max:{x,y}},reserved:{min:{x,y},max:{x,y}},basis:'estimate or native dimensions'}].
@@ -1263,7 +1277,7 @@ async def export_planning_report(plan_path: str, output_dir: str, width: int = 1
     """
     import json
     from pathlib import Path
-    plan = json.loads(Path(plan_path).read_text(encoding='utf-8'))
+    plan = json.loads(Path(plan_path).read_text(encoding='utf-8-sig'))
     return await _planning_card(plan, output_dir, dict(plan_path=plan_path), width, height)
 
 
@@ -1306,9 +1320,9 @@ async def plan_rail_connection(
         output_dir = os.environ.get('TF3_PLANNING_DIR', 'exports/plans')
     if output_dir is not None:
         from .development_planner import base_plan, save_json
-        plan = base_plan(snapshot, '铁路连接候选方案', 'rail', [])
-        plan['routes'] = [dict(c, name=f'候选 {i+1}', mode='rail', status='sampled_candidate') for i,c in enumerate(result['candidates'])]
-        plan['phases'] = [dict(name='工程复核', actions=['刷新站端口、曲率、坡度与桥隧条件', '比较候选，执行原生预览'], gate='原生预览及用户建设授权')]
+        plan = base_plan(snapshot, tr_text('铁路连接候选方案', 'Rail connection candidates'), 'rail', [])
+        plan['routes'] = [dict(c, name=f"{tr_text('候选', 'Candidate')} {i+1}", mode='rail', status='sampled_candidate') for i,c in enumerate(result['candidates'])]
+        plan['phases'] = [dict(name=tr_text('工程复核', 'Engineering review'), actions=[tr_text('刷新站端口、曲率、坡度与桥隧条件', 'Refresh station ports, curvature, grades and bridge/tunnel conditions'), tr_text('比较候选，执行原生预览', 'Compare candidates and run native previews')], gate=tr_text('原生预览及用户建设授权', 'Native preview and user construction authorization'))]
         plan['warnings'].append(result['limitation'])
         result['plan_path'] = save_json(plan, output_dir, 'rail-plan')
     return _planning_result(plan, result)

@@ -3,6 +3,7 @@ local react = ug_require "::/gui/main/react.lua"
 local builtin = ug_require "::/gui/main/builtin.lua"
 local gameBar = ug_require "::/gui/game_bar/game_bar_widgets.tl"
 local coordinates = {}
+local PANEL_VISIBLE = false
 local loggedReadErrors = {}
 local readErrorCount = 0
 
@@ -20,7 +21,7 @@ local function readPosition()
     local stage = "hasTerrainPosition"
     local ok, text = pcall(function()
         if not api.gui.mouse.hasTerrainPosition() then
-            return "未指向地面"
+            return "Not pointing at terrain / 未指向地面"
         end
         stage = "getTerrainPosition"
         local p = api.gui.mouse.getTerrainPosition()
@@ -30,20 +31,20 @@ local function readPosition()
             local v = values[i]
             if type(v) ~= "number" or v ~= v or math.abs(v) == math.huge then
                 reportReadError("validate coordinate " .. i, "type=" .. type(v) .. ", value=" .. tostring(v))
-                return "坐标暂不可用"
+                return "Coordinates unavailable / 坐标暂不可用"
             end
             if math.abs(v) < 0.05 then values[i] = 0 end
         end
         stage = "format coordinates"
-        return string.format("X  %.1f    Y  %.1f    Z  %.1f 米", values[1], values[2], values[3])
+        return string.format("X  %.1f    Y  %.1f    Z  %.1f m", values[1], values[2], values[3])
     end)
     if not ok then reportReadError(stage, text) end
-    return ok and text or "坐标暂不可用"
+    return ok and text or "Coordinates unavailable / 坐标暂不可用"
 end
 
 coordinates.Panel = react.RegisterPluginRecipe(
     gameBar.GameBarInfoDisplayExtension, "TnjMouseCoordinatePanel", function()
-        local position = react.useState("将鼠标移到地面")
+        local position = react.useState("Move mouse over terrain / 将鼠标移到地面")
         -- Mouse APIs require the synchronous GUI step context.
         -- onStepTimer defers callbacks into a scope where these APIs are restricted.
         react.onStep(function()
@@ -51,12 +52,20 @@ coordinates.Panel = react.RegisterPluginRecipe(
             if position:old() ~= text then position:set(text) end
         end)
 
+        -- Keep coordinate updates and the panel implementation; render no widget.
+        if not PANEL_VISIBLE then
+            return builtin.BoxLayout{
+                orientation = builtin.type.Orientation.Horizontal,
+                children = {},
+            }
+        end
+
         local children = {
             builtin.TextView{
                 meta = {
                     id = "tnj.coordinates.value",
                     class = "tnj-coordinate-value",
-                    tooltip = "鼠标地面坐标：X、Y 为平面位置，Z 为地面高度，单位：米。",
+                    tooltip = "Terrain coordinates (m): X/Y position, Z elevation. / 鼠标地面坐标：X、Y 为平面位置，Z 为地面高度，单位：米。",
                 },
                 text = position:old(),
             },

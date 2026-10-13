@@ -51,6 +51,27 @@ class HeadlessClient:
                 self.session = previous
                 raise
 
+    async def isolate_previous_save(self, request_id, expected_session):
+        """Explicitly quarantine an unknown old save and verify the new session."""
+        from .headless import workflow_lock
+        async with self.lock:
+            with workflow_lock(self.requests.directory):
+                status = await asyncio.to_thread(self.requests.status)
+                transition = status.get('sessionTransition')
+                if transition:
+                    if transition['requestId'] != request_id or transition['session'] != expected_session:
+                        raise ValueError('Another session transition is pending')
+                else:
+                    await asyncio.to_thread(self.requests.isolate_previous_save, request_id, expected_session)
+                self.session, self.identity = expected_session, None
+                state = await self.request('get_game_state', {})
+                world = await self.request('get_map_info', {})
+                await self.request('get_validation_state', {})
+                proof = await asyncio.to_thread(self.requests.verify_session_transition, expected_session)
+                self.identity = dict(session=expected_session, player=state['player'], world=state['world'],
+                                     mapDigest=self.map_digest(world))
+                return dict(proof, identity=self.identity)
+
     async def reconcile_subvention_rejection(self, request_id, expected_session):
         """Close one proven legacy pre-dispatch rejection; never replay the accept."""
         async with self.lock:

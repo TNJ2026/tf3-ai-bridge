@@ -68,6 +68,7 @@ def test_actual_mcp_card_resource_and_result(tmp_path,apps_enabled):
                 r=await session.call_tool('export_planning_report',dict(plan_path=r.structured_content['plan_path'],output_dir=str(tmp_path)))
                 assert not r.is_error
                 card=r.meta['planningCard']
+                assert card['language'] in ('en', 'zh-CN')
                 image_data=base64.b64decode(card['image'].split(',',1)[1])
                 assert image_data.startswith(b'\x89PNG')
                 decoded=Image.open(io.BytesIO(image_data))
