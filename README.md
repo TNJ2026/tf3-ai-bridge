@@ -4,6 +4,8 @@
 
 Connect AI assistants to Transport Fever 3 for map analysis, transport planning, and in-game operations.
 
+[Download the mod on mod.io](https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai)
+
 ![Transport Fever 3 AI Bridge](mod/tf3_mcp_bridge/_metadata/0.png)
 
 This project includes an in-game mod and a local Python MCP server. Bring your own MCP-compatible AI client; the mod does not include an AI model or a model-service subscription.

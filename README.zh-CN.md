@@ -4,6 +4,8 @@
 
 连接 AI 助手与《Transport Fever 3》，支持地图分析、运输规划及游戏操作。
 
+[在 mod.io 下载模组](https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai)
+
 ![Transport Fever 3 AI Bridge](mod/tf3_mcp_bridge/_metadata/0.png)
 
 项目包含游戏端模组和本地 Python MCP 服务。你需要自行配置兼容 MCP 的 AI 客户端；模组不内置 AI 模型，也不包含模型服务订阅。
