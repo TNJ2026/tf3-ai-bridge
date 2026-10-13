@@ -112,6 +112,8 @@ Publishing sources live in `mod/tf3_mcp_bridge/`; its directory name is retained
 
 `_metadata/0.png` is the cover image, and `_metadata/modinfo.json` contains the author and description. The staging copy stays outside Git. Users still need to install the local MCP server separately.
 
+Before uploading, run `python scripts/check_mod_package.py "<staging mod directory>"`. Live tests can generate request files under `content/tf3_mcp_bridge/headless/`; these are runtime data, not release files. With the game and bridge clients stopped and no pending request, archive that directory outside the mod before publishing. Keep the request ledger and backups. This offline check does not replace the game's native validation.
+
 `exports/`, live-game survey records, logs, and test temporary directories are not distributed with the source. References to those files in historical documents may not resolve in a public checkout.
 
 - [Documentation index](docs/README.md)

@@ -112,6 +112,8 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 
 `_metadata/0.png` 为封面，`_metadata/modinfo.json` 保存作者与介绍。发布副本不进入 Git；本地 MCP 服务仍需另行安装。
 
+上传前运行 `python scripts/check_mod_package.py "<发布模组目录>"`。实机测试会在 `content/tf3_mcp_bridge/headless/` 生成请求文件，这些是运行数据，不属于发布文件。停止游戏和桥接客户端、确认无 pending 后，将该目录备份移出模组目录；保留请求账本和备份。此离线检查不能代替游戏原生校验。
+
 `exports/`、现场调查记录、日志和测试临时目录不随源码发布。历史文档对这些文件的引用可能在公共仓库中不可用。
 
 - [文档导航](docs/README.md)
