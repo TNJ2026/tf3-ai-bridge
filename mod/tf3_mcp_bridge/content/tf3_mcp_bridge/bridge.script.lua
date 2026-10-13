@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.12.9"
+local BRIDGE_VERSION = "0.12.10"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats

@@ -41,7 +41,7 @@ AI 客户端 → MCP（标准输入输出）→ Python 服务 → 本地文件�
 
 规划报告和卡片支持英文与简体中文。在 MCP 服务的环境变量中设置 `TF3_UI_LANGUAGE=en`、`zh-CN` 或 `auto`，然后重启服务。自动选择依次读取进程语言设置（`LC_ALL`、`LC_MESSAGES`、`LANG`）与系统区域设置，无法识别时回退英文；不检测游戏语言。已保存的规划保留生成时的显示语言，更换语言后需重新生成规划。卡片初始使用浏览器／宿主语言，收到报告后采用报告语言。
 
-原生实体名称、资源 ID 和自定义标题保持原样。游戏坐标面板采用中英文提示；此次兼容不代表所有工具说明和文档均已翻译。
+原生实体名称、资源 ID 和自定义标题保持原样。游戏坐标面板默认隐藏，保留坐标采样逻辑和中英文显示实现；此次兼容不代表所有工具说明和文档均已翻译。
 
 设施选址与铁路规划的显示文字也遵循该语言设置。快照／规划 JSON 导入和恢复配置支持带 BOM 或不带 BOM 的 UTF-8。`TF3_RECOVERY_CONFIG` 支持用户目录与环境变量展开；读取配置不会启用恢复或监控。
 
@@ -116,7 +116,6 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 
 - [文档导航](docs/README.md)
 - [规划工具](docs/reference/PLANNING_TOOLS.md)
-- [历史版本与接口说明](docs/README_LEGACY.zh-CN.md)
 - [官方模组发布指南](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
 
 
