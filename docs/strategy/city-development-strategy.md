@@ -233,8 +233,6 @@
 
 每阶段都指定交付物、进入条件和完成证据。未观察到实际运输前，不把“已建成”写成“供给稳定”；后期供给按已确认需求与预测情景分别记账，升级后滚动更新。
 
-牡丹江旧地图的调查线索已移至 [历史案例](../history/MUDANJIANG_CASE.md)，不作为当前城市的默认建设清单。
-
 ## 9. 官方参考资料
 
 - [Dev Blog – Episode 4: Tycoon：城市等级、成长经验与六项评分](https://www.transportfever3.com/news/dev-blog-episode-4-tycoon/)

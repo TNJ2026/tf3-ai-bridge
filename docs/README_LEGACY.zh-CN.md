@@ -4,7 +4,7 @@
 
 通过 **Agent → MCP → 模组** 控制《狂热运输3》(Transport Fever 3)。
 
-文档分类入口见 [docs 导航](../docs/README.md)，包括发展策略、执行指南、接口参考与历史案例。实时规划和建造前请先阅读 [agent 入口](../AGENTS.md) 与 [规划、建造及防崩溃执行手册](../docs/guides/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
+文档分类入口见 [docs 导航](../docs/README.md)，包括发展策略、执行指南与接口参考。实时规划和建造前请先阅读 [agent 入口](../AGENTS.md) 与 [规划、建造及防崩溃执行手册](../docs/guides/AGENT_PLAYBOOK.md)。下文各版本章节保留历史能力说明，实际执行还需核对当前接口与手册中的验证边界。
 
 设施选址可使用 [`find_facility_sites`](../docs/reference/SITE_SELECTION.md)：一份地图快照批量筛选停靠点、仓库与车站候选，检查升级预留并保存候选方案 JSON，减少逐点查询游戏和原生预览。
 
