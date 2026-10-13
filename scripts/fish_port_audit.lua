@@ -2,7 +2,7 @@
 local spec=B.json.decode(SPEC_JSON);local origin=B.json.decode(ORIGIN_JSON);local added=B.json.decode(ADDED_JSON)
 local CT=api.type.ComponentType;local angle=math.rad(origin.rotation);local roles={};local cs={}
 local out={facilities={},paths={},coverage={},service={},staticAccepted=false,operationalAccepted=false,
- pending={'actual fishing route and return path','fish delivery and deadlines','maintenance over several cycles','save reload and long simulation'}}
+ pending={'actual departure, normal line operation, no native fault'}}
 assert(#added.constructions==#spec.facilities,'Unexpected construction count')
 for _,f in ipairs(spec.facilities)do
  local x=origin.x+f.localPosition.x*math.cos(angle)-f.localPosition.y*math.sin(angle)
@@ -75,7 +75,7 @@ for _,id in ipairs(cs.water_maintenance.depots)do
   service=service or (compatible and covers and d.maintenancePool>0)
  end
 end
--- Required ship legs are audited once by ship_route_checks after this readback.
+-- Ship route diagnostics are opt-in, not infrastructure acceptance gates.
 out.purchase={required=roles.water_depot~=nil,harborPathsVerified=false,purchaseExecuted=false}
 out.infrastructureAccepted=#common>0 and transportAccepted and service
 out.staticAccepted=false

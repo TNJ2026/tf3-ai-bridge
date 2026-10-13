@@ -133,6 +133,10 @@ api = {
     getComponent = function(e, ct) return components[e] and components[e][ct] end,
     entityExists = function(e) return components[e] ~= nil end,
     forEachEntityWithComponent = function(fn, ct)
+      for _,name in ipairs({'BASE_NODE','BASE_EDGE','MODEL_INSTANCE_LIST','ASSET_GROUP','SIM_CARGO','STOCK_LIST','TERRAIN_TILE_BRUSH','WATER_MESH'}) do
+        local unsupported=api.type.ComponentType[name]
+        if unsupported~=nil and ct==unsupported then error('Cannot loop over this component type') end
+      end
       if ct == CT.LINE then error("Cannot loop over this component type") end
       local ids = {}
       for e, comps in pairs(components) do if comps[ct] then ids[#ids+1] = e end end
@@ -655,15 +659,25 @@ def test_build_road_reports_collisions(bridge_dir):
 def test_build_depot_faces_and_connects_to_street(bridge_dir):
     b = Bridge(bridge_dir, timeout=5)
     with FakeGame(bridge_dir) as game:
-        street_b = game.lua.globals().STREET_B
-        r = run(b.call("build_depot", {"x": 100, "y": -60}))
+        street_a = game.lua.globals().STREET_A
+        r = run(b.call("build_depot", {"x": 0, "y": -60}))
         assert r["built"] is True
         # the entrance is on the depot's local -y side, so facing the street to the north takes 180 degrees
         assert r["rotation"] == 180
-        assert r["expectedEntrance"] == {"x": 100, "y": -39.7}
-        assert r["connection"]["toNode"] == street_b
+        assert r["expectedEntrance"] == {"x": 0, "y": -39.7}
+        assert r["connection"]["toNode"] == street_a
         depots = run(b.call("list_depots"))["depots"]
         assert r["depot"] in [d["id"] for d in depots]
+
+
+@pytest.mark.parametrize("carrier,catenary", [("TRAM", 2), ("ROAD", None)])
+def test_depot_catenary_parameters_reach_native_proposal(bridge_dir, carrier, catenary):
+    b = Bridge(bridge_dir, timeout=5)
+    with FakeGame(bridge_dir) as game:
+        r = run(b.call("build_depot", {"x": 0, "y": -60, "carrier": carrier, "connect": False}))
+        assert r["built"] is True
+        con = game.lua.globals().components[r["construction"]][game.lua.globals().api.type.ComponentType.CONSTRUCTION]
+        assert con.params.tramCatenary == catenary
 
 
 def test_street_stop_apply_cannot_be_enabled_by_experimental_flag(bridge_dir):
@@ -758,14 +772,14 @@ def test_bulldoze_depot(bridge_dir):
 def test_build_station_connects_and_bulldoze(bridge_dir):
     b = Bridge(bridge_dir, timeout=5)
     with FakeGame(bridge_dir) as game:
-        street_b = game.lua.globals().STREET_B
-        preview = run(b.call("build_station", {"x": 100, "y": 40, "preview": True}))
-        assert preview["ok"] is True and preview["expectedEntrance"] == {"x": 100, "y": 25}
+        street_a = game.lua.globals().STREET_A
+        preview = run(b.call("build_station", {"x": 0, "y": 40, "preview": True}))
+        assert preview["ok"] is True and preview["expectedEntrance"] == {"x": 0, "y": 25}
         assert game.lua.globals().builds == 0
 
-        r = run(b.call("build_station", {"x": 100, "y": 40, "name": "Central", "size": 2}))
+        r = run(b.call("build_station", {"x": 0, "y": 40, "name": "Central", "size": 2}))
         assert r["built"] is True and r["name"] == "Central" and r["kind"] == "passenger"
-        assert r["connection"]["toNode"] == street_b
+        assert r["connection"]["toNode"] == street_a
         con = game.lua.globals().components[r["construction"]][11]
         assert len(list(con.params.modules.keys())) == 5  # 2 columns x 2 platforms + entrance/exit
 
@@ -789,9 +803,9 @@ def test_build_road_between_existing_nodes_reports_edge(bridge_dir):
     b = Bridge(bridge_dir, timeout=5)
     with FakeGame(bridge_dir) as game:
         g = game.lua.globals()
-        r = run(b.call("build_road", {"start": {"node": g.STREET_A}, "end": {"x": 0, "y": 80}}))
+        r = run(b.call("build_road", {"start": {"node": g.STREET_A}, "end": {"x": 100, "y": 80}}))
         top = r["nodes"][-1]
-        joined = run(b.call("build_road", {"start": {"node": top}, "end": {"node": g.STREET_B}, "max_segment_length": 200}))
+        joined = run(b.call("build_road", {"start": {"node": top}, "end": {"node": g.STREET_C}, "max_segment_length": 200}))
         assert joined["built"] is True and joined["nodes"] == [] and len(joined["edges"]) == 1
 
 
@@ -847,7 +861,7 @@ def test_road_reports_all_via_connections_without_old_edges(bridge_dir):
     with FakeGame(bridge_dir) as game:
         g = game.lua.globals()
         r = run(b.call("build_road", {"start": {"node": g.STREET_A}, "end": {"node": g.STREET_C},
-            "via": [{"x": 50, "y": 80}, {"node": g.STREET_B}, {"x": 150, "y": 80}],
+            "via": [{"x": 50, "y": 80}, {"x": 100, "y": 100}, {"x": 150, "y": 80}],
             "max_segment_length": 200}))
         assert r["built"] is True and len(r["edges"]) == 4
         assert g.EDGE_AB not in r["edges"] and g.EDGE_BC not in r["edges"]
@@ -1049,3 +1063,20 @@ def test_orphan_stop_cleanup_is_restricted(bridge_dir, owner, has_station, previ
             assert r["removed"] is (not preview)
             assert r["mutationAttempted"] is (not preview)
             assert game.lua.globals().builds == int(not preview)
+
+
+@pytest.mark.parametrize("junction_position", ["start", "via", "end"])
+def test_road_junction_guard_rejects_without_submission(bridge_dir, junction_position):
+    b = Bridge(bridge_dir, timeout=5)
+    with FakeGame(bridge_dir) as game:
+        args = {"start": {"x": 0, "y": 80}, "end": {"x": 200, "y": 80}}
+        junction = {"node": game.lua.globals().STREET_B}
+        args[junction_position] = [junction] if junction_position == "via" else junction
+        preview = run(b.call("build_road", {**args, "preview": True}))
+        assert preview["geometryBuildable"] is True
+        assert preview["buildable"] is False and preview["commitSupported"] is False
+        assert preview["commitBlockedReason"] == "junction_commit_suspended"
+        result = run(b.call("build_road", args))
+        assert result["built"] is False
+        assert result["reason"]["code"] == "junction_commit_suspended"
+        assert game.lua.globals().builds == 0

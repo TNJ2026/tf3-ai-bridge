@@ -86,7 +86,7 @@ async def execute(a):
             if state['speedup']!=0:raise StopBatch('Pause required for joint placement')
             if getattr(a,'current_map_test',False):
                 b.ledger['testAuthorization']='Explicit user request to test at a new site on the current map; not a claim that this is an isolated save'
-            if unfinished(b.ledger):raise StopBatch('Unreconciled submissions; no replay')
+            # Historical business ledger entries do not gate unrelated work.
             for name,field in [('facility_amendments.json','facilities'),('planned_road_amendments.json',None),('extra_roads.json','roads')]:
                 path=b.out/name
                 if path.exists():

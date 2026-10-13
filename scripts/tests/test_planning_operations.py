@@ -78,3 +78,40 @@ def test_non_cargo_roles_and_maintenance_not_counted_as_handling():
     enrich(p)
     assert p['hubs'][0]['sharedStockCheck']==['REMOTE','TR']
     assert p['collection_quantity_decisions']['decisions'][0]['traffic']==[]
+
+
+def test_basic_mode_skips_detailed_forecasts_and_accepts_unbound_draft_terminal(monkeypatch):
+    p=plan()
+    p['operations_review']={'mode':'detailed','chains':[{'old':True}]}
+    for l in p['line_specs']:
+        l.pop('headway_seconds_forecast')
+        l.pop('source_terminal_index')
+    def unexpected(_):
+        pytest.fail('Basic planning must not compute chain forecasts')
+    monkeypatch.setattr('planning_operations.chain_forecasts',unexpected)
+    result=enrich(p)
+    assert result['mode']=='basic' and result['chains']==[]
+    assert not result['operationalAccepted']
+    assert result['maintenance']['assignments']
+    assert all('roundtrip_seconds_forecast' not in l and 'headway_seconds_forecast' not in l for l in p['line_specs'])
+    assert all(r['occupancyEstimate'] is None and not r['capacityReviewRequired'] for r in result['platforms'])
+    assert any(r['terminal'] is None and r['lineLimitPassed'] is None for r in result['platforms'])
+
+
+def test_detailed_mode_is_explicit_and_retains_estimates_when_switching_to_basic():
+    p=plan();p['operationsAnalysis']='detailed'
+    for l in p['line_specs']:l.pop('headway_seconds_forecast')
+    result=enrich(p)
+    assert result['mode']=='detailed' and result['chains'][0]['complete']
+    assert p['line_specs'][0]['headway_seconds_forecast']==200
+    p['operationsAnalysis']='basic';result=enrich(p)
+    assert result['chains']==[] and all(r['occupancyEstimate'] is None for r in result['platforms'])
+    assert p['line_specs'][0]['headway_seconds_forecast']==200
+
+
+def test_unknown_occupancy_does_not_request_capacity_review_but_known_line_limit_does():
+    p=plan()
+    for l in p['line_specs']:l.pop('headway_seconds_forecast')
+    assert all(r['forecastStatus']=='unknown' and not r['capacityReviewRequired'] for r in platform_forecasts(p))
+    p['line_specs'] += [line('L3'),line('L4')]
+    assert all(r['capacityReviewRequired'] for r in platform_forecasts(p,detailed=False))

@@ -1,6 +1,16 @@
 -- Task-specific road proposal. Preview by default; apply only with args.apply=true.
 return function(args, bridge)
  local api, CT = api, api.type.ComponentType
+ -- Construction-internal degree-one nodes are NOT external connection ports.
+ -- A depot connection to one caused a native TransportNetwork assertion even
+ -- after a clean proposal preview (2026-10-08). Reject before making proposals.
+ api.engine.forEachEntityWithComponent(function(id)
+  local con=api.engine.getComponent(id,CT.CONSTRUCTION)
+  for _,n in ipairs(con.frozenNodes) do
+   assert(n~=args.startNode and n~=args.endNode,
+    'rail endpoint is a construction-internal frozen node; resolve external ports')
+  end
+ end,CT.CONSTRUCTION)
  local function vec(p) return api.type.Vec3f.new(p.x,p.y,p.z) end
  local function pos(n) local p=api.engine.getComponent(n,CT.BASE_NODE).position;return {x=p.x,y=p.y,z=p.z} end
  local pts=args.path
@@ -82,7 +92,7 @@ return function(args, bridge)
  out.buildable=not pd.errorState.critical and #out.blocking==0 and #out.collisions==0
  if args.apply then
   assert(out.buildable,'road preview blocked construction')
-  api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,true,true),function(res,success)
+  api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,true),function(res,success)
    out.built=success;out.nodes={};out.edges={}
    if success then
     local involved={[args.startNode]=true,[args.endNode]=true}

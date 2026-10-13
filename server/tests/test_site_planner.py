@@ -49,12 +49,55 @@ def test_rank_reserve_avoidance_and_immutability():
     assert all(c['requiresNativePreview'] and c['buildable'] is None for c in plan['sites'])
 
 
-def test_water_interior_and_terrain_ridge_excluded():
+def test_explicit_strict_policy_excludes_water_and_terrain_ridge():
     for field,value,reason in [('water',True,'water'),('heights',100,'height_range')]:
         s=snapshot(); s['grid'][field][10*21+10]=value
-        plan=search_sites(s,[request(radius=1)])
+        plan=search_sites(s,[request(radius=1,terrain_policy='strict')])
         assert plan['sites']==[]
         assert plan['searches'][0]['rejected'][reason]==2
+
+
+def test_building_ridge_remains_a_candidate_without_claiming_native_adaptation():
+    s=snapshot();s['grid']['heights'][10*21+10]=100
+    original=copy.deepcopy(s)
+    p=search_sites(s,[request(radius=1,rotations=[0])])
+    assert s==original and p['metrics']['gameCalls']==0
+    assert p['searches'][0]['rejected']=={}
+    c=p['sites'][0]
+    assert c['position']==dict(x=500,y=500)
+    assert c['heightRange']==[2,100]
+    assert c['terrainAssessment']['exceedsHeightReference']
+    assert c['terrainAssessment']['adaptationRequired'] is None
+    assert not c['terrainAssessment']['placementVerified']
+    assert c['requiresNativePreview'] and c['buildable'] is None
+
+
+@pytest.mark.parametrize('failure',['water','obstacle','access_grade'])
+def test_advisory_terrain_does_not_bypass_independent_siting_gates(failure):
+    s=snapshot();r=request(radius=1,rotations=[0])
+    if failure=='water':
+        s['grid']['water'][10*21+10]=True;reason='water'
+    elif failure=='obstacle':
+        s['obstacles'].append(dict(kind='CONSTRUCTION',entity=800,**bounds(490,490,20)))
+        reason='obstacle_or_reservation'
+    else:
+        s['grid']['heights']=[i%21*50 for i in range(441)]
+        r['access']=dict(anchor=dict(x=200,y=500),local_entry=dict(x=-30,y=0))
+        reason='access_grade_requires_design'
+    p=search_sites(s,[r])
+    assert not p['sites'] and p['searches'][0]['rejected'][reason]==1
+
+
+def test_building_adaptation_policy_does_not_apply_to_street_stops():
+    s=street_snapshot();s['grid']['heights']=[i%21*50 for i in range(441)]
+    r=request(kind='street_stop',edges=[7],radius=400)
+    p=search_sites(s,[r])
+    assert not p['sites'] and p['searches'][0]['terrainPolicy']=='strict'
+    assert p['searches'][0]['rejected']['height_range']==3
+    with pytest.raises(ValueError,match='street_stop terrain_policy'):
+        search_sites(s,[dict(r,terrain_policy='advisory')])
+    with pytest.raises(ValueError,match='terrain_policy'):
+        search_sites(snapshot(),[request(terrain_policy='ignore_everything')])
 
 
 def test_unknown_bounds_and_budget_do_not_become_clear():

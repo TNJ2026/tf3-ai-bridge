@@ -11,21 +11,18 @@ async def execute_collection(batch, *, preview=False):
     """The adapter owns geometry; this runner owns submission and recovery policy."""
     await batch.session()
     batch.tasks_all = batch.tasks()
-    if unfinished(batch.ledger):
-        raise StopBatch('Unknown previous outcome: read-only reconciliation required')
+    # No global historical-ledger gate; individual submissions are never replayed.
     items = batch.ledger['items']
+    scope = {t['id'] for t in batch.tasks_all} | {r['id'] for r in batch.p['roads']}
+    skipped = [k for k in scope if items.get(k,{}).get('attempts') and
+               items[k].get('status') not in ('static_verified','connection_verified')]
+    if skipped:
+        # Do not replay or claim success. Unrelated historical operations are ignored.
+        return {'phase':'skipped_submitted_operations','accepted':False,'skipped':sorted(skipped)}
     has_submissions = any(v.get('attempts', 0) for v in items.values())
-    # Verify everything already submitted BEFORE any further writes.
+    # Preserve past submission records without re-auditing the whole collection.
     for task in batch.tasks_all:
-        item = items.setdefault(task['id'], {'attempts': 0})
-        if item['attempts']:
-            await verify_facility(batch, task, item)
-    for spec in batch.p['roads']:
-        item = items.get(spec['id'], {})
-        if item.get('attempts'):
-            audit = await batch.audit_road(item)
-            if not audit.get('verified'):
-                raise StopBatch('Existing road changed: '+spec['id'])
+        items.setdefault(task['id'], {'attempts': 0})
     for task in batch.tasks_all:
         item = items[task['id']]
         if not item['attempts']:

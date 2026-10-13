@@ -47,13 +47,15 @@ class BatchSafety(unittest.TestCase):
    h=Harness(Path(d)/'ledger.json','preview')
    with self.assertRaises(StopBatch):asyncio.run(h.run())
    self.assertNotIn(('A','build'),h.calls);self.assertEqual(h.ledger['items']['A']['attempts'],0)
- def test_unknown_result_journal_blocks_next_item_and_retry(self):
+ def test_unknown_result_stops_current_batch_but_does_not_gate_unrelated_future_work(self):
   with tempfile.TemporaryDirectory()as d:
    h=Harness(Path(d)/'ledger.json','timeout')
    with self.assertRaises(TimeoutError):asyncio.run(h.run())
    self.assertEqual(unfinished(h.ledger),['A']);self.assertNotIn(('B','build'),h.calls)
-   with self.assertRaises(StopBatch):asyncio.run(h.run())
+   h.fail=None
+   asyncio.run(h.run())
    self.assertEqual(h.calls.count(('A','build')),1)
+   self.assertEqual(h.calls.count(('B','build')),1)
  def test_verified_restart_does_not_duplicate(self):
   with tempfile.TemporaryDirectory()as d:
    h=Harness(Path(d)/'ledger.json');asyncio.run(h.run());asyncio.run(h.run())

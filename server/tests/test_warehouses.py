@@ -142,3 +142,37 @@ def test_mcp_warehouse_is_preview_in_engine(monkeypatch):
     cmd, args = calls[0]
     assert cmd == "build_warehouse" and args["preview"] and args["_engine"]
     assert args["module_count"] == 4
+
+
+def test_facility_ticket_survives_engine_recreation_and_is_single_use(warehouse_game):
+    lua, _ = warehouse_game
+    state = lua.execute("local v={};return {get=function()return v end,set=function(_,x)v=x end}")
+    counter = 0
+    def event(cmd, epoch="one", **args):
+        nonlocal counter
+        counter += 1
+        script = lua.execute(SCRIPT.read_text("utf8"))
+        script["handleEvent"](None, state, None, "tf3_mcp", "tf3_mcp_request",
+            json.dumps(dict(id=str(counter), cmd=cmd, args=args, facilityEpoch=epoch)))
+        responses = state["get"](state)["responses"]
+        result = json.loads(responses[len(responses)]["text"])
+        codec = script["_internal"]["json"]
+        state["set"](state, codec["decode"](codec["encode"](state["get"](state))))
+        return result
+    stale = event("build_warehouse", x=700,y=740,z=2,module_count=1)["result"]["preview_token"]
+    assert not event("commit_facility", epoch="two", preview_token=stale)["ok"]
+    p = event("build_warehouse", epoch="two", x=700,y=740,z=2,module_count=1)["result"]
+    r = event("commit_facility", epoch="two", preview_token=p["preview_token"])
+    assert r["ok"] and r["result"]["built"] and r["result"]["verified"]
+    assert not event("commit_facility", epoch="two", preview_token=p["preview_token"])["ok"]
+    assert lua.globals().SUBMISSIONS == 1
+
+
+def test_commit_reconciles_id_reused_from_different_construction(warehouse_game):
+    lua, call = warehouse_game
+    lua.execute("components[8001]={[api.type.ComponentType.CONSTRUCTION]={fileName='::/industries/farm/farm.con'}}")
+    p = preview(call, module_count=1)
+    r = call("commit_facility", preview_token=p["preview_token"])
+    assert r["built"] and r["verified"] and r["entity"] == 8001
+    assert r["stock_capacity"] == 500
+    assert lua.globals().SUBMISSIONS == 1

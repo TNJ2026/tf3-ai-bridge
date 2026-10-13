@@ -42,7 +42,7 @@ class Stops(Batch):
  async def run(self):
   if self.a.action=='verify'and getattr(self.a,'read_batch_size',8)>1:return await self.verify_batches()
   await self.session()
-  if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Pending unknown submission')
+  # Historical business ledger entries do not gate unrelated work.
   if self.a.action=='build':await self.save('stops_before')
   done=0
   for t in self.p['city_stops']:

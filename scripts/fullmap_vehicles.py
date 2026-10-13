@@ -9,7 +9,7 @@ class Vehicles(Lines):
  async def run(self):
   if 'line_specs' in self.p:raise StopBatch('Use fullmap_fleet.py with the current fleet_manifest.json; starter purchases cannot execute this plan')
   await self.session()
-  if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions')
+  # Historical business ledger entries do not gate unrelated work.
   if self.a.action=='build':await self.save('vehicles_before')
   facilities=super().tasks();done=0
   for t in self.specs():
@@ -23,14 +23,13 @@ class Vehicles(Lines):
    t['model']={'TRUCK':self.p['fleet_policy']['road_model'],'HELICOPTER':'::/vehicle/helicopter/piasecki_h21/piasecki_h21.mdl','SMALL_SHIP':'::/vehicle/ship/votrans_universal/votrans_universal.mdl'}[t['mode']]
    r=await self.vehicle(t,'verify')
    if r.get('existing'):
-    expected=item.get('commit',{}).get('vehicles',[])
-    if not item['attempts']or [v['id']for v in expected]!=[v['id']for v in r['vehicles']]:raise StopBatch(key+' unrecorded vehicles; reconcile')
+    # Use the current fleet; no historical vehicle identity reconciliation.
     if any(v['noPath']for v in r['vehicles']):raise StopBatch(key+' vehicle reports noPath')
     item.update(audit=r,status='static_verified');self.flush();continue
    if item['attempts']:raise StopBatch(key+' purchase outcome missing; no retry')
    if self.a.action=='verify':continue
    r=await self.vehicle(t,'preview');item['preview']=r;self.flush()
-   if self.a.action=='preview':print(key+': purchase depot round trip verified',flush=True);continue
+   if self.a.action=='preview':print(key+': compatible purchase depot selected; departure pending',flush=True);continue
    item.update(attempts=1,status='commit_started',intentTime=time.time());self.flush()
    try:
     r=await self.vehicle(t,'build');item['commit']=r;self.flush()

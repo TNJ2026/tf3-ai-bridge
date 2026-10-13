@@ -84,7 +84,7 @@ class MapCache:
                 except asyncio.TimeoutError:pass
                 self.wake.clear()
                 try:await self.refresh(start,end,spacing=spacing,force=True)
-                except Exception:pass  # status keeps error; foreground refresh surfaces it
+                except Exception:break  # retain error; never poll a failed receiver automatically
         self.task=asyncio.create_task(poll())
         return self.status()
 

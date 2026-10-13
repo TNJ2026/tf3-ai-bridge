@@ -22,28 +22,27 @@ for i,ep in ipairs(task.endpoints)do
  choices[i]={}
  for _,id in ipairs(stationIds)do local st=api.engine.getComponent(id,CT.STATION);local g=groups[id]
   if st and g then for k,t in ipairs(st.terminals)do
-   if (ep.terminal_index==nil or ep.terminal_index==k-1) and (t.transportModes[mode] or (ep.stop and mode==api.type.enum.TransportMode.TRUCK)) and ((#ep.loads>0 and t.cargoLoad) or (#ep.loads==0 and t.cargoUnload))then choices[i][#choices[i]+1]={group=g.group,station=g.station,terminal=k-1,entity=id,node=t.vehicleNodeId}end
+   if (ep.terminal_index==nil or ep.terminal_index==k-1) and (ep.station_index==nil or ep.station_index==g.station) and (ep.station_entity==nil or ep.station_entity==id) and (t.transportModes[mode] or (ep.stop and mode==api.type.enum.TransportMode.TRUCK)) and ((#ep.loads>0 and t.cargoLoad) or (#ep.loads==0 and t.cargoUnload))then choices[i][#choices[i]+1]={group=g.group,station=g.station,terminal=k-1,entity=id,node=t.vehicleNodeId}end
   end end
  end
  assert(#choices[i]>0,'no compatible cargo terminal: '..ep.id)
 end
-local costs={};local n=#choices
-for i,opts in ipairs(choices)do costs[i]={};for a,x in ipairs(opts)do costs[i][a]={};for b,y in ipairs(choices[i%n+1])do
- local path=api.engine.util.pathfinding.findPathNodeToNode({x.node},{y.node},{mode});local len=0
- for _,st in ipairs(path)do local net=api.engine.getComponent(st[1].entity,CT.TRANSPORT_NETWORK);len=len+net.edges[st[1].index+1].geometry.length end
- costs[i][a][b]=#path>0 and len or 1e15
-end end end
-local best=1e15;local chosen={};local selection={}
-local function search(i)
- if i<=n then for a=1,#choices[i]do chosen[i]=a;search(i+1)end;return end
- local total=0;for k=1,n do total=total+costs[k][chosen[k]][chosen[k%n+1]]end
- if total<best then best=total;for k=1,n do selection[k]=chosen[k]end end
-end
-search(1);assert(best<1e15,'no native closed cargo route: '..task.id)
-local out={id=task.id,length=best,stops={},pathVerified=true}
-for i=1,n do local c=choices[i][selection[i]];out.stops[i]={group=c.group,station=c.station,terminal=c.terminal,entity=c.entity,loads=task.endpoints[i].loads,lengthToNext=costs[i][selection[i]][selection[i%n+1]]}end
+local n=#choices
 local matches={};for _,id in ipairs(api.engine.system.lineSystem.getLines())do local name=api.engine.getComponent(id,CT.NAME);if name and name.name==task.name then matches[#matches+1]=id end end
 assert(#matches<=1,'duplicate named line')
+local existing=#matches==1 and api.engine.getComponent(matches[1],CT.LINE) or nil
+if existing then assert(#existing.stops==n,'line stop count changed') end
+local out={id=task.id,stops={},pathVerified=false,configurationVerified=false,selectionBasis='explicit or existing compatible terminal; stable first compatible fallback',operationalAccepted=false}
+for i=1,n do
+ table.sort(choices[i],function(a,b)if a.entity~=b.entity then return a.entity<b.entity end;return a.terminal<b.terminal end)
+ local c=choices[i][1]
+ if existing then
+  c=nil;local old=existing.stops[i]
+  for _,v in ipairs(choices[i])do if v.group==old.stationGroup and v.station==old.station and v.terminal==old.terminal then c=v;break end end
+  assert(c,'existing terminal incompatible with requested endpoint')
+ end
+ out.stops[i]={group=c.group,station=c.station,terminal=c.terminal,entity=c.entity,loads=task.endpoints[i].loads}
+end
 local function audit(id)
  local l=api.engine.getComponent(id,CT.LINE);assert(l.customFilters and #l.stops==n,'line shape/config changed')
  for i,s in ipairs(l.stops)do
@@ -54,7 +53,7 @@ local function audit(id)
  end
  return true
 end
-if #matches==1 then out.line=matches[1];out.existing=true;out.verified=audit(out.line);return B.json.encode(out)end
+if #matches==1 then out.line=matches[1];out.existing=true;out.verified=audit(out.line);out.configurationVerified=out.verified;return B.json.encode(out)end
 if action~='build'then out.existing=false;return B.json.encode(out)end
 local line=api.type.Line.new();line.customFilters=true;local stops={}
 for _,w in ipairs(out.stops)do
@@ -67,5 +66,5 @@ line.stops=stops;local accepted=false
 api.cmd.sendCommand(api.cmd.makeLineCreateCmd(task.name,api.type.Vec3f.new(.12,.55,.8),api.engine.util.getPlayer(),line),function(_,ok)accepted=ok==true end)
 out.accepted=accepted
 for _,id in ipairs(api.engine.system.lineSystem.getLines())do local name=api.engine.getComponent(id,CT.NAME);if name and name.name==task.name then assert(not out.line,'duplicate creation');out.line=id end end
-out.verified=out.line and audit(out.line)or false
+out.verified=out.line and audit(out.line)or false;out.configurationVerified=out.verified
 return B.json.encode(out)

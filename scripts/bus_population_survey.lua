@@ -8,14 +8,16 @@ for _,t in ipairs(out.map.towns)do
  local row={id=t.id,name=t.name,position=t.position,population=r.used,residentialCapacity=r.capacity}
  out.towns[#out.towns+1]=row;if r.used>=150 then eligible[t.id]=true end
 end
-api.engine.forEachEntityWithComponent(function(id)
+local buildingMap=api.engine.system.townBuildingSystem.getTown2BuildingMap()
+for town in pairs(eligible) do
+ for _,id in pairs(buildingMap[town] or {}) do
  local b=api.engine.getComponent(id,CT.TOWN_BUILDING)
  if eligible[b.town]then
   local c=api.engine.getComponent(b.construction,CT.CONSTRUCTION)
   local cap=api.engine.entityExists(b.personCapacity)and api.engine.getComponent(b.personCapacity,CT.PERSON_CAPACITY)
   if c and cap then local p=c.transf:cols(3);out.buildings[#out.buildings+1]={id=id,town=b.town,x=p.x,y=p.y,landUse=cap.type,capacity=cap.capacity}end
  end
-end,CT.TOWN_BUILDING)
+end end
 local seen={}
 for _,t in ipairs(out.towns)do if eligible[t.id]then
  for _,id in ipairs(api.engine.util.octree.findEntitiesInCircle(api.type.Vec2f.new(t.position.x,t.position.y),1500,CT.BASE_EDGE))do

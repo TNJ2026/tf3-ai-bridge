@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from fullmap_workflow import write_json
 from planning_operations import enrich
+from carrier_acceptance import policy as carrier_policy
 from build_joint_collection import prepare, prepared_for_file
 from fullmap_fleet import fleet_rows
 from plan_report import write_report
@@ -48,8 +49,8 @@ def validate_pack(root):
     return dict(passed=True,gameCalls=0,lines=len(plan['line_specs']),groups=len(plan['hubs']),planDigest=digest)
 
 
-def finalize(root):
-    if (root/'ledger.json').exists():raise ValueError('Execution ledger present; reconcile before updating plan')
+def finalize(root, operations_analysis=None):
+    # Offline output refresh preserves any existing execution ledger verbatim.
     plan=read(root/'network_plan.json');manifest=read(root/'execution_manifest.json')
     # Preserve the pre-update planning package once, including compiled geometry.
     backup=root/'before_operations_update'
@@ -60,13 +61,16 @@ def finalize(root):
     details=root/'details.json'
     if details.exists():
         plan['cargo_deadlines_seconds']={str(c['id']):c['timeToDeliverInSeconds'] for c in read(details)['cargos'] if c.get('timeToDeliverInSeconds',0)>0}
+    if operations_analysis is not None:
+        plan['operationsAnalysis']=operations_analysis
+    plan['carrierAcceptance']=carrier_policy()
     enrich(plan)
     by_id={f['id']:f for f in plan['facilities']+plan.get('ports',[])}
     existing_fleet=read(root/'fleet_manifest.json') if (root/'fleet_manifest.json').exists() else None
     if existing_fleet is None:
         vehicles=[]
         for line in plan['line_specs']:
-            kind={'TRUCK':'road_depot','HELICOPTER':'heliport','SMALL_SHIP':'water_depot'}[line['mode']]
+            kind={'TRUCK':'road_depot','HELICOPTER':'heliport','SMALL_SHIP':'water_depot','SHIP':'water_depot'}[line['mode']]
             candidates=[f for f in by_id.values() if f['kind']==kind]
             if not candidates:raise ValueError('Missing purchase depot kind: '+kind)
             selected=line.get('purchase_base')
@@ -107,9 +111,10 @@ def finalize(root):
         gates['phaseGates']={
             'beforeBuild':dict(status='pending_current_session',checks=['user scope','backup','fresh joint preview','existing HQ reuse']),
             'afterEachCollection':dict(status='pending',checks=['physical inventory','external paths','primary warehouse','maintenance','role-specific transfer']),
-            'beforeFleet':dict(status='pending',checks=['line cargo and terminals','specified depot round trip','model availability and compartments']),
-            'operation':dict(status='pending',checks=['actual delivery time','maintenance','platform queue','city consumption'])}
-        gates['operatingForecastReviewRequired']=True
+            'beforeFleet':dict(status='pending',checks=['line cargo and terminals','compatible purchase base','model availability and compartments']),
+            'operation':dict(status='pending',checks=carrier_policy()['required'])}
+        gates['operatingForecastReviewRequired']=False
+        gates['operatingForecastRole']='planning_reference_not_commissioning_gate'
         write_json(gates_path,gates)
     write_json(root/'ship_route_checks.json',compile_checks(plan))
     write_report(root)
@@ -119,7 +124,11 @@ def finalize(root):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pack',type=Path,required=True);parser.add_argument('--check',action='store_true')
+    parser.add_argument('--operations-analysis', choices=['basic','detailed'],
+                        help='Detailed forecasts only for an explicitly requested optimization task')
     args=parser.parse_args()
-    print(json.dumps(validate_pack(args.pack) if args.check else finalize(args.pack)))
+    if args.check and args.operations_analysis is not None:
+        parser.error('--check cannot change the operations analysis mode')
+    print(json.dumps(validate_pack(args.pack) if args.check else finalize(args.pack,args.operations_analysis)))
 
 if __name__=='__main__':main()

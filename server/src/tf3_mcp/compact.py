@@ -46,10 +46,16 @@ def compact_status(status: dict) -> dict:
     """Connection health without the Lua environment probe."""
     hb = status.get("heartbeat") or {}
     out = {k: status[k] for k in ("connected", "heartbeatAgeSeconds", "bridgeDir", "reason", "error") if k in status}
-    out.update({k: hb[k] for k in HEARTBEAT_FIELDS if k in hb})
+    snapshot = {k: hb[k] for k in HEARTBEAT_FIELDS if k in hb}
     probe = hb.get("probe") or {}
     if "state" in probe:
-        out["luaState"] = probe["state"]
+        snapshot["luaState"] = probe["state"]
+    if status.get("connected"):
+        out.update(snapshot)
+    elif snapshot:
+        # A disconnected heartbeat describes the old session, not the live map.
+        out["lastKnown"] = snapshot
+        out.setdefault("reason", "heartbeat is stale; lastKnown is historical, not current game state")
     return out
 
 

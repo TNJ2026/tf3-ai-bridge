@@ -7,6 +7,7 @@ attempted at most once; a failed or unverified accept is never resent.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import time
@@ -93,20 +94,41 @@ class SubventionAutoAccept:
         self.last_run = None
         self.run_lock = asyncio.Lock()
 
+    def _load_attempts(self):
+        path = self.log_path() if callable(self.log_path) else self.log_path
+        if not path or not Path(path).exists():
+            return
+        saved = json.loads(Path(path).read_text(encoding='utf-8'))
+        for uid, row in saved.get('attempted', {}).items():
+            self.attempted[int(uid)] = row
+        # Migrate older journals conservatively: dispatched/unknown entries block
+        # further acceptance until independently reconciled, never disappear.
+        for row in saved.get('log', []):
+            if row.get('uid') is not None and row.get('result') not in (None, 'dry_run'):
+                self.attempted.setdefault(int(row['uid']), dict(row))
+
     def _record(self, entry):
         entry["time"] = time.time()
-        self.log.append(entry)
+        self.log.append(copy.deepcopy(entry))
         del self.log[:-200]
         path = self.log_path() if callable(self.log_path) else self.log_path
         if path:
             path = Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"policy": self.policy, "dryRun": self.dry_run, "log": self.log},
+            tmp.write_text(json.dumps({"policy": self.policy, "dryRun": self.dry_run, "log": self.log,
+                                      "attempted": self.attempted},
                                       ensure_ascii=False, indent=1), encoding="utf8")
             os.replace(tmp, path)
 
     async def run_once(self) -> dict:
         async with self.run_lock:
+            path = self.log_path() if callable(self.log_path) else self.log_path
+            if path:
+                from .headless import public_lock
+                with public_lock(Path(path).parent / 'subvention_policy_lock'):
+                    self._load_attempts()
+                    return await self._run_once()
             return await self._run_once()
 
     async def _run_once(self) -> dict:
@@ -116,6 +138,8 @@ class SubventionAutoAccept:
                    "accepted": [], "submitted": [], "pending": [], "failed": []}
         native = {t["uid"]: t for t in state.get("tasks", [])}
         for uid, attempt in self.attempted.items():
+            if attempt.get('transportSession') and attempt['transportSession'] != state.get('transportSession'):
+                raise ValueError('Autoaccept session changed; reconcile stored intents before restarting')
             if attempt.get("confirmed"):
                 continue
             status = native.get(uid, {}).get("status")
@@ -150,8 +174,10 @@ class SubventionAutoAccept:
                 if changed:
                     self._record(dict(row, gameTime=state.get("gameTime"), result="dry_run"))
                 continue
-            attempt = dict(row, gameTime=state.get("gameTime"))
+            attempt = dict(row, gameTime=state.get("gameTime"), transportSession=state.get('transportSession'),
+                           terms=expectation(task), result='intent')
             self.attempted[uid] = attempt
+            self._record(attempt)  # Persist before any acceptance dispatch.
             try:
                 result = await self.call("accept_subvention", uid=uid, expect=expectation(task))
                 attempt["result"] = {k: result.get(k) for k in ("submitted", "callbackAccepted", "dispatchError")}
@@ -182,8 +208,9 @@ class SubventionAutoAccept:
                 try:
                     await self.run_once()
                     self.error = None
-                except Exception as exc:  # keep polling; status shows the error
+                except Exception as exc:
                     self.error = str(exc)
+                    break  # no repeated game requests after a transport/native error
         self.task = asyncio.create_task(poll())
         return dict(self.status(), firstPass=first)
 

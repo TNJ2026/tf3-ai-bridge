@@ -1,4 +1,4 @@
-"""Read current purchase-depot paths and endpoint maintenance, without creating lines."""
+"""Read compatible purchase bases and endpoint maintenance, without route searches."""
 import argparse
 import asyncio
 import json
@@ -17,7 +17,7 @@ async def main():
         tasks=[]
         for spec in b.specs():
             preview=b.ledger['items'][spec['id']]['preview']
-            assert preview['pathVerified'] and not b.ledger['items'][spec['id']]['attempts']
+            assert preview['stops'] and not b.ledger['items'][spec['id']]['attempts']
             tasks.append(dict(id=spec['id'],mode=spec['mode'],stops=preview['stops'],
                 positions=[ep.get('position') or ep['stop']['position'] for ep in spec['endpoints']]))
         source=(ROOT/'scripts/route_support_preview.lua').read_text(encoding='utf8')
@@ -25,7 +25,7 @@ async def main():
         result['session']=b.prev
         write_json(a.output/'support.json',result)
         print(json.dumps({'lines':len(result['lines']),
-            'noPurchasePath':[r['id'] for r in result['lines'] if not r['purchaseCandidates']],
+            'noCompatiblePurchaseBase':[r['id'] for r in result['lines'] if not r['purchaseCandidates']],
             'noEndpointMaintenance':[r['id'] for r in result['lines'] if not r['maintenanceCandidates']]}))
 
 if __name__=='__main__':asyncio.run(main())

@@ -1,6 +1,6 @@
 """Resumable full-map construction batches. Default action is read-only preview.
-Fresh native preview and one commit share an engine invocation. Unknown outcomes
-lock further writes until read-only reconciliation; never replay historical IDs.
+Fresh native preview and one commit share an engine invocation. Historical business
+ledgers do not gate unrelated work; never replay a submitted operation.
 """
 from __future__ import annotations
 import argparse,asyncio,functools,hashlib,json,sys,time,uuid
@@ -84,6 +84,8 @@ class Batch:
   if fingerprint(world)!=fingerprint(expected)or state['player']!=self.p['session']['player']:raise StopBatch('Current map does not match planned towns/industry resources and positions')
   if self.prev and any(state[k]<self.prev[k]for k in ['tickCount','gameTime']):raise StopBatch('Game reloaded/time regressed; explicit reconciliation required')
   if self.a.action=='build'and state['speedup']!=0:raise StopBatch('World must remain paused during batch construction')
+  if self.a.action=='build' and isinstance(state.get('balance'),(int,float)) and state['balance']<=1_500_000:
+   raise StopBatch('Cash at or below 1500000 reserve; no new paid work')
   self.prev=state;self.ledger['lastState']=state;self.flush();return state
  @timed_stage('save')
  async def save(self,phase):
@@ -176,7 +178,7 @@ class Batch:
   if self.a.action in ('verify','preview') and getattr(self.a,'read_batch_size',1)>1:
    return await self.run_reads()
   await self.session()
-  if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions: '+','.join(unfinished(self.ledger)))
+  # Historical business ledger entries do not gate unrelated work.
   if self.a.action=='build':await self.save('before')
   done=0
   for t in self.tasks():

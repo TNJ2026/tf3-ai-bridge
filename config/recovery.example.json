@@ -1,0 +1,10 @@
+{
+  "stateDirectory": "D:/Develop/game/tf3/output/city_recovery",
+  "gameExecutable": "C:/REPLACE_WITH_VERIFIED_GAME_PATH/TransportFever3.exe",
+  "audit": [],
+  "bootstrap": {
+    "validated": false,
+    "argv": [],
+    "executableSha256": ""
+  }
+}

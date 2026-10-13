@@ -1,0 +1,1378 @@
+{
+  "provenance": "v38 isolated native readback after one split; raw metadata param stayed 0.5",
+  "edge": {
+    "components": {
+      "BASE_EDGE": {
+        "type": 0,
+        "position0": {
+          "x": 1820,
+          "y": -600,
+          "z": 1.8280001878738
+        },
+        "tangent0": {
+          "x": -80,
+          "y": 0,
+          "z": -0.68799924850464
+        },
+        "node1": 56468,
+        "distance": 0,
+        "roadStyle": "::/infrastructure/street/country/country_new_small.street",
+        "_unavailableFields": [
+          "laneConfig"
+        ],
+        "roadType": 1,
+        "typeIndex": -1,
+        "tangent1": {
+          "x": -80,
+          "y": 0,
+          "z": -0.68799924850464
+        },
+        "node0": 55862,
+        "roadDevelopmentLocked": false,
+        "edgeDecorations": [],
+        "objects": [
+          [
+            42426,
+            1
+          ],
+          [
+            42427,
+            0
+          ]
+        ],
+        "roadTemplate": "::/infrastructure/street/country/country_new_small.street_template",
+        "laneConfigs": [
+          {
+            "offset": -1,
+            "transportModes": {
+              "0": true,
+              "1": true,
+              "10": false,
+              "11": false,
+              "4": false,
+              "5": false,
+              "2": false,
+              "3": false,
+              "8": false,
+              "9": false,
+              "6": false,
+              "7": false,
+              "15": false,
+              "14": false,
+              "13": false,
+              "12": false
+            },
+            "height": 0,
+            "width": 2,
+            "forward": false,
+            "speed": 22.219999313354
+          },
+          {
+            "offset": -0.5,
+            "transportModes": {
+              "0": false,
+              "1": false,
+              "10": false,
+              "11": false,
+              "4": true,
+              "5": false,
+              "2": true,
+              "3": true,
+              "8": false,
+              "9": false,
+              "6": false,
+              "7": false,
+              "15": false,
+              "14": false,
+              "13": false,
+              "12": false
+            },
+            "height": 0,
+            "width": 5,
+            "forward": false,
+            "speed": 22.219999313354
+          },
+          {
+            "offset": 0.5,
+            "transportModes": {
+              "0": false,
+              "1": false,
+              "10": false,
+              "11": false,
+              "4": true,
+              "5": false,
+              "2": true,
+              "3": true,
+              "8": false,
+              "9": false,
+              "6": false,
+              "7": false,
+              "15": false,
+              "14": false,
+              "13": false,
+              "12": false
+            },
+            "height": 0,
+            "width": 5,
+            "forward": true,
+            "speed": 22.219999313354
+          },
+          {
+            "offset": 1,
+            "transportModes": {
+              "0": true,
+              "1": true,
+              "10": false,
+              "11": false,
+              "4": false,
+              "5": false,
+              "2": false,
+              "3": false,
+              "8": false,
+              "9": false,
+              "6": false,
+              "7": false,
+              "15": false,
+              "14": false,
+              "13": false,
+              "12": false
+            },
+            "height": 0,
+            "width": 2,
+            "forward": true,
+            "speed": 22.219999313354
+          }
+        ],
+        "position1": {
+          "x": 1740,
+          "y": -600,
+          "z": 1.1400009393692
+        }
+      }
+    },
+    "id": 55865
+  },
+  "stops": [
+    {
+      "id": 42426,
+      "components": {
+        "EDGE_OBJECT": {
+          "edgeObjectConstruction": "::/stations/street/small_stops/small_new_twosided.con",
+          "param": 0.5,
+          "transf": {
+            "columns": [
+              {
+                "x": -0.99996310472488,
+                "w": 0,
+                "z": -0.0085996724665165,
+                "y": 0
+              },
+              {
+                "x": 0,
+                "w": 0,
+                "z": 0,
+                "y": -1
+              },
+              {
+                "x": -0.0085996715351939,
+                "w": 0,
+                "z": 0.99996310472488,
+                "y": 0
+              },
+              {
+                "x": 1790.0053710938,
+                "w": 1,
+                "z": 1.4814805984497,
+                "y": -595
+              }
+            ]
+          },
+          "params": {
+            "seed": 0,
+            "year": 2006
+          }
+        },
+        "STATION": {
+          "catchmentAreas": [
+            {
+              "position": {
+                "x": 1790,
+                "z": 1.8700003623962,
+                "y": -595
+              },
+              "radius": 160
+            }
+          ],
+          "pool": {
+            "capacity": 0,
+            "edges": []
+          },
+          "tag": 0,
+          "terminals": [
+            {
+              "transportModes": {
+                "8": false,
+                "7": false,
+                "12": false,
+                "9": false,
+                "4": false,
+                "3": false,
+                "6": false,
+                "5": false,
+                "0": false,
+                "15": false,
+                "2": false,
+                "1": false,
+                "14": false,
+                "13": false,
+                "11": false,
+                "10": false
+              },
+              "capacity": 50,
+              "personEdges": [],
+              "cargoLoad": false,
+              "tag": 16,
+              "cargoUnload": true,
+              "comfortFactor": 1,
+              "passengersLoad": true,
+              "terminalAssignmentWeight": 1,
+              "vehicleEdges": [],
+              "cargoTransferSpeeds": [
+                {
+                  "cargoTypeSet": {
+                    "cargoTypesIncluded": [],
+                    "cargoClassesExcluded": [],
+                    "cargoClassesIncluded": [
+                      "PASSENGERS",
+                      "UNIVERSAL"
+                    ],
+                    "cargoTypesExcluded": []
+                  },
+                  "length": 0,
+                  "loadSpeedModifier": 1
+                }
+              ],
+              "personNodes": [
+                {
+                  "entity": 55865,
+                  "index": 0
+                }
+              ],
+              "vehicleNodeId": {
+                "entity": 55865,
+                "index": 1
+              },
+              "passengersUnload": true
+            }
+          ]
+        }
+      },
+      "name": ""
+    },
+    {
+      "name": "",
+      "components": {
+        "EDGE_OBJECT": {
+          "edgeObjectConstruction": "::/stations/street/small_stops/small_new_twosided.con",
+          "params": {
+            "seed": 0,
+            "year": 2006
+          },
+          "param": 0.5,
+          "transf": {
+            "columns": [
+              {
+                "x": 0.99996310472488,
+                "y": 8.7422776573476e-08,
+                "z": 0.0085996724665165,
+                "w": 0
+              },
+              {
+                "x": -8.7419550709456e-08,
+                "y": 1,
+                "z": -7.5180722758361e-10,
+                "w": 0
+              },
+              {
+                "x": -0.0085996715351939,
+                "y": 0,
+                "z": 0.99996310472488,
+                "w": 0
+              },
+              {
+                "x": 1790.0053710938,
+                "y": -605,
+                "z": 1.4814805984497,
+                "w": 1
+              }
+            ]
+          }
+        },
+        "STATION": {
+          "pool": {
+            "capacity": 0,
+            "edges": []
+          },
+          "terminals": [
+            {
+              "personNodes": [
+                {
+                  "entity": 55865,
+                  "index": 2
+                }
+              ],
+              "cargoUnload": true,
+              "capacity": 50,
+              "cargoLoad": false,
+              "passengersLoad": true,
+              "tag": 4,
+              "passengersUnload": true,
+              "cargoTransferSpeeds": [
+                {
+                  "length": 0,
+                  "cargoTypeSet": {
+                    "cargoTypesExcluded": [],
+                    "cargoClassesExcluded": [],
+                    "cargoTypesIncluded": [],
+                    "cargoClassesIncluded": [
+                      "PASSENGERS",
+                      "UNIVERSAL"
+                    ]
+                  },
+                  "loadSpeedModifier": 1
+                }
+              ],
+              "comfortFactor": 1,
+              "terminalAssignmentWeight": 1,
+              "personEdges": [],
+              "transportModes": {
+                "8": false,
+                "9": false,
+                "14": false,
+                "15": false,
+                "10": false,
+                "11": false,
+                "12": false,
+                "13": false,
+                "0": false,
+                "1": false,
+                "2": false,
+                "3": false,
+                "4": false,
+                "5": false,
+                "6": false,
+                "7": false
+              },
+              "vehicleEdges": [],
+              "vehicleNodeId": {
+                "entity": 55865,
+                "index": 3
+              }
+            }
+          ],
+          "catchmentAreas": [
+            {
+              "position": {
+                "x": 1790,
+                "y": -605,
+                "z": 1.8700003623962
+              },
+              "radius": 160
+            }
+          ],
+          "tag": 1
+        }
+      },
+      "id": 42427
+    }
+  ],
+  "network": {
+    "components": {
+      "TRANSPORT_NETWORK": {
+        "nodes": [
+          {
+            "_unavailable": "opaque_userdata",
+            "description": "Node: 0x8016ffab38"
+          },
+          {
+            "_unavailable": "opaque_userdata",
+            "description": "Node: 0x8016ffa4a8"
+          },
+          {
+            "_unavailable": "opaque_userdata",
+            "description": "Node: 0x8016ffad18"
+          },
+          {
+            "_unavailable": "opaque_userdata",
+            "description": "Node: 0x8016ffb358"
+          }
+        ],
+        "edges": [
+          {
+            "linkable": 2,
+            "precedence": false,
+            "forwardOnly": false,
+            "conns": [
+              {
+                "index": 17,
+                "entity": 56468
+              },
+              {
+                "index": 2,
+                "entity": 55865
+              }
+            ],
+            "curSpeed": 0,
+            "speedLimit": 0,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": 42.005359649658,
+                    "y": 0
+                  },
+                  {
+                    "x": 42.00537109375,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 42.00707244873,
+              "height": {
+                "x": 1.1400009393692,
+                "y": 1.4814805984497
+              },
+              "width": 2,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": 42.005359649658,
+                    "y": 0
+                  },
+                  {
+                    "x": 42.00537109375,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "offset": -5
+              },
+              "type": 3,
+              "tangent": {
+                "x": 0,
+                "y": 0.53268074989319
+              },
+              "arc": {
+                "angle": 42.005359649658,
+                "radius": 1790.0053710938,
+                "center": {
+                  "x": 1748,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 0,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": true,
+              "1": true,
+              "2": false,
+              "3": false,
+              "4": false,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 2,
+            "precedence": false,
+            "forwardOnly": false,
+            "conns": [
+              {
+                "index": 2,
+                "entity": 55865
+              },
+              {
+                "index": 1,
+                "entity": 55862
+              }
+            ],
+            "curSpeed": 0,
+            "speedLimit": 0,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": 29.994636535645,
+                    "y": 0
+                  },
+                  {
+                    "x": 29.994632720947,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 29.996660232544,
+              "height": {
+                "x": 1.4814805984497,
+                "y": 1.8280001878738
+              },
+              "width": 2,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": 29.994636535645,
+                    "y": 0
+                  },
+                  {
+                    "x": 29.994632720947,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ],
+                "offset": -5
+              },
+              "type": 3,
+              "tangent": {
+                "x": 0.38036954402924,
+                "y": 0.25795355439186
+              },
+              "arc": {
+                "angle": 29.994636535645,
+                "radius": 1820,
+                "center": {
+                  "x": 1790.0053710938,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 0,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": true,
+              "1": true,
+              "2": false,
+              "3": false,
+              "4": false,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 0,
+            "precedence": false,
+            "forwardOnly": true,
+            "conns": [
+              {
+                "index": 3,
+                "entity": 56468
+              },
+              {
+                "index": 3,
+                "entity": 55865
+              }
+            ],
+            "curSpeed": 14.539277076721,
+            "speedLimit": 22.219999313354,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": 42.005359649658,
+                    "y": 0
+                  },
+                  {
+                    "x": 42.00537109375,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 42.00707244873,
+              "height": {
+                "x": 1.1400009393692,
+                "y": 1.4814805984497
+              },
+              "width": 5,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": 42.005359649658,
+                    "y": 0
+                  },
+                  {
+                    "x": 42.00537109375,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1748,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "offset": -2
+              },
+              "type": 3,
+              "tangent": {
+                "x": 0,
+                "y": 0.53268074989319
+              },
+              "arc": {
+                "angle": 42.005359649658,
+                "radius": 1790.0053710938,
+                "center": {
+                  "x": 1748,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 160.00799560547,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": false,
+              "1": false,
+              "2": true,
+              "3": true,
+              "4": true,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 0,
+            "precedence": false,
+            "forwardOnly": true,
+            "conns": [
+              {
+                "index": 3,
+                "entity": 55865
+              },
+              {
+                "index": 2,
+                "entity": 55862
+              }
+            ],
+            "curSpeed": 14.539277076721,
+            "speedLimit": 22.219999313354,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": 29.994636535645,
+                    "y": 0
+                  },
+                  {
+                    "x": 29.994632720947,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 29.996660232544,
+              "height": {
+                "x": 1.4814805984497,
+                "y": 1.8280001878738
+              },
+              "width": 5,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": 29.994636535645,
+                    "y": 0
+                  },
+                  {
+                    "x": 29.994632720947,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1820,
+                    "y": -600
+                  }
+                ],
+                "offset": -2
+              },
+              "type": 3,
+              "tangent": {
+                "x": 0.38036954402924,
+                "y": 0.25795355439186
+              },
+              "arc": {
+                "angle": 29.994636535645,
+                "radius": 1820,
+                "center": {
+                  "x": 1790.0053710938,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 160.00799560547,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": false,
+              "1": false,
+              "2": true,
+              "3": true,
+              "4": true,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 0,
+            "precedence": false,
+            "forwardOnly": true,
+            "conns": [
+              {
+                "index": 3,
+                "entity": 55862
+              },
+              {
+                "index": 1,
+                "entity": 55865
+              }
+            ],
+            "curSpeed": 14.539277076721,
+            "speedLimit": 22.219999313354,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": -29.994632720947,
+                    "y": 0
+                  },
+                  {
+                    "x": -29.994636535645,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 29.996660232544,
+              "height": {
+                "x": 1.8280001878738,
+                "y": 1.4814805984497
+              },
+              "width": 5,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": -29.994632720947,
+                    "y": 0
+                  },
+                  {
+                    "x": -29.994636535645,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "offset": -2
+              },
+              "type": 3,
+              "tangent": {
+                "x": -0.25795355439186,
+                "y": -0.38036954402924
+              },
+              "arc": {
+                "angle": -29.994632720947,
+                "radius": 1790.0053710938,
+                "center": {
+                  "x": 1820,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 160.00799560547,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": false,
+              "1": false,
+              "2": true,
+              "3": true,
+              "4": true,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 0,
+            "precedence": false,
+            "forwardOnly": true,
+            "conns": [
+              {
+                "index": 1,
+                "entity": 55865
+              },
+              {
+                "index": 0,
+                "entity": 56468
+              }
+            ],
+            "curSpeed": 14.539277076721,
+            "speedLimit": 22.219999313354,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": -42.00537109375,
+                    "y": 0
+                  },
+                  {
+                    "x": -42.005359649658,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 42.00707244873,
+              "height": {
+                "x": 1.4814805984497,
+                "y": 1.1400009393692
+              },
+              "width": 5,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": -42.00537109375,
+                    "y": 0
+                  },
+                  {
+                    "x": -42.005359649658,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ],
+                "offset": -2
+              },
+              "type": 3,
+              "tangent": {
+                "x": -0.53268074989319,
+                "y": 0
+              },
+              "arc": {
+                "angle": -42.00537109375,
+                "radius": 1748,
+                "center": {
+                  "x": 1790.0053710938,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 160.00799560547,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": false,
+              "1": false,
+              "2": true,
+              "3": true,
+              "4": true,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 2,
+            "precedence": false,
+            "forwardOnly": false,
+            "conns": [
+              {
+                "index": 0,
+                "entity": 55862
+              },
+              {
+                "index": 0,
+                "entity": 55865
+              }
+            ],
+            "curSpeed": 0,
+            "speedLimit": 0,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": -29.994632720947,
+                    "y": 0
+                  },
+                  {
+                    "x": -29.994636535645,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 29.996660232544,
+              "height": {
+                "x": 1.8280001878738,
+                "y": 1.4814805984497
+              },
+              "width": 2,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": -29.994632720947,
+                    "y": 0
+                  },
+                  {
+                    "x": -29.994636535645,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1820,
+                    "y": -600
+                  },
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  }
+                ],
+                "offset": -5
+              },
+              "type": 3,
+              "tangent": {
+                "x": -0.25795355439186,
+                "y": -0.38036954402924
+              },
+              "arc": {
+                "angle": -29.994632720947,
+                "radius": 1790.0053710938,
+                "center": {
+                  "x": 1820,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 0,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": true,
+              "1": true,
+              "2": false,
+              "3": false,
+              "4": false,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          },
+          {
+            "linkable": 2,
+            "precedence": false,
+            "forwardOnly": false,
+            "conns": [
+              {
+                "index": 0,
+                "entity": 55865
+              },
+              {
+                "index": 6,
+                "entity": 56468
+              }
+            ],
+            "curSpeed": 0,
+            "speedLimit": 0,
+            "geometry": {
+              "cubicSpline": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ],
+                "tangent": [
+                  {
+                    "x": -42.00537109375,
+                    "y": 0
+                  },
+                  {
+                    "x": -42.005359649658,
+                    "y": 0
+                  }
+                ]
+              },
+              "straight": {
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ]
+              },
+              "length": 42.00707244873,
+              "height": {
+                "x": 1.4814805984497,
+                "y": 1.1400009393692
+              },
+              "width": 2,
+              "cubicOffsetSpline": {
+                "tangent": [
+                  {
+                    "x": -42.00537109375,
+                    "y": 0
+                  },
+                  {
+                    "x": -42.005359649658,
+                    "y": 0
+                  }
+                ],
+                "pos": [
+                  {
+                    "x": 1790.0053710938,
+                    "y": -600
+                  },
+                  {
+                    "x": 1748,
+                    "y": -600
+                  }
+                ],
+                "offset": -5
+              },
+              "type": 3,
+              "tangent": {
+                "x": -0.53268074989319,
+                "y": 0
+              },
+              "arc": {
+                "angle": -42.00537109375,
+                "radius": 1748,
+                "center": {
+                  "x": 1790.0053710938,
+                  "y": -600
+                },
+                "startAngle": -600
+              }
+            },
+            "noiseModifier": 1,
+            "needsReservation": false,
+            "curveSpeedLimit": 0,
+            "pedestrianWalkPenalty": true,
+            "pollutionModifier": 1,
+            "transportModes": {
+              "12": false,
+              "15": false,
+              "11": false,
+              "10": false,
+              "14": false,
+              "13": false,
+              "0": true,
+              "1": true,
+              "2": false,
+              "3": false,
+              "4": false,
+              "5": false,
+              "6": false,
+              "7": false,
+              "8": false,
+              "9": false
+            }
+          }
+        ],
+        "turnaroundEdges": [
+          6,
+          6,
+          4,
+          4,
+          2,
+          2,
+          0,
+          0
+        ]
+      }
+    },
+    "id": 55865
+  }
+}

@@ -10,6 +10,8 @@ from .planning_geometry import dry_access
 from .route_planner import Terrain
 from .flat_areas import FlatTerrain, preference_key, POLICY_VERSION
 
+SITING_POLICY_VERSION = 'facility-terrain-advisory-v1'
+
 
 def touches(a, b):
     return all(a['min'][k] <= b['max'][k] and a['max'][k] >= b['min'][k] for k in ('x', 'y'))
@@ -94,7 +96,9 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
     plan['searches'] = []
     plan['warnings'] += ['各候选为互斥备选，不是同时放置方案；选定后用局部规划核对设施间冲突。',
                          '默认平整优先排名使用采样地表坡度、高差与目标距离，不证明服务覆盖、接驳、成本或可施工。',
+                         '建筑天然高差默认仅作参考；超过参考值仍可进入原生预览，不代表已平整或已经可建。道路接入另行检查。',
                          '停靠点道路类型、可建区间和既有边对象需实时核验；仅暂排除指定承载边。']
+    plan['sitingPolicy'] = SITING_POLICY_VERSION
     names, total, terrain_work = set(), 0, 0
     for request in requests:
         name = request['name']
@@ -114,6 +118,11 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
         if radius > 5000:
             raise ValueError('radius must be <= 5000 metres')
         max_height = number(request.get('max_height_range', 5), 'max_height_range')
+        terrain_policy = request.get('terrain_policy', 'advisory' if kind == 'facility' else 'strict')
+        if terrain_policy not in ('advisory', 'strict'):
+            raise ValueError('terrain_policy must be advisory or strict')
+        if kind == 'street_stop' and terrain_policy != 'strict':
+            raise ValueError('street_stop terrain_policy must be strict; building adaptation does not apply')
         ranking = request.get('ranking', 'flat_first')
         if ranking not in ('flat_first','distance_height'):
             raise ValueError('ranking must be flat_first or distance_height')
@@ -184,7 +193,7 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
             if any(g['water'][i] for i in cells):
                 rejected['water'] += 1; continue
             lo, hi = min(g['heights'][i] for i in cells), max(g['heights'][i] for i in cells)
-            if hi-lo > max_height:
+            if hi-lo > max_height and terrain_policy == 'strict':
                 rejected['height_range'] += 1; continue
             profile = flat_terrain.profile(reserve, max_height)
             access_profile = profile
@@ -207,6 +216,13 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
                              status='sampled_only', buildable=None, conflicts=[], siteConflicts=[],
                              requiresNativePreview=True)
             candidate.update(terrain=profile,ranking=ranking,rankingPolicy=POLICY_VERSION)
+            candidate['terrainAssessment'] = dict(
+                policy=terrain_policy, heightRangeReferenceM=max_height,
+                exceedsHeightReference=hi-lo > max_height,
+                placementVerified=False, adaptationRequired=None,
+                advisories=['natural_height_range_exceeds_reference'] if hi-lo > max_height else [],
+                nextStep='native_building_and_access_preview',
+                basis='sampled natural ground; not a native building placement limit')
             if access is not None:candidate['accessTerrain']=access_profile
             if entry is not None:
                 candidate['access'] = dict(anchor=access['anchor'], entry=entry,
@@ -228,6 +244,7 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
                 break
         plan['sites'].extend(selected)
         plan['searches'].append(dict(name=name, evaluated=len(positions), rejected=dict(rejected),
+                                     terrainPolicy=terrain_policy,
                                      viable=len(viable), candidates=selected,
                                      status='candidates' if selected else 'no_candidate'))
     plan['metrics'] = dict(evaluated=total, obstacleChecks=index.checks, terrainVertices=terrain_work,

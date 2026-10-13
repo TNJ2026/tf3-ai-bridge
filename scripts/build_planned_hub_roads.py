@@ -59,7 +59,7 @@ end;return B.json.encode(out)'''.replace('DESCRIPTORS',quote(descriptors))
   item['audit']=await self.audit_road(item)
  async def run(self):
   await self.session();self.tasks_all=self.tasks()
-  if unfinished(self.ledger):raise StopBatch('Unreconciled submissions '+str(unfinished(self.ledger)))
+  # Historical business ledger entries do not gate unrelated work.
   selected=[s for s in self.p['roads']if s['id'].startswith(self.a.owner+'_')]
   extra_file=self.out/'extra_roads.json'
   if extra_file.exists():

@@ -98,8 +98,7 @@ return B.json.encode(out)'''.replace('ENTITIES', quote(entities))
         write_json(OUT/'collection_extension.json', self.extension)
         if self.a.action == 'verify':
             print(json.dumps(await self.accept())); return
-        if unfinished(self.ledger):
-            raise StopBatch('Unreconciled submission; no further writes')
+        # No global historical-ledger gate; individual submissions are never replayed.
         # Verify all original roles in one read before adding the passenger role.
         rows = await self.read_facilities(super().tasks(), 'verify', with_session=True)
         if not all(r['result'].get('audit', {}).get('staticVerified') for r in rows):

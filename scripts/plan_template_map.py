@@ -51,9 +51,33 @@ def materialize_candidate(candidate,template,compiled):
  return out
 
 
+def road_distance_graph(edges):
+ """Sample each road once per snapshot; this is not native directed routing."""
+ graph=collections.defaultdict(list)
+ for edge in edges:
+  points=[curve(edge,k/8)for k in range(9)]
+  length=sum(math.dist(x,y)for x,y in zip(points,points[1:]))
+  graph[edge['node0']].append((edge['node1'],length))
+  graph[edge['node1']].append((edge['node0'],length))
+ return graph
+
+
+def road_service_distances(graph,source,initial_distance):
+ """Owner-specific shortest distances over a shared, read-only coarse graph."""
+ distances={source:initial_distance};queue=[(initial_distance,source)]
+ while queue:
+  length,n=heapq.heappop(queue)
+  if length!=distances[n]:continue
+  for neighbor,cost in graph.get(n,()):
+   if length+cost<distances.get(neighbor,math.inf):
+    distances[neighbor]=length+cost;heapq.heappush(queue,(length+cost,neighbor))
+ return distances
+
+
 def collection_candidates(template,ordered,nodes,kind,flat_terrain,sizes,target,materialize=True,search_radius=None,city_network_distances=None):
  """Bounded terrain ranking before obstacle checks; includes frontage and reserve space."""
  compiled=compiled_footprints(template,sizes)
+ truck_positions={c['rotation']:next((g['position']for f,g in zip(template['facilities'],c['fac'])if f['role']=='truck'),dict(x=0,y=0))for c in compiled}
  candidates=[]
  # Production has no fixed distance or nearest-node count cutoff. A supplied
  # search_radius only bounds this survey pass, never production eligibility.
@@ -61,20 +85,23 @@ def collection_candidates(template,ordered,nodes,kind,flat_terrain,sizes,target,
   distance=math.dist((nodes[n]['x'],nodes[n]['y']),(target['x'],target['y']))
   if distance>(search_radius if search_radius is not None else (2300 if kind=='city'else math.inf)):break
   if kind=='city'and distance<500:continue
+  network_distance=city_network_distances.get(n,math.inf)if city_network_distances is not None else distance
+  if not math.isfinite(network_distance):continue
   for geometry in compiled:
    rot=geometry['rotation'];co,si=geometry['co'],geometry['si'];v=geometry['end']
+   truck=truck_positions[rot]
    for extension in ((90,170,270)if kind=='city'else(30,50,90,170,270,450,650,850)):
     entry=dict(x=nodes[n]['x']+co*extension,y=nodes[n]['y']+si*extension)
     origin=dict(x=entry['x']-v['x'],y=entry['y']-v['y'])
     reserve=shift_box(geometry['reserve'],origin)
     access=dict(min={a:min(nodes[n][a],entry[a])-5 for a in ('x','y')},max={a:max(nodes[n][a],entry[a])+5 for a in ('x','y')})
-    profile=flat_terrain.profile(reserve);ap=flat_terrain.profile(access)
+    profile=flat_terrain.profile(reserve)
     # Unknown/wet collection footprints cannot become terrain-ranked candidates.
     if profile['outsideSurvey']or not profile['dry']:continue
+    ap=flat_terrain.profile(access)
     flat_key=preference_key(profile,ap,distance+extension)
-    service_distance=(city_network_distances.get(n,math.inf) if city_network_distances is not None else distance)+extension
+    service_distance=network_distance+extension
     if not math.isfinite(service_distance):continue
-    truck=next((g['position'] for f,g in zip(template['facilities'],geometry['fac']) if f['role']=='truck'),dict(x=0,y=0))
     direct_distance=math.hypot(origin['x']+truck['x']-target['x'],origin['y']+truck['y']-target['y'])
     key=city_preference_key(profile,ap,service_distance) if kind=='city' else production_preference_key(profile,ap,service_distance,direct_distance)
     c=dict(node=n,origin=origin,rotation=rot,entry=entry,
@@ -142,7 +169,9 @@ def main():
    if j>3 and(index or idx).blocked(bbox(pt(x,y),5,5)):return False
    zlast=z
   return True
+ distance_graph=None
  def site(owner,target,kind):
+  nonlocal distance_graph
   if any(h['entity']==owner and h['kind']==kind for h in hubs):return
   template=templates[kind];ordered=sorted((n for n in nodes if n not in frozen),key=lambda n:dist(nodes[n],target));chosen=None
   ci=idx
@@ -156,16 +185,9 @@ def main():
   if search_radius is not None and (not math.isfinite(search_radius) or search_radius<=0):raise ValueError('Invalid owner search radius')
   city_distances=None
   if kind in ('city','production'):
-   source=min(nodes,key=lambda n:dist(nodes[n],target));city_distances={source:dist(nodes[source],target)};queue=[(city_distances[source],source)]
-   graph=collections.defaultdict(list)
-   for edge in edges:
-    points=[curve(edge,k/8)for k in range(9)];length=sum(math.dist(x,y)for x,y in zip(points,points[1:]))
-    graph[edge['node0']].append((edge['node1'],length));graph[edge['node1']].append((edge['node0'],length))
-   while queue:
-    length,n=heapq.heappop(queue)
-    if length!=city_distances[n]:continue
-    for neighbor,cost in graph[n]:
-     if length+cost<city_distances.get(neighbor,math.inf):city_distances[neighbor]=length+cost;heapq.heappush(queue,(length+cost,neighbor))
+   if distance_graph is None:distance_graph=road_distance_graph(edges)
+   source=min(nodes,key=lambda n:dist(nodes[n],target))
+   city_distances=road_service_distances(distance_graph,source,dist(nodes[source],target))
   candidates=collection_candidates(template,ordered,nodes,kind,flat_terrain,sizes,target,materialize=False,search_radius=search_radius,city_network_distances=city_distances);checked=0
   geometry={c['rotation']:c for c in compiled_footprints(template,sizes)}
   for candidate in candidates:

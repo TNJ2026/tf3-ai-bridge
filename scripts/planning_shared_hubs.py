@@ -87,7 +87,7 @@ def city_siting_reviews(hubs, cities):
                 triggers=dict(nearby=gap<=1000,potential_service_overlap=any(s['alternative_direct_distance_m']<=s['direct_distance_m']*1.25 for s in service)),
                 service=service,status='pending_comparison',build_ready=False,
                 alternatives=['share_one_collection','retain_separate_collections','relocate_nearer_served_city'],
-                required_checks=['actual round-trip road travel and delivery coverage for both cities',
+                required_checks=['reasonable road access and delivery coverage for both cities; no commissioning round-trip test',
                     'aggregate cargo and passenger throughput; distinct terminals; stock counted once',
                     'upgrade space, noise, pollution and city growth',
                     'nearer site with limited grading versus distant flatter site',

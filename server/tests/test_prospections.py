@@ -130,3 +130,49 @@ def test_portable_receipt_survives_lua_instance_change(game):
     receipt['town']['revision']=99
     r=new['_internal']['commands']['get_prospection_operation'](lua.table_from({'operation_id':t,'tracking_receipt':receipt},recursive=True))
     assert not r['verified']
+
+
+def test_prospection_state_survives_engine_recreation(game):
+    lua, _ = game
+    state = lua.execute("local v={};return {get=function()return v end,set=function(_,x)v=x end}")
+    counter = 0
+    def event(cmd, epoch="one", **args):
+        nonlocal counter
+        counter += 1
+        script = lua.execute(SCRIPT.read_text("utf8"))
+        script["handleEvent"](None, state, None, "tf3_mcp", "tf3_mcp_request",
+            json.dumps(dict(id=str(counter), cmd=cmd, args=args, facilityEpoch=epoch)))
+        responses = state["get"](state)["responses"]
+        result = json.loads(responses[len(responses)]["text"])
+        codec = script["_internal"]["json"]
+        state["set"](state, codec["decode"](codec["encode"](state["get"](state))))
+        return result
+    stale = event("preview_prospection", town=100, resource="explore1")["result"]["preview_token"]
+    assert not event("commit_prospection", epoch="two", preview_token=stale)["ok"]
+    token = event("preview_prospection", epoch="two", town=100, resource="explore1")["result"]["preview_token"]
+    r = event("commit_prospection", epoch="two", preview_token=token)
+    assert r["ok"] and r["result"]["verified"]
+    assert not event("commit_prospection", epoch="two", preview_token=token)["ok"]
+    assert event("get_prospection_operation", epoch="two", operation_id=token)["result"]["verified"]
+    assert lua.globals().SEND_COUNT == 1
+
+
+def test_pending_uses_native_entity_generation_not_change_counters(game):
+    lua, c = game
+    lua.execute('''
+ug_require_original=ug_require
+ug_require=function(p)
+ if p:find('entity_util')then return {
+  makeEntityAndRevision=function(id)return {entity=id,revision={num={REV,6,148990}}}end,
+  entityEquals=function(a,b)return a.entity==b.entity and a.revision.num[1]==b.revision.num[1]end
+ }end
+ return ug_require_original(p)
+end
+function DELIVER(p)
+ STATE.pendingProspections={{townEntity={entity=p.townEntity,revision={num={REV,0,0}}},cargoType=p.cargoType,initiatedTimestamp=components[1][4].gameTime,attempts=0}}
+end
+''')
+    token = preview(c)
+    assert c('commit_prospection', preview_token=token)['verified']
+    lua.execute('STATE.pendingProspections[1].townEntity.revision.num[1]=99')
+    assert not c('get_prospection_operation', operation_id=token)['verified']

@@ -100,7 +100,7 @@ def test_unknown_submission_locks_road_phase(tmp_path,monkeypatch):
     a=SimpleNamespace(owner='T1',action='build',stage='roads',current_map_test=True,authorize_build=True)
     with pytest.raises(mod.StopBatch,match='unknown'):asyncio.run(mod.run(a))
     assert b.ledger['items']['ROAD_FIRST_T1_roads']['status']=='needs_reconciliation'
-    with pytest.raises(mod.StopBatch,match='Unreconciled'):asyncio.run(mod.run(a))
+    with pytest.raises(mod.StopBatch,match='already attempted'):asyncio.run(mod.run(a))
     assert b.commits==1
 
 

@@ -4,17 +4,19 @@ import sys
 from pathlib import Path
 import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from batch_connections import ConnectionRunner, ANCHORS, road_preview_ok, within_current
+from batch_connections import ConnectionRunner, road_preview_ok, within_current
 from batch_helipads import land_tasks, HelipadRunner
-from batch_warehouses import StopBatch, PLAN
+from batch_warehouses import StopBatch
 
-def test_all_frontage_corridors_avoid_native_warehouse_envelope():
-    plan=json.loads(PLAN.read_text(encoding="utf-8"))
-    for task in plan["warehouses"]:
-        anchor,points=ANCHORS[task["warehouseId"]]
-        chain=[anchor]+points
-        assert not any(within_current(a,b,task) for a,b in zip(chain,chain[1:]))
-    assert within_current((439,970),(439,1050),plan["warehouses"][0])
+@pytest.mark.parametrize("rotation", [0, 90, 37])
+def test_corridors_respect_rotated_warehouse_envelope(rotation):
+    import math
+    task={"position":{"x":100,"y":200},"rotation":rotation}
+    def world(x,y):
+        a=math.radians(rotation)
+        return (100+x*math.cos(a)-y*math.sin(a),200+x*math.sin(a)+y*math.cos(a))
+    assert within_current(world(-100,0),world(100,0),task)
+    assert not within_current(world(-100,-30),world(100,-30),task)
 
 @pytest.mark.parametrize("bad",[{"blocked":True},{"critical":True},{"blocking":[1]},
                                {"messages":["too sharp"]},{"buildable":False}])
@@ -22,10 +24,17 @@ def test_unsafe_road_preview_rejected(bad):
     assert not road_preview_ok({"buildable":True,**bad})
 
 def test_manifest_excludes_ports_and_resolves_selection():
-    plan=json.loads(PLAN.read_text(encoding="utf-8"))
+    plan={"sites":[
+        {"id":"land1","role":"facility","position":{"x":1,"y":2},"basis":"native HELIPAD"},
+        {"id":"port","role":"port","position":{"x":3,"y":4},"basis":"helipad"},
+        {"id":"unplaced","role":"facility","basis":"helipad"},
+        {"id":"warehouse","role":"facility","position":{"x":5,"y":6},"basis":"warehouse"},
+        {"id":"land2","role":"facility","position":{"x":7,"y":8},"basis":"停机坪36×38"}]}
+    original=json.dumps(plan,ensure_ascii=False)
     tasks=land_tasks(plan)["warehouses"]
-    assert len(tasks)==29
-    assert len(land_tasks(plan,["H03"])["warehouses"])==1
+    assert [t["id"] for t in tasks]==["land1","land2"]
+    assert json.dumps(plan,ensure_ascii=False)==original
+    assert len(land_tasks(plan,["H02"])["warehouses"])==1
     with pytest.raises(StopBatch,match="未知"):
         land_tasks(plan,["H99"])
 

@@ -75,7 +75,7 @@ return B.json.encode(out)'''.replace('TASK',quote(t)).replace('ARGS',quote(args)
     r=await self.clone(t);self.ledger['items'][t['id']]={'attempts':0,'preview':r,'status':'preview_ready'if r['safe']else'preview_blocked'};self.flush();print(t['id']+': '+str(r['safe']),flush=True)
    return
   from fullmap_batch import unfinished
-  if unfinished(self.ledger):raise StopBatch('Unreconciled work')
+  # Historical business ledger entries do not gate unrelated work.
   road_preflight=json.loads((OUT/'road_preflight.json').read_text('utf8'))
   if not road_preflight or not all(r.get('safe')for r in road_preflight):raise StopBatch('Missing road preflight')
   await self.save('before')

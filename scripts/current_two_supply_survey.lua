@@ -2,7 +2,6 @@
 local CT=api.type.ComponentType
 local map=B.commands.get_map_info({})
 local out={state=B.commands.get_game_state({}),towns={},industries={},cargos={}}
-local byTown={}
 for id,resource in pairs(api.res.cargoTypeRep.getAll(true)) do
  local c=api.res.cargoTypeRep.get(id)
  out.cargos[#out.cargos+1]={id=id,resource=resource,name=c.name}
@@ -10,20 +9,13 @@ end
 for _,t in ipairs(map.towns) do
  local comp=api.engine.getComponent(t.id,CT.TOWN)
  local r={id=t.id,name=t.name,position=t.position,needs=B.toPlain(comp.cargoNeeds),demand={}}
- out.towns[#out.towns+1]=r;byTown[t.id]=r
+ out.towns[#out.towns+1]=r
 end
-api.engine.forEachEntityWithComponent(function(id)
- local b=api.engine.getComponent(id,CT.TOWN_BUILDING)
- local t=byTown[b.town]
- if t and b.stockList>=0 and api.engine.entityExists(b.stockList) then
-  for _,c in ipairs(out.cargos) do
-   local amount=api.engine.util.stock.getCargoMaxConsumptionPerYear(b.stockList,c.id)
-   if amount>0 then
-    local key=tostring(c.id);t.demand[key]=(t.demand[key] or 0)+amount
-   end
-  end
- end
-end,CT.TOWN_BUILDING)
+for _,t in ipairs(out.towns) do
+ local panel=B.commands.get_town_cargo_supply({town=t.id})
+ t.supply=panel;t.demandScope="native city panel"
+ for _,row in ipairs(panel.items) do t.demand[tostring(row.cargo)]=row.demand end
+end
 for _,i in ipairs(map.industries) do
  local c=api.engine.getComponent(i.id,CT.INDUSTRY)
  local io=api.engine.util.stock.getInputsOutputsFromRules(c.stockList)
