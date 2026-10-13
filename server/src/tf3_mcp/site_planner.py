@@ -6,6 +6,7 @@ import time
 from collections import Counter, defaultdict
 
 from .development_planner import base_plan, box, contains, grid_bounds, number
+from .localization import translate as tr_text
 from .planning_geometry import dry_access
 from .route_planner import Terrain
 from .flat_areas import FlatTerrain, preference_key, POLICY_VERSION
@@ -79,7 +80,7 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
         if type(value) is not int or not 1 <= value <= hi:
             raise ValueError(f'{name} must be an integer in 1..{hi}')
     started = time.perf_counter()
-    plan = base_plan(snapshot, '设施批量选址 · 候选比较', 'local', [])
+    plan = base_plan(snapshot, tr_text('设施批量选址 · 候选比较', 'Facility siting · Candidate comparison'), 'local', [])
     g = snapshot['grid']
     terrain = Terrain(g)
     flat_terrain = FlatTerrain(g)
@@ -94,10 +95,10 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
     index = BoxIndex(rows)
     edges = {r['entity']: r for r in rows if r.get('kind') == 'BASE_EDGE'}
     plan['searches'] = []
-    plan['warnings'] += ['各候选为互斥备选，不是同时放置方案；选定后用局部规划核对设施间冲突。',
-                         '默认平整优先排名使用采样地表坡度、高差与目标距离，不证明服务覆盖、接驳、成本或可施工。',
-                         '建筑天然高差默认仅作参考；超过参考值仍可进入原生预览，不代表已平整或已经可建。道路接入另行检查。',
-                         '停靠点道路类型、可建区间和既有边对象需实时核验；仅暂排除指定承载边。']
+    plan['warnings'] += [tr_text('各候选为互斥备选，不是同时放置方案；选定后用局部规划核对设施间冲突。', 'Candidates are mutually exclusive alternatives, not simultaneous placements; verify facility conflicts in a local plan after selection.'),
+                         tr_text('默认平整优先排名使用采样地表坡度、高差与目标距离，不证明服务覆盖、接驳、成本或可施工。', 'Default flatness ranking uses sampled slopes, height differences and target distance; it does not verify coverage, connections, cost or buildability.'),
+                         tr_text('建筑天然高差默认仅作参考；超过参考值仍可进入原生预览，不代表已平整或已经可建。道路接入另行检查。', 'Natural height differences are advisory by default; candidates above the reference can still receive native previews. This does not establish leveling or buildability; check road access separately.'),
+                         tr_text('停靠点道路类型、可建区间和既有边对象需实时核验；仅暂排除指定承载边。', 'Verify stop road types, buildable intervals and existing edge objects live; only the specified supporting edge is provisionally excluded.')]
     plan['sitingPolicy'] = SITING_POLICY_VERSION
     names, total, terrain_work = set(), 0, 0
     for request in requests:
@@ -238,7 +239,7 @@ def search_sites(snapshot, requests, max_candidates=3, max_evaluations=10000, re
             p = candidate['position']
             if any(math.hypot(p['x']-c['position']['x'],p['y']-c['position']['y']) < separation for c in selected):
                 continue
-            candidate['name'] = f'{name} · 候选 {len(selected)+1}'
+            candidate['name'] = f"{name} · {tr_text('候选', 'Candidate')} {len(selected)+1}"
             selected.append(candidate)
             if len(selected) == max_candidates:
                 break

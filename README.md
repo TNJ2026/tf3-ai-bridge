@@ -37,6 +37,18 @@ The mod exchanges request, response, and heartbeat files with the server using `
 - An AI client supporting MCP over standard input/output.
 - The automatic installer targets Windows / Steam. Installation on other environments has not been verified.
 
+## Language and paths
+
+Planning reports and cards support English and Simplified Chinese. Set `TF3_UI_LANGUAGE` to `en`, `zh-CN`, or `auto` in the MCP server's environment, then restart the server. Automatic selection uses process locale overrides (`LC_ALL`, `LC_MESSAGES`, `LANG`), then the system locale, with English as the fallback. It does not detect the game's language. Saved plans retain their presentation language; regenerate a plan to change it. Cards initially use the browser/host locale, then the report's language when available.
+
+Native entity names, resource IDs, and custom titles remain unchanged. The in-game coordinate panel uses bilingual hints. This is not a translation of every tool description or document.
+
+Facility-siting and railway-plan labels also follow this language setting. Snapshot/plan JSON imports and recovery configuration accept UTF-8 with or without a BOM. `TF3_RECOVERY_CONFIG` supports user-directory and environment-variable expansion; reading configuration does not enable recovery or monitoring.
+
+`TF3_MCP_DIR` overrides the bridge directory and supports `~` and environment variables. `TF3_PLANNING_FONT` optionally selects a font file for report images; use a font with CJK glyphs for Chinese names. Common Windows fonts and available Linux/macOS fonts are tried as fallbacks.
+
+English presentation, Unicode transport, and paths containing spaces/non-ASCII characters have offline tests. An English game has passed live queries, terrain capture, report generation, native warehouse preview, save verification and speed-change readback. Paid construction and vehicle operation remain unverified in this language test (the test map had zero cash). English Windows has not been tested separately. See [English compatibility validation](docs/reference/ENGLISH_COMPATIBILITY.md).
+
 ## Quick start with an Agent
 
 Open this repository in an AI Agent that can access local files and configure MCP connections. Enter the prompts below in its chat. The Agent handles setup and tool calls; you describe what you want to achieve.

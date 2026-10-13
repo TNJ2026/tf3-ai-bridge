@@ -77,7 +77,16 @@ def test_coordinate_panel_resource_layout_and_reading():
             return panel.params.layout.params.children
         end
     ''')
-    lua.execute(SOURCE.read_text(encoding="utf-8"))
+    source = SOURCE.read_text(encoding="utf-8")
+    lua.execute(source)
+    lua.execute('''
+        local root = data().Panel()
+        assert(root.kind == 'BoxLayout' and #root.params.children == 0)
+        tick()
+        assert(reads == 1, 'Hidden panel retains coordinate updates')
+    ''')
+    # Exercise the retained panel implementation without changing its hidden default.
+    lua.execute(source.replace('local PANEL_VISIBLE = false', 'local PANEL_VISIBLE = true'))
     lua.execute('''
         assert(type(data) == 'function' and type(data().Panel) == 'function')
         assert(data() == data())
@@ -85,18 +94,18 @@ def test_coordinate_panel_resource_layout_and_reading():
         assert(#children == 1 and children[1].kind == 'TextView')
         tick()
         children = render()
-        assert(children[1].params.text == 'X  12.3    Y  -45.6    Z  7.8 米')
+        assert(children[1].params.text == 'X  12.3    Y  -45.6    Z  7.8 m')
         assert(#messages == 0)
         terrain = false
         tick()
         children = render()
-        assert(children[1].params.text == '未指向地面')
+        assert(children[1].params.text == 'Not pointing at terrain / 未指向地面')
         terrain = true
         api.gui.mouse.getTerrainPosition = function() error('native read failure') end
         tick()
         tick()
         children = render()
-        assert(children[1].params.text == '坐标暂不可用')
+        assert(children[1].params.text == 'Coordinates unavailable / 坐标暂不可用')
         assert(#messages == 1)
         assert(string.find(messages[1], 'getTerrainPosition', 1, true))
         assert(string.find(messages[1], 'native read failure', 1, true))

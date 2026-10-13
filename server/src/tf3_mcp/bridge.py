@@ -44,7 +44,7 @@ def default_bridge_dir() -> Path:
     most recently used Steam account that has played the game."""
     explicit = os.environ.get("TF3_MCP_DIR")
     if explicit:
-        return Path(explicit)
+        return Path(os.path.expandvars(explicit)).expanduser()
     steam = _steam_path()
     if steam:
         locals_ = [p for p in (steam / "userdata").glob(f"*/{TF3_APP_ID}/local") if p.is_dir()]

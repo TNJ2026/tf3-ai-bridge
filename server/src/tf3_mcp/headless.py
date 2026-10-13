@@ -214,14 +214,92 @@ class HeadlessRequests:
             raise ValueError("Headless heartbeat stale; no dispatch")
         ledger = self._load()
         return {"receiver": latest, "ageSeconds": age,
-                "pending": ledger.get("pending"), "loadVerification": ledger.get('loadVerification'), "bounded": not demand,
+                "pending": ledger.get("pending"), "sessionTransition": ledger.get('sessionTransition'), "loadVerification": ledger.get('loadVerification'), "bounded": not demand,
                 "nativeCacheReclamationVerified": False}
+
+    def isolate_previous_save(self, request_id, expected_session):
+        """Explicit new-session recovery for a save only; never infer its outcome.
+
+        Retains the original intent and permanently quarantines its save slot.
+        Only identity reads are enabled until verify_session_transition succeeds.
+        Not a generic pending reset: world mutations and loads are excluded.
+        """
+        with public_lock(self.directory):
+            ledger = self._load()
+            live = self.status()['receiver']
+            row = ledger['requests'].get(request_id, {})
+            if (ledger.get('sessionTransition') or ledger.get('loadVerification')
+                    or ledger.get('pending') != request_id or row.get('kind') != 'save'
+                    or row.get('command') != 'save_game' or not row.get('saveSlot')
+                    or not row.get('session') or row['session'] == expected_session
+                    or live['session'] != expected_session or live['status'] != 'ready'
+                    or live.get('mode') != 'demand' or 'response' in row):
+                raise ValueError('Only an unresolved save from a different session can be isolated')
+            transition = dict(requestId=request_id, previousSession=row['session'],
+                              session=expected_session, generation=live['generation'],
+                              started=time.time(), outcome='unknown', retryAllowed=False)
+            row['sessionIsolation'] = transition.copy()
+            row['status'] = 'previous_session_save_unknown'
+            ledger.setdefault('quarantinedSaveSlots', {})[row['saveSlot']] = request_id
+            ledger['sessionTransition'] = transition
+            ledger['pending'] = None
+            self._save(ledger)
+            return transition
+
+    def verify_session_transition(self, expected_session):
+        """Unlock only after durable, fresh native identity/pending reads."""
+        with public_lock(self.directory):
+            ledger = self._load()
+            transition = ledger.get('sessionTransition')
+            live = self.status()['receiver']
+            if (not transition or ledger.get('pending') or ledger.get('loadVerification')
+                    or transition['session'] != expected_session or live['session'] != expected_session
+                    or live['generation'] != transition['generation'] or live['status'] != 'ready'):
+                raise ValueError('Session transition identity or pending mismatch')
+            evidence = {}
+            for command in ('get_game_state', 'get_map_info', 'get_validation_state'):
+                rows = [r for r in ledger['requests'].values()
+                        if r.get('command') == command and r.get('session') == expected_session
+                        and r.get('generation') == live['generation']
+                        and r.get('created', 0) >= transition['started']
+                        and 0 <= time.time() - r.get('created', 0) <= 60
+                        and r.get('response', {}).get('ok') is True
+                        and r['response'].get('id') == r.get('id')
+                        and r['response'].get('cmd') == command]
+                if not rows:
+                    raise ValueError('Fresh independent read required: ' + command)
+                evidence[command] = max(rows, key=lambda r: r['created'])
+            state = evidence['get_game_state']['response']['result']
+            world = evidence['get_map_info']['response']['result']
+            validation = evidence['get_validation_state']['response']['result']
+            # This audited native response omits nil-valued Lua fields, including pending.
+            pending_known = ('pending' in validation or
+                             validation.get('capabilityRevision') == 'consolidated-20261011-v40')
+            if (validation.get('session') != expected_session or not pending_known
+                    or validation.get('pending') or state.get('player') is None
+                    or state.get('world') is None or not isinstance(world, dict) or not world):
+                raise ValueError('Native identity or pending remains unknown')
+            proof = dict(transition, verifiedAt=time.time(), player=state['player'], world=state['world'],
+                         mapDigest=hashlib.sha256(json.dumps(world, sort_keys=True).encode()).hexdigest(),
+                         evidenceRequests={k: v['id'] for k, v in evidence.items()})
+            ledger['requests'][transition['requestId']]['sessionIsolation'] = proof
+            ledger['sessionTransition'] = None
+            self._save(ledger)
+            return proof
 
     def send(self, command, arguments=None, *, kind="read", expected_session=None):
         with public_lock(self.directory):
             ledger = self._load()
             if ledger.get("pending"):
                 raise ValueError("Previous request unresolved; read its result, never resubmit")
+            transition = ledger.get('sessionTransition')
+            identity_kinds = {'get_game_state': 'read', 'get_map_info': 'read', 'get_validation_state': 'build'}
+            # Native validation is read-only but uses the extended build dispatcher.
+            if transition and (identity_kinds.get(command) != kind
+                               or expected_session != transition['session']):
+                raise ValueError('Session transition permits only independent identity reads')
+            if kind in ('save', 'load') and (arguments or {}).get('slot') in ledger.get('quarantinedSaveSlots', {}):
+                raise ValueError('Previous-session unknown save slot is quarantined; never replay or load it')
             if ledger.get('loadVerification') and not (kind == 'read' or command == 'get_validation_state'):
                 raise ValueError('Loaded session requires independent readback; writes blocked')
             self._archive(ledger)
@@ -377,6 +455,9 @@ class HeadlessRequests:
                     raise ValueError("Archived response identity mismatch")
             if "response" in row:
                 return {"status": "received", "response": row["response"]}
+            if 'sessionIsolation' in row:
+                return dict(status='timeout_unknown', id=request_id, retryAllowed=False,
+                            phase='previous_session_save_isolated', isolation=row['sessionIsolation'])
             if 'reconciliation' in row:
                 return dict(status='rejected', id=request_id, retryAllowed=False,
                             reconciliation=row['reconciliation'])
