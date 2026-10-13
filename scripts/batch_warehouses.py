@@ -272,9 +272,7 @@ class Runner:
 
     async def run(self):
         await self.session()
-        if self.action == "build" and any(x.get("status") in ("commit_started", "needs_reconciliation")
-                                          for x in self.ledger["items"].values()):
-            raise StopBatch("存在未核实的施工请求；只能先运行verify，不自动重试")
+        # No global business reconciliation gate; per-operation attempts still prevent replay.
         if self.action == "build":
             await self.checkpoint("before")
         for task in self.plan["warehouses"]:

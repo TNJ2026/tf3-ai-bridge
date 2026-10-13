@@ -64,7 +64,7 @@ def test_station_frontage_is_optional_and_validated(cargo):
             validate_build_arguments('preview_station', dict(args, frontage_node=bad))
 
 
-@pytest.mark.parametrize('change', [dict(z=3.01), dict(z=-1.01), dict(z=float('nan')),
+@pytest.mark.parametrize('change', [dict(z=float('nan')),
                                    dict(z=float('inf')), dict(z=True), dict(z='1'),
                                    dict(z=1, frontage_node=None)])
 def test_explicit_height_rejected_before_native_preview(station_placement, change):
@@ -79,9 +79,37 @@ def test_explicit_height_rejected_before_native_preview(station_placement, chang
 def test_explicit_height_does_not_bypass_native_height_guard(station_placement):
     lua, place = station_placement
     lua.execute('height=2')
-    with pytest.raises(LuaError, match='Native entrance height differs'):
+    with pytest.raises(LuaError, match='did not converge'):
         place(lua.table_from(dict(x=0, y=30, z=1, preview=True, frontage_node=10)),
               lua.globals().TERMINAL_CON, lambda: lua.table(), lua.table())
+
+
+@pytest.mark.parametrize('height', [3.01, -1.01, 8])
+def test_native_foundation_alignment_preserves_road_and_parameters(station_placement, height):
+    lua, place = station_placement
+    lua.execute('''
+local original=previewProposal
+function previewProposal(p)
+ height=p.constructionsToAdd[1].transf.z
+ return original(p)
+end
+''')
+    calls = []
+    def parameters():
+        calls.append(True)
+        return lua.table_from({'seed': len(calls)})
+    out = place(lua.table_from(dict(x=0, y=30, z=height, preview=True, frontage_node=10)),
+                lua.globals().TERMINAL_CON, parameters, lua.table())
+    assert out['ok']
+    assert len(calls) == 1
+    assert lua.globals().previews == 3
+    assert out['position']['z'] == pytest.approx(1)
+    assert out['foundationHeightAdjustment'] == pytest.approx(0)
+    alignment = out['frontage']['heightAlignment']
+    assert alignment['delta'] == pytest.approx(1-height)
+    assert alignment['roadHeightPreserved']
+    assert lua.globals().observedProposal['constructionsToAdd'][1]['params']['seed'] == 1
+    assert lua.globals().nodes[10]['position']['z'] == 1
 
 
 @pytest.mark.parametrize('command,extra', [('preview_station', dict(cargo=True,size=1)),

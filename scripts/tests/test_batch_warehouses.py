@@ -110,7 +110,7 @@ async def test_unknown_commit_is_never_replayed(tmp_path, failure):
     restarted = FakeRunner(tmp_path)
     with pytest.raises(batch.StopBatch):
         await restarted.run()
-    assert restarted.calls == []
+    assert restarted.calls == [('save', 'before')]  # No global history gate, still no replay.
     # Read-only verification reconciles an actually built warehouse.
     verify = FakeRunner(tmp_path, "verify")
     verify.constructed = True

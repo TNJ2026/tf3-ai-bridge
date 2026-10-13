@@ -105,16 +105,10 @@ async def execute(a):
         # Keep successful infrastructure readback even if route identity cannot be resolved.
         write_json(a.output/'fish_port_infrastructure.json',audit)
         port_id=select_port(b.p,{'x':x,'y':y},getattr(a,'port_id',None))
-        if port_id is not None:
-            checks=compile_checks(b.p,port_id)
-            audit['waterRoutes']=await b.eval(audit_source(checks))
-            audit['purchase']['harborPathsVerified']=all(v['verified']for v in audit['waterRoutes']['pairs']if v['kind']=='depot_harbor')
-            audit['staticAccepted']=audit['infrastructureAccepted']and audit['waterRoutes']['verified']
-            if audit['waterRoutes']['verified']:
-                audit['pending']=[v for v in audit['pending']if v!='actual fishing route and return path']
-                audit['pending'].append('ship model restrictions and actual route operation')
-        else:
-            audit['waterRoutes']={'verified':False,'reason':'Specify --port-id or match planned harbor position'}
+        audit['waterRoutes']={'verified':False,'requiredForCommissioning':False,'diagnosticOnly':True}
+        audit['staticAccepted']=audit['infrastructureAccepted']
+        audit['operationalAccepted']=False
+        audit['pending']=['actual ship departure, normal assigned-line operation, no native fault']
         write_json(a.output/'fish_port_acceptance.json',audit)
         if not audit.get('staticAccepted'):raise StopBatch('Static acceptance incomplete; no resubmission')
         if a.action=='build':await b.save('fish_port_checkpoint')

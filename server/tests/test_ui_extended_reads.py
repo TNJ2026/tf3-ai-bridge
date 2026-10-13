@@ -25,6 +25,12 @@ def query(tmp_path,request):
     elif command in ('list_prospections','get_prospections'):lua.execute(PROSPECTIONS)
     elif command=='get_loans':lua.execute(LOANS)
     elif command=='get_subventions':lua.execute(SUBVENTIONS)
+    elif command=='get_notifications':
+        from test_notifications import FIXTURE
+        lua.execute(FIXTURE)
+    elif command=='get_town_cargo_supply':
+        from test_town_cargo_supply import SETUP
+        lua.execute(SETUP)
     elif command=='get_town_cargo_needs':lua.execute(TOWN_CARGO)
     elif command=='get_vehicle_motion':
         lua.execute("""
@@ -59,10 +65,10 @@ def query(tmp_path,request):
  ('find_nearby',{'x':0,'y':0,'radius':100,'limit':2}),
  ('list_facility_resources',{'limit':2}),('list_industry_resources',{}),
  ('list_prospections',{}),('get_prospections',{}),('get_loans',{}),
- ('get_subventions',{'assess':True}),('get_terrain_operation_capabilities',{}),
+ ('get_subventions',{'assess':True}),('get_notifications',{}),('get_terrain_operation_capabilities',{}),
  ('get_terrain_grid',{'x':0,'y':0,'spacing':10,'columns':2,'rows':2,'limit':4}),
  ('get_map_data',{}),('get_terrain_tile',{'tile_x':-1,'tile_y':-1}),
- ('get_town_cargo_needs',{'town':100}),
+ ('get_town_cargo_needs',{'town':100}),('get_town_cargo_supply',{'town':100}),
 ])
 def test_extended_read_event(query,command,args):
     response=query(command,args)

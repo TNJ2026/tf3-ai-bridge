@@ -234,10 +234,56 @@ def test_strict_graph_schema(change):
     with pytest.raises(ValueError):validate_build_arguments('preview_road_graph',{'graph':g,'isolated_test':True})
 
 
-def test_no_explicit_isolation_never_dispatches(tmp_path):
+@pytest.mark.parametrize('isolation', [None, False, True])
+def test_current_map_preview_and_single_commit(tmp_path, isolation):
     c=graph_channel(tmp_path)
-    r=c.query('preview_road_graph',{'graph':{'nodes':[node(700,700),node(800,700)],'edges':[edge(0,1)]},'isolated_test':False})
-    assert not r['ok'] and c.lua.globals().dispatches==0 and c.lua.globals().previewCalls==0
+    args={'graph':{'nodes':[node(700,700),node(800,700)],'edges':[edge(0,1)]}}
+    if isolation is not None:
+        args['isolated_test']=isolation
+    r=c.query('preview_road_graph',args)
+    assert r['ok'] and r['result']['nativePreviewPassed'],r
+    assert 'nativeAcceptance' not in r['result']
+    assert c.lua.globals().dispatches==0 and c.lua.globals().previewCalls==1
+    result=commit(c,r['result'])
+    assert result['ok'] and result['result']['verified'],result
+    assert c.lua.globals().dispatches==1
+    assert not commit(c,r['result'])['ok'] and c.lua.globals().dispatches==1
+
+
+def test_current_map_capabilities_do_not_claim_blanket_acceptance(tmp_path):
+    c=graph_channel(tmp_path)
+    r=c.query('get_validation_state',{})
+    assert r['ok'],r
+    for name in ('roadGraph','roadJunctionBranch'):
+        capability=r['result'][name]
+        assert capability['isolatedTestRequired'] is False
+        assert capability['mapUsePolicy']=='current-map-authorized-v1'
+        assert 'nativeAcceptance' not in capability
+    assert c.lua.globals().dispatches==0
+
+
+def test_steep_new_road_reaches_native_preview_instead_of_fixed_grade_rejection(tmp_path):
+    c=graph_channel(tmp_path)
+    p=preview(c,{'nodes':[node(700,700,2),node(800,700,22)],'edges':[edge(0,1)]})
+    assert p['nativePreviewPassed'] and c.lua.globals().previewCalls==1
+    assert c.lua.globals().dispatches==0
+
+
+def test_steep_replacement_cannot_bypass_missing_native_preview(tmp_path):
+    c=graph_channel(tmp_path)
+    base=preview(c,{'nodes':[node(700,700),node(800,700)],'edges':[edge(0,1)]})
+    built=commit(c,base)['result'];old=built['edges'][0]
+    calls=c.lua.globals().previewCalls
+    r=c.query('preview_road_graph',{'graph':{'nodes':[{'split':{'edge':old,'param':.5}},node(750,800,42)],'edges':[edge(0,1)]}})
+    assert not r['ok'] and 'separate native-preview' in str(r)
+    assert c.lua.globals().previewCalls==calls and c.lua.globals().dispatches==1
+
+
+def test_highway_geometry_does_not_reject_20_percent_before_native_preview():
+    lanes=[dict(width=3.5,offset=0,forward=True,transportModes={'2':True,'3':True,'4':True})]
+    plan=paired_highway([dict(x=0,y=0,z=2),dict(x=100,y=0,z=22)],HIGHWAY,lanes)
+    assert plan['nativePreviewPassed'] is False
+    assert all(abs(e['tangent0']['z'])>0 for e in plan['graph']['edges'])
 
 
 def test_implicit_existing_node_materializes_all_old_turns(tmp_path):

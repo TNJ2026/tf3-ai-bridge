@@ -243,14 +243,13 @@ def test_load_fraction_limits_capacity(game,fraction):
         assert a['lines'][0]['capacityPerYear']==pytest.approx(20*fraction*1461/276)
 
 
-def test_native_blocks_other_accept_until_confirmation(game):
+def test_native_accepts_other_available_uid_without_reconciliation(game):
     lua,call=game
     call('accept_subvention',uid=7001)
-    with pytest.raises(Exception,match='requires reconciliation'):
-        call('accept_subvention',uid=7002)
-    assert len(events(lua))==1
-    lua.execute('SUB.activeSubventions[1]=table.remove(SUB.proposedSubventions,1)')
     call('accept_subvention',uid=7002)
+    assert len(events(lua))==2
+    with pytest.raises(Exception,match='already submitted'):
+        call('accept_subvention',uid=7001)
     assert len(events(lua))==2
 
 

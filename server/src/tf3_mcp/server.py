@@ -62,26 +62,133 @@ async def bind_headless_session(expected_session: str) -> dict:
 
 
 @mcp.tool()
-async def execute_vehicle_batch(batch_id: str, operations: list[dict], expected_session: str) -> dict:
+async def load_game(slot: str, expected_session: str) -> dict:
+    """Explicitly load a previously headless-verified local save, without GUI input.
+    Requires user authorization to load/roll back, a paused native-load-v1 receiver
+    and no pending. Saves current progress to a new independent backup first.
+    Checks target hash, publishes once, waits for a new session and independently
+    verifies checkpoint time/player/world, map identity and native pending.
+    Unknown results are never retried; use verify_loaded_game with the original ID.
+    Invalidates cached plans; never starts monitoring or changes game speed.
+    First installation still requires loading the updated bridge once.
+    """
+    _map_cache.invalidate()
+    return await headless_client().load_game(slot, expected_session)
+
+
+@mcp.tool()
+async def verify_loaded_game(request_id: str) -> dict:
+    """Read back one previously submitted load; never issues another load or clears unknown pending."""
+    _map_cache.invalidate()
+    return await headless_client().verify_loaded_game(request_id)
+
+
+@mcp.tool()
+async def reconcile_subvention_rejection(request_id: str, expected_session: str) -> dict:
+    """Resolve a proven legacy subvention rejection before native dispatch.
+    Requires the loaded reconciliation-v1 adapter and matching engine pending.
+    Validates durable error, workflow, identity and absence of submission; retains
+    the original failure. Never accepts an opportunity, retries, resets quota,
+    resolves unknown older submissions, reloads or resumes monitoring.
+    """
+    return await headless_client().reconcile_subvention_rejection(request_id, expected_session)
+
+
+@mcp.tool()
+async def reset_operation_quota(expected_session: str, expected_round: int, expected_used: int) -> dict:
+    """Explicitly open another 256-operation round without reloading the game.
+    Read get_validation_state first and supply its exact session/round/used.
+    Refuses unresolved host/engine requests and stale quota values. Retains all
+    historical request IDs, invalidates old previews, and independently verifies
+    the new round. Never retries work, reloads, or starts monitoring. Requires
+    the quota-v1 receiver to be loaded; does not revive an old stopped receiver.
+    """
+    return await headless_client().reset_operation_quota(expected_session, expected_round, expected_used)
+
+
+@mcp.tool()
+async def execute_vehicle_batch(batch_id: str, operations: list[dict], expected_session: str,
+                                use_recovery: bool = False) -> dict:
     """Execute 1..64 authorized single-vehicle operations, persisted before dispatch.
     Each item is {command,arguments}. buy_vehicles requires count=1. A later
     assign_vehicles may use purchase_index instead of vehicles to reference an
     earlier purchase. Same batch_id reads its journal, NEVER repeats or resumes it.
     Stops on unknown, partial result or readback mismatch. This does not authorize
-    purchases, new spending or resuming a stopped batch; review budget first."""
+    purchases, new spending or resuming a stopped batch; review budget first.
+    use_recovery explicitly wraps buy/assign/stopped batches in the persistent
+    recovery ledger and requires recovery_control(checkpoint) first."""
+    if use_recovery:
+        from .recovery_workflows import execute_vehicle_batch as guarded_batch
+        return await guarded_batch(_configured_recovery(), batch_id, operations, expected_session)
     from .headless_workflows import VehicleBatches
     return await VehicleBatches(headless_client(), bridge().dir).execute(batch_id, operations, expected_session)
+
+
+def _configured_recovery():
+    import json
+    from pathlib import Path
+    from .recovery_adapter import HeadlessRecoveryAdapter
+    from .recovery_runtime import RecoveryRuntime
+    configured = os.environ.get('TF3_RECOVERY_CONFIG')
+    if not configured:
+        raise ToolError('TF3_RECOVERY_CONFIG is not configured; no game operation sent')
+    config = json.loads(Path(configured).read_text(encoding='utf-8'))
+    directory = Path(config['stateDirectory'])
+    if not directory.is_absolute():
+        raise ToolError('Recovery stateDirectory must be absolute')
+    return RecoveryRuntime(HeadlessRecoveryAdapter(headless(), directory, config), directory, bridge().dir)
+
+
+@mcp.tool()
+async def recovery_control(action: str = 'status', incident_id: str | None = None,
+                           allow_launch: bool = False, max_lost_game_time: float = 0,
+                           max_launches: int = 1, allow_unknown_loss: bool = False) -> dict:
+    """Opt-in one-shot checkpoint/recovery; never starts a monitor or retries work.
+
+    Configure TF3_RECOVERY_CONFIG with a local JSON file containing stateDirectory,
+    gameExecutable, bounded audit queries and an independently validated bootstrap.
+    status is local-only. checkpoint saves a paused, audited independent backup.
+    recover_once only launches after a confirmed process exit, explicit rollback
+    authorization and bounded loss evidence; checks the native loaded map on later
+    calls. Unknown/pending operations remain blocked. Does not kill hung games,
+    clear pending, auto-develop interfaces or claim long-term simulation safety.
+    allow_unknown_loss separately authorizes discarding an unmeasurable amount
+    of progress since the pinned checkpoint; defaults to false.
+    """
+    import json
+    from pathlib import Path
+    from .recovery_runtime import RecoveryRuntime
+    if action not in ('status', 'checkpoint', 'recover_once'):
+        raise ToolError('Unknown recovery action')
+    configured = os.environ.get('TF3_RECOVERY_CONFIG')
+    if not configured:
+        if action == 'status':
+            return dict(configured=False, monitorEnabled=False, launchEnabled=False)
+        raise ToolError('TF3_RECOVERY_CONFIG is not configured; no game operation sent')
+    config = json.loads(Path(configured).read_text(encoding='utf-8'))
+    directory = Path(config['stateDirectory'])
+    if not directory.is_absolute():
+        raise ToolError('Recovery stateDirectory must be absolute')
+    if action == 'status':
+        return RecoveryRuntime(None, directory, directory).read()
+    runtime = _configured_recovery()
+    if action == 'checkpoint':
+        return await runtime.checkpoint()
+    return await runtime.recover_once(incident_id, allow_launch=allow_launch,
+                                     max_lost_game_time=max_lost_game_time, max_launches=max_launches,
+                                     allow_unknown_loss=allow_unknown_loss)
 
 
 @mcp.tool()
 async def operations_monitor(action: str = 'status', interval_seconds: float = 60) -> dict:
     """Read-only new-channel monitoring: status | run_once | start | stop.
     Never starts implicitly. start requires user monitoring authorization.
-    Collects map/towns, paged vehicle/line identities, finance and opportunities;
-    reports changed faults/opportunities only, skips busy rounds, no catch-up.
+    Collects account balance, native income if exposed and debt, plus map identity;
+    reports changed account risks only, skips busy rounds, no catch-up.
     Stops on errors. No construction, purchases, speed changes, saves or acceptance.
     Writes local rounds; this tool does not itself deliver desktop notifications.
-    Platform occupancy and full recipe/stock/age chain diagnosis remain unknown."""
+    Cash floor is 1500000. Current finance adapter has no income history;
+    cash changes are never reported as income. No historical business reconciliation."""
     global _operations_monitor
     from .headless_workflows import OperationsMonitor
     if _operations_monitor is None:
@@ -122,7 +229,11 @@ async def send_headless_request(command: str, arguments: dict | None = None,
     save_game(slot, overwrite=False) only; requires a loaded save-capable receiver,
     verified expected_session and paused game. read_headless_result waits for a
     new nonempty stable .sav file, not just the native requested acknowledgement.
-    Existing slots require explicit overwrite=True. Never automatically reloads.
+    Existing slots require explicit overwrite=True. kind=load accepts load_game
+    with slot and backup_save, both previously verified by this channel; requires
+    fresh paused-state/pending reads and a recent current-session backup. Prefer
+    the named load_game tool, which creates that backup and verifies the new session.
+    Low-level load results require verify_loaded_game before further writes.
     Same whitelist as
     prepare_ui_read_request (kind=read) or prepare_ui_build_request (kind=build).
     Engine operations require expected_session from a fresh headless_status plus
@@ -365,6 +476,19 @@ async def list_prospections() -> dict:
 
 
 @mcp.tool()
+async def get_notifications(include_history: bool = False, offset: int = 0, limit: int = 100) -> dict:
+    """Read native notification-bar candidates, or all retained entries with include_history.
+
+    Current means membership in native history and not dismissed, matching the popup-list
+    selector; actual rendered pixels/hover state are unknown. Unsupported text renderers
+    retain raw params and explicit unknowns. Never dismisses, accepts, or updates notifications.
+    Pagination is live, not a snapshot. Requires notificationsVersion=1.
+    """
+    return await _call("get_notifications", _engine=True, include_history=include_history,
+                       offset=offset, limit=limit)
+
+
+@mcp.tool()
 async def get_prospections() -> dict:
     """Read pending native prospecting progress and available success/failure notification history.
     Missing history or disappeared tasks do not prove success. Refresh map after a discovery."""
@@ -530,6 +654,22 @@ async def build_airfield(x: float, y: float, z: float, rotation: float = 0,
 
 
 @mcp.tool()
+async def build_water_facility(kind: str, x: float, y: float, z: float, rotation: float = 0, harbor_size: str | None = None) -> dict:
+    """Preview a new native water starter: harbor, shipyard or maintenance.
+    Harbor defaults to one small pier (SMALL_SHIP); harbor_size="large" selects
+    one medium pier (SHIP/SMALL_SHIP). Size applies only to harbor; shipyard and maintenance
+    are separate module-free native facilities. Explicit water elevation is required.
+    Returns a single-use commit_facility token after native collision/permission checks.
+    No roads, warehouse, lines or vehicles are built. Configuration readback does not
+    certify navigation or shared stock. Requires waterHarborLayoutVersion=1 for harbor;
+    no legacy or arbitrary Lua fallback.
+    """
+    extra = {'harbor_size': harbor_size} if harbor_size is not None else {}
+    return await _call("build_water_facility", _engine=True, _timeout=BUILD_TIMEOUT, preview=True,
+                       kind=kind, x=x, y=y, z=z, rotation=rotation, **extra)
+
+
+@mcp.tool()
 async def commit_facility(preview_token: str) -> dict:
     """Apply a facility preview ONCE with strict native error checking and config readback.
     Have a pre-construction save; use an isolated test save for unvalidated replacement layouts.
@@ -675,10 +815,14 @@ _autoaccept = SubventionAutoAccept(_subvention_call, lambda: bridge().dir / "sub
 async def accept_subvention(uid: int, expected_to_deliver: int | None = None, expected_target: int | None = None,
                             expected_upfront_money: int | None = None, expected_failure_money: int | None = None) -> dict:
     """Accept ONE proposed subvention by uid, exactly like the in-game Accept button. Only with user
-    authorization. The game pays the upfront money and applies failure penalties on timeout.
+    authorization. An explicit instruction to accept is sufficient: resolve the current UID with
+    get_subventions(assess=False) if needed, then call directly. No prior contract reconciliation,
+    network assessment or additional approval is required. The game pays the upfront money and
+    applies failure penalties on timeout.
     Expected_* values are re-checked before sending; changed terms abort. The native script applies
     the accept on its next update: confirm with get_subventions. Never resend; a second accept for the
-    same uid is refused until the bridge reloads."""
+    same uid is refused, including persisted submissions after reload. This does not bypass an
+    unrelated transport-level pending request or make an unknown send safe to repeat."""
     if uid in _autoaccept.attempted:
         raise ToolError("auto-accept already attempted this uid; inspect get_subventions")
     expect = {k: v for k, v in dict(toDeliver=expected_to_deliver, target=expected_target,
@@ -766,6 +910,20 @@ async def send_to_depot(vehicle: int, sell_on_arrival: bool = False) -> dict:
 async def set_vehicle_stopped(vehicle: int, stopped: bool = True) -> dict:
     """Stop or restart a vehicle, like the stop button in the vehicle window."""
     return await _call("set_vehicle_stopped", vehicle=vehicle, stopped=stopped)
+
+
+@mcp.tool()
+async def get_industry_bonuses(industry: int) -> dict:
+    """Read one current industry's worker and cargo bonuses and internal transfer targets.
+    Citizens must reach the industry internal passenger transfer; booster goods must
+    reach its internal cargo transfer/stock. Nearby warehouse inventory is not delivery.
+    Reports native worker capacity, threshold, visitor window/counts, applied multiplier,
+    and potential multiplier only when safely available. Cargo input alternatives map
+    stock indices to actual cargo IDs/names/quantities; configuration is not activation.
+    Unknown fields stay explicit. Read-only: no routing, purchases, speed/RNG changes.
+    Requires loaded industryBonusesVersion=1; accepts industry entity, not construction ID.
+    """
+    return await _call("get_industry_bonuses", _engine=True, industry=industry)
 
 
 @mcp.tool()
@@ -870,6 +1028,17 @@ async def get_map_data(layer: str | None = None, offset: int = 0, limit: int = 5
 async def set_game_speed(speed: int) -> dict:
     """Set the simulation speed multiplier. 0 pauses; 1, 2, 4 are the usual in-game speeds."""
     return await _call("set_game_speed", speed=speed)
+
+
+@mcp.tool()
+async def get_town_cargo_supply(town: int) -> dict:
+    """Read native city-panel cargo supply, demand and ratios without building scans.
+
+    Requires loaded townCargoSupplyVersion=2. Includes per-land-use display
+    rounding, raw values and cargo-ID totals. Zero demand has no ratio.
+    Native temporal window is unspecified; these are not annual delivery counts.
+    """
+    return await _call("get_town_cargo_supply", _engine=True, town=town)
 
 
 @mcp.tool()
@@ -1347,8 +1516,49 @@ async def build_station(
 
 
 @mcp.tool()
+async def preview_depot_removal(entity: int) -> dict:
+    """Preview removal of ONE owned empty road depot (construction or depot ID).
+    Requires paused simulation. Checks returning vehicles and native removal scope;
+    no makeProposalData on removal proposals. Structural preview, not native acceptance.
+    Returns a session-bound one-use 60-second token. Maintenance coverage will change.
+    """
+    return await _call("preview_depot_removal", entity=entity)
+
+
+@mcp.tool()
+async def commit_depot_removal(preview_token: str) -> dict:
+    """Save/verify an independent backup, then remove the previewed empty road depot ONCE.
+    Requires user demolition authorization, paused game and headless depotRemovalVersion=1.
+    No vehicle sale, unrelated road removal or collision override. Unknown results retain
+    the mutation block: use get_depot_removal_operation, NEVER repeat commit.
+    """
+    import uuid
+    if transport_mode() != 'headless':
+        raise ToolError('Guarded depot removal requires the headless channel')
+    status = await headless_client().status()
+    if status['receiver'].get('depotRemovalVersion') != 1 or status.get('pending'):
+        raise ToolError('Depot removal v1 receiver without pending request required; nothing submitted')
+    slot = 'tf3_depot_before_' + uuid.uuid4().hex
+    saved = await _call('save_game', slot=slot, overwrite=False)
+    if saved.get('verified') is not True:
+        raise ToolError('Backup not verified; depot removal was not submitted')
+    return await _call('commit_depot_removal', preview_token=preview_token, backup_save=slot)
+
+
+@mcp.tool()
+async def get_depot_removal_operation(operation_id: str) -> dict:
+    """Read/reconcile one depot removal from its preview token; never dispatch removal.
+    Checks target disappearance, adjacent roads and vehicle preservation. Different
+    session/player, partial removal or altered dependencies retain the unresolved block.
+    """
+    return await _call('get_depot_removal_operation', operation_id=operation_id)
+
+
+@mcp.tool()
 async def bulldoze(entity: int) -> dict:
-    """Remove a construction (depot, station group or station, or any construction id) or a street
+    """Legacy FILE channel only; unsupported on headless. For empty road depots use
+    preview_depot_removal/commit_depot_removal/get_depot_removal_operation.
+    Remove a construction (depot, station group or station, or any construction id) or a street
     segment, using the game's own removal. Roadside stops can't be removed by script yet."""
     return await _call("bulldoze", _timeout=BUILD_TIMEOUT, entity=entity)
 
@@ -1381,8 +1591,8 @@ async def list_road_structures() -> dict:
 
 @mcp.tool()
 async def preview_road_graph(graph: dict, isolated_test: bool = False) -> dict:
-    """Preview explicit road topology (zero-based node indices). Experimental adapter requires
-    an isolated save and isolated_test=True. Supports endpoints, split points, intersections,
+    """Preview explicit road topology (zero-based node indices) on the current map.
+    isolated_test is a legacy compatibility flag, not required. Supports endpoints, split points, intersections,
     one-way lanes, ramps and explicit bridge/tunnel resources. Splits get structural checking
     only because native removal previews can assert. v37 adds opted-in stop-object
     and structure splits, explicit crossing_resource nodes, and junction signal plans.
@@ -1399,7 +1609,8 @@ async def preview_dual_highway(centerline: list[dict], template: str, median_gap
                                drive_side: str = "right", isolated_test: bool = False) -> dict:
     """Create and preview two opposite one-way highway carriageways from native lane widths.
     Centerline contains explicit xyz points, 10-200 m spans. Returns four independent ports;
-    connecting ramps must be explicitly designed. Does not build or prove vehicle access."""
+    connecting ramps must be explicitly designed. isolated_test is a legacy compatibility flag,
+    not required. Does not build or prove vehicle access."""
     from .road_graph import paired_highway
     native = await _call("get_network_template", template=template)
     plan = paired_highway(centerline, native['resource'], native['laneConfigs'], median_gap, drive_side)
@@ -1409,7 +1620,7 @@ async def preview_dual_highway(centerline: list[dict], template: str, median_gap
 
 @mcp.tool()
 async def commit_road_graph(preview_token: str, backup_save: str) -> dict:
-    """Submit an isolated-test road graph exactly once; backup_save identifies the verified
+    """Submit a road graph on the current map exactly once; backup_save identifies the verified
     preconstruction save. Unknown/partial outcome stays pending: never resend. Static verified
     does not establish directed vehicle paths or long-term simulation safety."""
     return await _call("commit_road_graph", _timeout=BUILD_TIMEOUT, preview_token=preview_token, backup_save=backup_save)

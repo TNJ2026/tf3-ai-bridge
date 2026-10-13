@@ -38,9 +38,57 @@ def test_finalize_synchronizes_and_detects_stale_artifacts_without_game(tmp_path
     with pytest.raises(ValueError,match='Stale derived'):validate_pack(tmp_path)
 
 
-def test_finalize_refuses_execution_ledger(tmp_path):
-    make_pack(tmp_path);(tmp_path/'ledger.json').write_text('{}','utf8')
-    with pytest.raises(ValueError,match='reconcile'):finalize(tmp_path)
+def test_finalize_preserves_execution_ledger_without_business_reconciliation(tmp_path):
+    make_pack(tmp_path)
+    ledger='{"items":{"old":{"status":"needs_reconciliation","attempts":1}}}'
+    (tmp_path/'ledger.json').write_text(ledger,'utf8')
+    assert finalize(tmp_path)['passed']
+    assert (tmp_path/'ledger.json').read_text('utf8')==ledger
+
+
+def test_regenerated_gates_do_not_restore_roundtrip_or_forecast_requirements(tmp_path):
+    make_pack(tmp_path)
+    (tmp_path/'acceptance_gates.json').write_text('{"operatingForecastReviewRequired":true}','utf8')
+    finalize(tmp_path)
+    gates=json.loads((tmp_path/'acceptance_gates.json').read_text('utf8'))
+    assert gates['operatingForecastReviewRequired'] is False
+    assert gates['phaseGates']['operation']['checks']==[
+        'actual departure from base','normal assigned-line operation','no native line/path fault']
+    assert 'compatible purchase base' in gates['phaseGates']['beforeFleet']['checks']
+    report=json.loads((tmp_path/'report_plan.json').read_text('utf8'))
+    assert '实际驶离基地' in report['phases'][-1]['gate']
+    assert '持续模拟' not in report['phases'][-1]['gate']
+    operations=(tmp_path/'OPERATIONS.md').read_text('utf8')
+    assert '基础模式' in operations and '| 货流 | 行程秒 |' not in operations
+    assert '缺少班次数据' not in operations
+    assert '数据缺口' not in (tmp_path/'BLOCKERS.md').read_text('utf8')
+
+
+def test_finalize_analysis_switch_is_persisted_and_basic_does_not_reuse_detailed_report(tmp_path):
+    make_pack(tmp_path)
+    assert finalize(tmp_path, 'detailed')['passed']
+    p=json.loads((tmp_path/'network_plan.json').read_text('utf8'))
+    assert p['operationsAnalysis']=='detailed'
+    assert '| 货流 | 行程秒 |' in (tmp_path/'OPERATIONS.md').read_text('utf8')
+    assert finalize(tmp_path, 'basic')['passed']
+    assert '基础模式' in (tmp_path/'OPERATIONS.md').read_text('utf8')
+    assert '| 货流 | 行程秒 |' not in (tmp_path/'OPERATIONS.md').read_text('utf8')
+    assert validate_pack(tmp_path)['passed']
+
+
+def test_ship_fleet_requires_water_depot_and_preserves_report_title(tmp_path):
+    p=make_pack(tmp_path)
+    p['line_specs'][0]['mode']='SHIP'
+    p['report_title']='Panjin furniture supply proposal'
+    policy=json.loads((tmp_path/'fleet_manifest.json').read_text('utf8'))
+    policy['planDigest']='x'
+    with pytest.raises(StopBatch,match='depot'):
+        fleet_rows(policy,p,'x')
+    next(f for f in p['facilities'] if f['id']=='D')['kind']='water_depot'
+    assert fleet_rows(policy,p,'x')[0]['depot']=='D'
+    (tmp_path/'network_plan.json').write_text(json.dumps(p),'utf8')
+    assert finalize(tmp_path)['passed']
+    assert json.loads((tmp_path/'report_plan.json').read_text('utf8'))['title']==p['report_title']
 
 def test_staged_network_acceptance_remains_a_line_prerequisite(tmp_path):
     p=make_pack(tmp_path);p['line_specs'][0]['prerequisite_jobs']=['VERIFY_NETWORK']

@@ -33,6 +33,16 @@ def validate_save_arguments(command: str, arguments: dict | None) -> dict:
     return dict(arguments)
 
 
+def validate_load_arguments(command: str, arguments: dict | None) -> dict:
+    if command != 'load_game' or not isinstance(arguments, dict) or set(arguments) != {'slot', 'backup_save'}:
+        raise ValueError('Expected load_game slot and backup_save only')
+    for slot in arguments.values():
+        validate_save_arguments('save_game', {'slot': slot})
+    if arguments['slot'] == arguments['backup_save']:
+        raise ValueError('Load target and current-progress backup must be different')
+    return dict(arguments)
+
+
 def validate_arguments(command: str, arguments: dict | None) -> dict:
     if command not in ALLOWED:
         raise ValueError("Supported read-only commands: " + ", ".join(sorted(ALLOWED)))
@@ -50,6 +60,11 @@ def validate_arguments(command: str, arguments: dict | None) -> dict:
             raise ValueError(f"Invalid or unsupported argument: {key}")
     return dict(arguments)
 BUILD_SCHEMAS = {
+    "get_industry_bonuses": {"industry":"entity"},
+    "preview_depot_removal": {"entity":"entity"},
+    "commit_depot_removal": {"preview_token":"token", "backup_save":"save_slot"},
+    "get_depot_removal_operation": {"operation_id":"token"},
+    "get_town_cargo_supply": {"town":"entity"},
     "get_town_population": {"town":"entity"},
     "get_town_building_stats": {"ids":"entity_ids"},
     "get_component_collection": {"id":"entity", "component":"text", "field":"text", "offset":"offset", "limit":"page_limit"},
@@ -66,6 +81,7 @@ BUILD_SCHEMAS = {
     "get_facility_inventory": {"entity":"entity"},
     "preview_test_removal": {"entity":"entity"}, "commit_test_removal": {"preview_token":"token"},
     "get_validation_state": {},
+    "reset_operation_quota": {"expected_round":"offset", "expected_used":"offset", "expected_count":"offset"},
     "preview_flatten_terrain": {"bounds":"bounds", "target_height":"number", "max_height_change":"number", "max_edge_grade":"number", "transition_width":"number"},
     "commit_flatten_terrain": {"preview_token":"token", "backup_save":"save_slot"}, "get_terrain_operation": {"operation_id":"token"},
     "get_stock_activity": {"stock_list":"entity", "cargo":"entity"}, "get_town_deliveries": {"town":"entity"},
@@ -112,6 +128,7 @@ BUILD_SCHEMAS = {
     "list_facility_resources": {"kind":"text", "search":"text", "offset":"offset", "limit":"page_limit"},
     "list_industry_resources": {},
     "list_prospections": {}, "get_prospections": {},
+    "get_notifications": {"include_history":"bool", "offset":"offset", "limit":"page_limit"},
     "get_loans": {}, "get_subventions": {"assess":"bool"},
     "get_town_cargo_needs": {"town":"entity"},
     "get_terrain_operation_capabilities": {},
@@ -133,12 +150,16 @@ BUILD_SCHEMAS = {
     "reconcile_road_rejection": {"request_id": "request_id"},
     "reconcile_network_rejection": {"request_id": "request_id"},
     "reconcile_town_cargo_rejection": {"request_id": "request_id"},
+    "reconcile_subvention_rejection": {"request_id": "request_id"},
     "reconcile_depot_rejection": {"request_id": "request_id"},
+    "reconcile_assignment_rejection": {"request_id": "request_id", "vehicle": "entity", "line": "entity"},
+    "reconcile_facility_rejection": {"request_id": "request_id"},
     "get_entity": {"id": "entity", "components":"component_names"},
     "get_vehicle_motion": {"vehicle": "entity", "resolve_native_path": "bool"},
     "list_street_types": {"filter": "text"},
     "survey_build_site": {"x": "number", "y": "number"},
     "list_facilities": {},
+    "build_water_facility": {"x": "number", "y": "number", "z": "number", "rotation": "number", "kind": "water_facility_kind", "harbor_size": "harbor_size"},
     "build_warehouse": {"x": "number", "y": "number", "z": "number", "rotation": "number", "module_count": "modules"},
     "build_facility": {"source_entity": "entity", "x": "number", "y": "number", "z": "number", "rotation": "number"},
     "commit_facility": {"preview_token": "token"},
@@ -154,6 +175,10 @@ def validate_build_arguments(command, arguments):
         raise ValueError("Unsupported UI construction command or arguments")
     schema = BUILD_SCHEMAS[command]
     required = ({"x", "y", "z"} if command.startswith("build_") else set(schema))
+    if command == "build_water_facility":
+        required.add("kind")
+        if 'harbor_size' in arguments and arguments.get('kind') != 'harbor':
+            raise ValueError('harbor_size only applies to harbor')
     if command == "preview_rail_station":
         required.discard("cargo")
     if command == "preview_network":
@@ -161,6 +186,8 @@ def validate_build_arguments(command, arguments):
         required.discard("reset_empty_rail_ports")
         required.discard("reset_empty_road_ports")
         required.discard("connect_road_junctions")
+    if command == "preview_road_graph":
+        required.discard("isolated_test")
     if command == "list_street_types":
         required = set()
     if command == "get_vehicle_motion":
@@ -170,7 +197,7 @@ def validate_build_arguments(command, arguments):
         if ("offset" in arguments or "limit" in arguments) and arguments.get("include_entities") is not True:
             raise ValueError("Entity pagination requires include_entities=true")
     optional_required = {'get_entity':{'id'}, 'begin_snapshot':{'snapshot_kind'}, 'get_facility_config':{'entity'}, 'get_facility_access':{'entity'}, 'get_stock_cargo':{'stock_list','cargo'}, 'preview_headquarters_access':{'town','road','x','y','z'}, 'get_facility_layout':{'entity'}, 'preview_flatten_terrain':{'bounds','target_height'}, 'preview_industry':{'resource','x','y'}, 'preview_town_cargo_needs':{'town'}, 'preview_loan':{'action'}, 'list_network_templates':set(), 'list_multiple_units':set(), 'list_facility_resources':set(), 'list_map_entities':set(),
-                         'get_terrain_grid':set(), 'get_map_data':set(), 'get_subventions':set()}
+                         'get_terrain_grid':set(), 'get_map_data':set(), 'get_subventions':set(), 'get_notifications':set()}
     required = optional_required.get(command, required)
     if command in ('preview_depot', 'preview_station'):
         required.discard('frontage_node')
@@ -207,6 +234,8 @@ def validate_build_arguments(command, arguments):
                      and all(valid_road_endpoint(v) and 'node' not in v for v in value))
                  or (kind == "number" and type(value) in (int, float) and math.isfinite(value))
                  or (kind=='depot_carrier' and isinstance(value,str) and value in {'ROAD','TRAM','RAIL','WATER'})
+                 or (kind=='water_facility_kind' and isinstance(value,str) and value in {'harbor','shipyard','maintenance'})
+                 or (kind=='harbor_size' and isinstance(value,str) and value in {'small','large'})
                  or (kind=='specialization' and isinstance(value,str) and value in {'universal','liquid','bulk','flatbed','goods'})
                  or (kind=='station_size' and type(value) is int and 1<=value<=3)
                  or (kind=='tracks' and type(value) is int and 1<=value<=4)
@@ -278,6 +307,9 @@ class UiLogRequests:
         ticket['instruction'] = 'Headless save only; no panel dispatch. Read the original ID until file verification completes.'
         return ticket
 
+    def prepare_load(self, path: Path, command: str, arguments: dict) -> dict:
+        return self._prepare(path, command, validate_load_arguments(command, arguments))
+
     def _prepare(self, path, command, arguments):
         if len(self.pending) >= 256:
             raise ValueError("Session request limit reached")
@@ -293,7 +325,7 @@ class UiLogRequests:
         return {"id": request_id, "input": f"{request_id} {command}{suffix}",
                 "status": "prepared_not_sent", "instruction": "Enter input in AI Bridge query and click Send once; then read this ID. No automatic UI dispatch."}
 
-    def read(self, request_id: str) -> dict:
+    def read(self, request_id: str, *, allow_load_transition=False) -> dict:
         if request_id not in self.pending:
             raise ValueError("Unknown request ID; do not resubmit an unknown outcome")
         path, inode, offset, command, anchor, created = self.pending[request_id]
@@ -308,7 +340,9 @@ class UiLogRequests:
                 raise ValueError("Log rewritten; request outcome unknown")
             f.seek(offset)
             text = f.read(16 * 1024 * 1024).decode("utf-8", errors="replace")
-        if any("Game is ready" in line or "[tf3_mcp_bridge] started in gui state" in line
+        if allow_load_transition and command != 'load_game':
+            raise ValueError('Only an explicit load request may cross a session transition')
+        if not allow_load_transition and any("Game is ready" in line or "[tf3_mcp_bridge] started in gui state" in line
                for line in text.splitlines()):
             raise ValueError("Game reloaded; old request outcome requires reconciliation, do not replay")
         parts, expected = {}, None

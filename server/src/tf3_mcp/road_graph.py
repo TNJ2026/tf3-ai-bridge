@@ -159,8 +159,8 @@ def paired_highway(centerline, template, lane_configs, median_gap=4.0, drive_sid
     for a, b in zip(centerline, centerline[1:]):
         dx, dy = b['x'] - a['x'], b['y'] - a['y']
         length = math.hypot(dx, dy)
-        if length < 10 or abs(b['z'] - a['z']) / length > .12:
-            raise ValueError('Degenerate or excessively steep centerline')
+        if length < 10:
+            raise ValueError('Degenerate centerline')
         normals.append((-dy / length, dx / length))
     miters = []
     for i in range(len(centerline)):

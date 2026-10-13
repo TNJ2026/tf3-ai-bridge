@@ -1507,6 +1507,101 @@ commands.list_map_entities = function(args)
 		consistency=cached and "fixed entity ids; fields are live; deleted entries marked missing" or "live; entity changes between pages can shift offsets"}
 end
 
+-- Bounded read-only industry bonus view. Never calls RNG-mutating potential-boost helper.
+do
+ local function read(id,name)
+  local ct=componentTypes()[name]
+  if ct==nil then return nil end
+  return api.engine.getComponent(id,ct)
+ end
+ commands.get_industry_bonuses=function(args)
+  local id=args.industry
+  assert(type(id)=='number' and id>=0 and id%1==0 and api.engine.entityExists(id),'industry entity unavailable')
+  local ind=assert(read(id,'INDUSTRY'),'entity is not an industry; use current industry ID')
+  local stock=assert(read(ind.stockList,'STOCK_LIST'),'industry stock list unavailable')
+  local con=assert(read(ind.construction,'CONSTRUCTION'),'industry construction unavailable')
+  local gameTime=read(api.engine.util.getWorld(),'GAME_TIME').gameTime
+  local capacity=read(id,'PERSON_CAPACITY')
+  local w={available=capacity~=nil,deliveryTarget=id,deliveryKind='industry_internal_passenger_transfer',
+   arrivalRequirement='citizens arriving at this industry via transport lines; not seats, nearby-stop unloads or stored cargo',
+   observationAvailable=false,potentialMultiplierAvailable=false}
+  local util=ug_require('::/industries/industry_productivity_util.tl')
+  if capacity then
+   w.capacity=capacity.capacity;w.requiredFraction=util.RequiredWorkersFractionForBoost
+   w.requiredVisitors=math.max(1,math.ceil(capacity.capacity*w.requiredFraction))
+   w.windowGameTime=util.workersTimeIntervalMax
+   w.currentMultiplier=stock.modifiers and stock.modifiers.productivity
+   if type(w.currentMultiplier)=='number' then w.active=w.currentMultiplier>1 end
+   local sid=api.engine.system.gameScriptSystem.getEntityForGameScript('::/industries/industry_workers.gs')
+   local script=sid and sid>=0 and read(sid,'GAME_SCRIPT') or nil
+   if script and script.state_native then
+    local entry=script.state_native:findPath({'industriesState',id})
+    local state=entry and entry:asTable() or nil
+    local visitors=state and state.lastVisitors or {}
+    w.observationAvailable=true;w.recordedVisitors=#visitors;w.pendingVisitors=state and state.pendingVisitors and #state.pendingVisitors or 0
+    w.inWindowVisitors=0
+    for _,v in ipairs(visitors)do
+     assert(type(v.time)=='number','invalid native worker visitor time')
+     if v.time>=gameTime-w.windowGameTime then w.inWindowVisitors=w.inWindowVisitors+1 end
+    end
+    w.thresholdMet=w.recordedVisitors>=w.requiredVisitors
+    w.countScope='native lastVisitors used by worker script; expiry/pending may await native update'
+   else w.observationUnavailableReason='native worker game-script state unavailable; count is unknown' end
+   local md=con.persistentMetadata
+   local potential=md and md.workersBoostFactor
+   if type(potential)=='number' then w.potentialMultiplier=potential;w.potentialMultiplierAvailable=true;w.potentialSource='construction persistentMetadata.workersBoostFactor'
+   elseif w.active then w.potentialMultiplier=w.currentMultiplier;w.potentialMultiplierAvailable=true;w.potentialSource='currently applied worker multiplier'
+   else w.potentialUnavailableReason='not stored in metadata; seeded native fallback mutates RNG and is not called by this read-only endpoint' end
+  end
+  local cargo={};local stocks=stock.stocks
+  assert(#stock.rules<=32,'too many production rules for bounded bonus query')
+  for ruleIndex,rule in ipairs(stock.rules)do
+   if rule.booster then
+    local inputs={};assert(#rule.input<=16,'too many input alternatives')
+    for alternative,vector in ipairs(rule.input)do
+     local items={}
+     for stockIndex,quantity in pairs(vector)do
+      if quantity>0 then
+       local st=assert(stocks[stockIndex],'booster input stock index unavailable')
+       local ct=st.cargoType;local resource=api.res.cargoTypeRep.getName(ct)
+       local data=api.res.cargoTypeRep.get(ct)
+       items[#items+1]={stockIndex=stockIndex,cargo=ct,resource=resource,name=data and data.name,
+        quantity=quantity,stockCapacity=st.capacity}
+      end
+     end
+     table.sort(items,function(a,b)return a.stockIndex<b.stockIndex end)
+     inputs[#inputs+1]={alternative=alternative,items=items}
+    end
+    local rd=stock.ruleDatas and stock.ruleDatas[ruleIndex]
+    cargo[#cargo+1]={ruleIndex=ruleIndex,booster=true,boostFactor=rule.boostFactor,capacity=rule.capacity,
+     consumptionFactor=rule.consumptionFactor,inputAlternatives=inputs,deliveryTarget=id,stockList=ind.stockList,
+     deliveryKind='industry_internal_cargo_transfer',activeKnown=false,
+     lastApplyDecayFactor=rd and rd.lastApplyDecayFactor,
+     scope='native rule configuration; quantity is per rule, not annual demand; activation not inferred from configuration'}
+   end
+  end
+  local stops={};local seen={}
+  local function station(sid)
+   if seen[sid] then return end;seen[sid]=true
+   local st=read(sid,'STATION');if not st then return end
+   assert(#st.terminals<=32,'too many industry terminals')
+   local ts={}
+   for index,t in ipairs(st.terminals)do
+    ts[#ts+1]={nativeCollectionIndex=index,tag=t.tag,passengersLoad=t.passengersLoad,passengersUnload=t.passengersUnload,
+     cargoLoad=t.cargoLoad,cargoUnload=t.cargoUnload,transportModes=toPlain(t.transportModes),vehicleNodeId=toPlain(t.vehicleNodeId,0,nil,"NodeId")}
+   end
+   stops[#stops+1]={station=sid,terminals=ts}
+  end
+  station(id)
+  assert(#con.stations<=32,'too many industry stations')
+  for _,sid in ipairs(con.stations)do station(sid)end
+  return {industry=id,construction=ind.construction,stockList=ind.stockList,resource=con.fileName,
+   gameTime=gameTime,workers=w,cargoBonuses=cargo,transfer={targetEntity=id,stations=stops,
+    stationResolved=#stops>0,scope='industry internal transfer target; select actual compatible terminal before routing; nearby warehouse is not automatic delivery'},
+   readOnly=true,industryBonusesVersion=1}
+ end
+end
+
 commands.get_map_info = function()
 	local bounds = api.engine.terrain.getBoundingBox()
 	-- Without a heightmap, makeMapFromGame leaves tile sizes at zero: use bounds instead.
@@ -1561,6 +1656,116 @@ commands.get_terrain_grid = function(args)
 		offset=offset, count=#heights, heights=heights, water=water, mode=mode,
 		hasMore=hasMore, nextOffset=hasMore and (offset+#heights) or nil,
 		order="row-major; x varies fastest", consistency="live; not a terrain snapshot"}
+end
+
+-- Native notification inspection. No GUI hooks, events, dismissals, or sim updates.
+do
+ local base="::/game_mechanics/notifications/types/"
+ local function render(n)
+  local p,s=n.params or {},n.simParams
+  if not s then return nil,"native simParams unavailable" end
+  local lang=ug_require("::/scripts/lang_util.tl")
+  if n.type==base.."town_rating_warning.script" then
+   local town=p.entities and p.entities[1] and p.entities[1].entity
+   local name=s.mapping and s.mapping[town]
+   local ratingName,icon
+   for _,r in ipairs(ug_require("::/game_mechanics/towns/town_util.tl").GetRatings())do
+    if p.param and p.param.key==r.key then ratingName=r.name;icon=r.icon;break end
+   end
+   if not name or not ratingName then return nil,"town/rating label unavailable" end
+   return {title=_("Town Rating Very Poor"),icon=icon,
+    description=lang.format(_("The rating \"{what}\" of {town} is very poor and the residents are furious. Action should be taken immediately."),{town=name,what=ratingName})}
+  elseif n.type==base.."industry_spawn.script" then
+   local name=s.mapping and p.entity and s.mapping[p.entity.entity]
+   if not name then return nil,"industry label unavailable" end
+   return {title=_("New Industry Founded"),
+    description=lang.format(_("A visionary entrepreneur smells an opportunity for profit and has founded {industry}."),{industry=name})}
+  elseif n.type==base.."subvention_notification.script" then
+   -- Only the reviewed native, read-only formatters. Never load arbitrary mod GUI code.
+   local allowed={
+    ["::/game_mechanics/subventions/deliver_passengers/deliver_passengers.res"]=true,
+    ["::/game_mechanics/subventions/deliver_cargo/deliver_cargo.res"]=true}
+   if not allowed[p.id] then return nil,"subvention formatter not reviewed" end
+   local rid=api.res.genericRep.find(p.id)
+   if not rid or rid<0 then return nil,"subvention resource unavailable" end
+   local desc=api.res.genericRep.get(rid).data
+   -- Verify resource indirection too, before executing a formatter.
+   local entryName=p.id:match("/([^/]+)%.res$")
+   if desc.scriptFile~=p.id:gsub("%.res$",".script").."@"..entryName then return nil,"subvention script differs from reviewed resource" end
+   local util=ug_require("::/scripts/util.tl")
+   local script=util.useFn(desc.scriptFile)
+   local status=({"Proposed","Active","Complete","Failed"})[p.status]
+   if not status or not s.mapping then return nil,"subvention status/mapping unavailable" end
+   local data=script.getNotificationData(p.id,p.params,status,"None",s.mapping)
+   data.title=p.status==1 and _("Subsidy Available") or p.status==2 and _("Subsidy in Progress")
+    or p.status==3 and _("Subsidy Effect Active") or "Invalid Status"
+   return data
+  end
+  return nil,"GUI-only or unsupported text renderer; raw native parameters retained"
+ end
+ commands.get_notifications=function(args)
+  if args.include_history~=nil then assert(type(args.include_history)=="boolean","include_history must be boolean") end
+  local offset=pageInteger(args.offset,0,0,2147483647,"offset")
+  local limit=pageInteger(args.limit,100,1,1024,"limit")
+  local id=api.engine.system.gameScriptSystem.getEntityForGameScript("::/game_mechanics/notifications/notifications.gs")
+  assert(id and id>=0,"native notifications script unavailable")
+  local c=assert(getComponent(id,"GAME_SCRIPT"),"native notification component unavailable")
+  local state=c.state
+  if not state and c.state_native then state=c.state_native:asTable() end
+  assert(state and state.notifications and state.history,"native notification state/history unavailable")
+  local membership,historyMissing={},{}
+  for _,key in ipairs(state.history)do
+   membership[key]=true
+   if not state.notifications[key] then historyMissing[#historyMissing+1]=key end
+  end
+  local selected,currentCount={},0
+  for key,e in pairs(state.notifications)do
+   assert(type(key)=="number","unsupported native notification key")
+   -- This is exactly the native popup-list selector, not expired/TTL inference.
+   local current=membership[key]==true and not e.dismissed
+   if current then currentCount=currentCount+1 end
+   if args.include_history==true or current then selected[#selected+1]={id=key,entry=e,current=current} end
+  end
+  table.sort(selected,function(a,b)
+   local at,bt=a.entry.timestamp or 0,b.entry.timestamp or 0
+   if at~=bt then return at<bt end
+   return a.id<b.id
+  end)
+  local items={}
+  for i=offset+1,math.min(#selected,offset+limit)do
+   local v=selected[i];local e=v.entry;local n=e.notification
+   local row={id=v.id,timestamp=e.timestamp,inHistory=membership[v.id]==true,popupEligible=v.current,
+    dismissed=e.dismissed==true,expired=e.expired==true,tracked=e.tracked==true,
+    dismissedRecorded=e.dismissed~=nil,expiredRecorded=e.expired~=nil,trackedRecorded=e.tracked~=nil,
+    persisting=toPlain(e.persisting),screenVisibleKnown=false,textKnown=false}
+   if n then
+    row.type=n.type;row.params=toPlain(n.params);row.simParams=toPlain(n.simParams)
+    row.autoDismissDuration=n.autoDismissDuration;row.subventionUid=n.params and n.params.uid
+    local categoryOk,category=pcall(function()
+     return ug_require("::/game_mechanics/notifications/notification_util.tl").getGuiTypeFromNotificationType(n.type)
+    end)
+    row.category=categoryOk and category or "Unknown"
+    row.categoryKnown=categoryOk and category~=nil and category~="Unknown"
+    local ok,data,reason=pcall(render,n)
+    if ok and type(data)=="table" then
+     row.title=data.title;row.description=data.description;row.icon=data.icon
+     row.textKnown=type(data.title)=="string" and type(data.description)=="string"
+     row.textSource="native template/formatter; no React hooks"
+    else row.textUnavailableReason=ok and reason or tostring(data) end
+   else row.textUnavailableReason="native notification payload missing" end
+   items[#items+1]=row
+  end
+  local more=offset+#items<#selected
+  return {notificationsVersion=1,readOnly=true,scriptEntity=id,player=api.engine.util.getPlayer(),
+   gameTime=getComponent(api.engine.util.getWorld(),"GAME_TIME").gameTime,
+   scope=args.include_history==true and "retained" or "current",items=items,total=#selected,
+   currentCount=currentCount,offset=offset,hasMore=more,nextOffset=more and offset+#items or nil,
+   historyComplete=#historyMissing==0,missingHistoryIds=historyMissing,
+   ignored=toPlain(state.ignored),nativePaused=state.paused==true,
+   consistency="live; pages may change between calls",screenVisibleKnown=false,
+   visibilityDefinition="Native popup list: id in history and not dismissed. GUI render/hover/layout state is not observed.",
+   rawSerialization="Standard bridge toPlain bounds apply; current list membership is enumerated before serialization."}
+ end
 end
 
 -- Large component collections can be retrieved without the serializer's 2000-item cap.
@@ -1731,7 +1936,7 @@ end
 local ENGINE_EVENT = "tf3_mcp_request"
 local ENGINE_EVENT_ID = "tf3_mcp"
 local MAX_ENGINE_RESPONSES = 8
-local ENGINE_COMMANDS = {}   -- filled by the construction commands below
+local ENGINE_COMMANDS = {get_notifications=true,get_industry_bonuses=true}   -- filled by the construction commands below
 local pendingEngine = {}     -- request id -> wall clock when forwarded
 local ENGINE_TIMEOUT = 25.0
 local terrainStateBind = nil
@@ -1775,7 +1980,7 @@ local function handleEngineEvent(state, param)
 	if prospectionStateBind and req.cmd and req.cmd:find("prospection", 1, true) then
 		checkpointProspection = prospectionStateBind(state, req.facilityEpoch)
 	end
-	if facilityStateBind and ({preview_facility_module=true,preview_facility_parameter=true,build_facility=true,configure_facility=true,build_headquarters=true,build_warehouse=true,build_helipad=true,build_heliport=true,build_airfield=true,commit_facility=true})[req.cmd] then
+	if facilityStateBind and ({preview_facility_module=true,preview_facility_parameter=true,build_facility=true,configure_facility=true,build_headquarters=true,build_warehouse=true,build_helipad=true,build_heliport=true,build_airfield=true,build_water_facility=true,commit_facility=true})[req.cmd] then
 		facilityStateBind(state, req.facilityEpoch)
 	end
 	if terrainStateBind and req.cmd and req.cmd:find("terrain", 1, true) then
@@ -2727,7 +2932,7 @@ local frontageAdapter={}
 -- Preserve native rejection details without another engine request or weakening
 -- the guard. Bound diagnostics before JSON encoding so errors remain readable.
 frontageAdapter.fail=function(message,stage,check,context)
- local remaining=48
+ local remaining=96
  local function short(s,n)
   if #s<=n then return s end
   local cut=n+1
@@ -2807,7 +3012,34 @@ do
   end
   return snapshot,canonical(snapshot)
  end
- frontageAdapter.bind=function(proposal,node,carrier)
+ frontageAdapter.geometrySummary=function(pd,target,carrier)
+  local out={networkCount=0,edgeCount=0,endpointCount=0,rows={},truncated=false}
+  if not pd or not pd.entity2tn then out.networkAvailable=false;return out end
+  out.networkAvailable=true
+  local seen={}
+  for network,net in pairs(pd.entity2tn)do
+   out.networkCount=out.networkCount+1
+   for _,e in ipairs(net.edges)do
+    out.edgeCount=out.edgeCount+1
+    local modes=e.transportModes
+    local compatible=(carrier=="TRAM" and modes[5] and modes[6]) or (carrier=="ROAD" and modes[2] and modes[3] and modes[4])
+    local geometry=e.geometry and e.geometry.cubicSpline
+    if geometry then for k=1,2 do
+     local id=e.conns[k].entity;local p=geometry.pos[k]
+     local z=k==1 and e.geometry.height.x or e.geometry.height.y
+     local reason=not compatible and "mode" or id>=0 and "existing" or (id>=-4 and id<0) and "reserved_in_joint"
+       or (math.abs(p.x-target.x)>=.05 or math.abs(p.y-target.y)>=.05) and "xy" or math.abs(z-target.z)>.01 and "height_alignment" or "match"
+     local row=string.format("net=%s id=%s x=%.3f y=%.3f z=%.3f dx=%.3f dy=%.3f reason=%s",tostring(network),tostring(id),p.x,p.y,z,p.x-target.x,p.y-target.y,reason)
+     if not seen[row]then seen[row]=true;out.endpointCount=out.endpointCount+1
+      if #out.rows<12 then out.rows[#out.rows+1]=row else out.truncated=true end
+     end
+    end end
+   end
+  end
+  table.sort(out.rows)
+  return out
+ end
+ frontageAdapter.bind=function(proposal,node,carrier,alignFoundation)
   carrier=carrier or "ROAD";assert(carrier=="ROAD" or carrier=="TRAM","Unsupported frontage carrier")
   local before=frontageAdapter.inspect(node);local target=before.position
   if carrier=="TRAM" then
@@ -2821,9 +3053,18 @@ do
     assert(forward and backward,"Tram frontage requires both directions of electric tram lanes on each road")
    end
   end
-  local port,position=-1,target
+  -- Discovery cannot retain a coincident existing node or add a coincident
+  -- placeholder: native proposal generation can fail before returning geometry.
+  -- Use a displaced preview-only placeholder. Its ID is above both replacement
+  -- segment IDs, so removing it in the final proposal does not renumber ports.
+  local first=before.edges[1]
+  local outer=first.node0==node and first.position1 or first.position0
+  local dx,dy=outer.x-target.x,outer.y-target.y;local span=math.sqrt(dx*dx+dy*dy)
+  assert(span>=1,"Frontage segment too short for geometry discovery")
+  local shift=math.min(2,span*.1)
+  local port,position=-2,{x=target.x+dx/span*shift,y=target.y+dy/span*shift,z=target.z}
   local edges,remove,remap={}, {}, {}
-  local nextId=-2
+  local nextId=-3
   local function allocate()local id=nextId;nextId=nextId-1;return id end
   for _,row in ipairs(before.edges)do
    local old=getComponent(row.id,"BASE_EDGE");local e=api.type.SegmentAndEntity.new();e.entity=allocate();e.type=0
@@ -2855,11 +3096,14 @@ do
   end
   proposal.streetProposal.edgesToRemove=remove;proposal.streetProposal.nodesToRemove={node}
   proposal.streetProposal.edgesToAdd=edges;proposal.streetProposal.nodeConfigsToRemove=configRemove;proposal.streetProposal.nodeConfigsToAdd=configAdd
-  local placeholder=api.type.NodeAndEntity.new();placeholder.entity=-1;placeholder.comp.position=V3(target.x,target.y,target.z)
+  local placeholder=api.type.NodeAndEntity.new();placeholder.entity=port
+  placeholder.comp.position=V3(position.x,position.y,position.z)
   proposal.streetProposal.nodesToAdd={placeholder}
-  -- Include replacements before discovering generated IDs, as in the reviewed joint workflow.
   local check,pd=previewProposal(proposal)
-  if not pd or check.critical then
+  -- This first proposal intentionally contains an unbound construction port.
+  -- Its placement verdict is not the verdict for the bound proposal. Use only
+  -- returned geometry here; never authorize construction from this check.
+  if not pd or not pd.entity2tn then
    frontageAdapter.fail("Native construction geometry unavailable","discover_port",check,{node=node,target=target,carrier=carrier,replacedEdges=remove})
   end
   local found={}
@@ -2868,11 +3112,8 @@ do
     or (carrier=="ROAD" and e.transportModes[2] and e.transportModes[3] and e.transportModes[4])
    if matching and e.geometry and e.geometry.cubicSpline then
     for k=1,2 do local id=e.conns[k].entity;local p=e.geometry.cubicSpline.pos[k]
-     if id<0 and id~=-1 and id~=-2 and id~=-3 and math.abs(p.x-target.x)<.05 and math.abs(p.y-target.y)<.05 then
+     if id<-4 and math.abs(p.x-target.x)<.05 and math.abs(p.y-target.y)<.05 then
       local z=k==1 and e.geometry.height.x or e.geometry.height.y
-      if math.abs(z-target.z)>.25 then
-       frontageAdapter.fail("Native entrance height differs from existing road; redesign","port_height",check,{node=node,target=target,nativeNode=id,nativeHeight=z,allowedDifference=.25})
-      end
       if found[id] then assert(math.abs(found[id].z-z)<.01,"Ambiguous entrance height") end
       found[id]={x=p.x,y=p.y,z=z}
      end
@@ -2881,11 +3122,37 @@ do
   end end
   local port,position,count=nil,nil,0;for id,p in pairs(found)do port=id;position=p;count=count+1 end
   if count~=1 then
-   frontageAdapter.fail("Native entrance does not uniquely match frontage; redesign placement","unique_port",check,{node=node,target=target,matchingPorts=found,count=count})
+   -- A construction-only control has no road-removal proposal and never commits.
+   -- Keep diagnostics separate: a collision in the control cannot approve the bound proposal.
+   local control,controlData
+   if proposal.constructionsToAdd and #proposal.constructionsToAdd>0 then
+    local unbound=api.type.SimpleProposal.new();unbound.constructionsToAdd=proposal.constructionsToAdd
+    control,controlData=previewProposal(unbound)
+   end
+   frontageAdapter.fail("Native entrance does not uniquely match frontage; redesign placement","unique_port",check,
+    {node=node,target=target,count=count,joint=frontageAdapter.geometrySummary(pd,target,carrier),
+     control=control and {critical=control.critical,messages=control.messages,collisions=control.collisions,
+      geometry=frontageAdapter.geometrySummary(controlData,target,carrier)} or nil})
+  end
+  -- Keep the existing road at its observed height. A placement guess is not
+  -- grounds to move the live road or accept a disconnected port. Rebuild the
+  -- construction-only input at the measured correction once, then rediscover
+  -- its real port and independently preview the final bound proposal.
+  if math.abs(position.z-target.z)>.01 then
+   if not alignFoundation then
+    frontageAdapter.fail("Native entrance needs foundation alignment or did not converge","port_height",check,
+     {node=node,target=target,nativeNode=port,nativeHeight=position.z,tolerance=.01})
+   end
+   local delta=target.z-position.z
+   local corrected=alignFoundation(delta)
+   local bound,metadata,verdict=frontageAdapter.bind(corrected,node,carrier)
+   metadata.heightAlignment={applied=true,delta=delta,originalNativeHeight=position.z,
+    roadHeight=target.z,finalNativeHeight=metadata.nativePosition.z,roadHeightPreserved=true,iterations=1}
+   return bound,metadata,verdict
   end
   for _,e in ipairs(edges)do
-   if e.comp.node0==-1 then e.comp.node0=port;e.comp.position0=V3(position.x,position.y,position.z)end
-   if e.comp.node1==-1 then e.comp.node1=port;e.comp.position1=V3(position.x,position.y,position.z)end
+   if e.comp.node0==-2 then e.comp.node0=port;e.comp.position0=V3(position.x,position.y,position.z)end
+   if e.comp.node1==-2 then e.comp.node1=port;e.comp.position1=V3(position.x,position.y,position.z)end
   end
   proposal.streetProposal.nodesToAdd={};proposal.streetProposal.edgesToAdd=edges
   local finalCheck,finalData=previewProposal(proposal)
@@ -2936,7 +3203,9 @@ do
   -- Unknown/mixed assets remain blocked. Only positively identified tree groups
   -- may be cleared by the ordinary native construction proposal.
 
-  return proposal,{roadNode=node,nativeEntranceNode=port,nativePosition=position,replacedEdges=remove,connectionsVerified=false},finalCheck
+  return proposal,{roadNode=node,nativeEntranceNode=port,nativePosition=position,replacedEdges=remove,
+   discoveryCritical=check.critical==true,discoveryMessages=check.messages,
+   connectionsVerified=false},finalCheck
  end
 end
 local function placeConstruction(args, fileName, params, extra)
@@ -2946,17 +3215,18 @@ local function placeConstruction(args, fileName, params, extra)
 	local z = groundZ
 	if args.z~=nil then
 		assert(args.frontage_node~=nil and (fileName==DEPOT_FILES.ROAD or fileName==DEPOT_FILES.TRAM or fileName==TERMINAL_CON),"Explicit height requires road/tram frontage")
-		assert(type(args.z)=="number" and args.z==args.z and math.abs(args.z-groundZ)<=2,"Frontage foundation height adjustment exceeds 2 metres; redesign")
+		assert(type(args.z)=="number" and args.z==args.z and math.abs(args.z)<math.huge,"Frontage foundation height must be finite")
 		z=args.z
 	end
 	local angle = resolveFacing(args, x, y)
 	local offset = ENTRANCE_OFFSET[fileName]
+	local nativeParams = params()
 	local function makeProposal()
 		local proposal = api.type.SimpleProposal.new()
 		local ce = api.type.SimpleProposal.ConstructionEntity.new()
 		ce.fileName = fileName
 		ce.transf = transfAt(x, y, z, angle)
-		ce.params = params()
+		ce.params = nativeParams
 		if type(args.name) == "string" then ce.name = args.name end
 		ce.playerEntity = api.engine.util.getPlayer()
 		proposal.constructionsToAdd = { ce }
@@ -2973,7 +3243,12 @@ local function placeConstruction(args, fileName, params, extra)
 	local check
 	if args.frontage_node~=nil then
 		assert(fileName==DEPOT_FILES.ROAD or fileName==DEPOT_FILES.TRAM or fileName==TERMINAL_CON,"Direct frontage supports road/tram depots and modular street stations only")
-		prepared,out.frontage,check=frontageAdapter.bind(prepared,args.frontage_node,fileName==DEPOT_FILES.TRAM and "TRAM" or "ROAD")
+		prepared,out.frontage,check=frontageAdapter.bind(prepared,args.frontage_node,fileName==DEPOT_FILES.TRAM and "TRAM" or "ROAD",function(delta)
+			assert(delta==delta and math.abs(delta)<math.huge,"Invalid native height correction")
+			z=z+delta
+			return makeProposal()
+		end)
+		out.position=roundPos({x=x,y=y,z=z});out.foundationHeightAdjustment=z-groundZ
 		out.expectedEntrance=out.frontage.nativePosition
 	end
 	check = check or previewProposal(prepared)
@@ -3081,6 +3356,9 @@ do
      parameters=definitions(d),module_type=field(d,"type"),
      construction_support=cat=="headquarters" and "build_headquarters" or (name=="::/stations/air/airfield.con" and "build_airfield" or name=="::/stations/air/helipad.con" and "build_helipad" or name=="::/stations/air/heliport.con" and "build_heliport" or (cat=="warehouse" and kind=="construction" and "build_warehouse" or (kind=="construction" and supported and "clone_existing_layout" or "dedicated_or_unsupported"))),
      template_script=field(field(d,"createTemplateScript"),"fileName")}
+    if kind=="construction" and ({["::/stations/water/harbor_modular.con"]=true,["::/depots/water/water_depot.con"]=true,["::/depots/water/water_maint_station.con"]=true})[name] then
+     row.construction_support="build_water_facility";row.liveAcceptance="pending"
+    end
     rows[#rows+1]=row
    end
   end
@@ -3864,6 +4142,77 @@ do
   out.externalConnectionsBuilt=false;out.serviceVerified=false
   return out
  end
+ -- Bounded native water starters. Mirror installed native template slot encoding;
+ -- never execute a data() asset script in the game global environment.
+ local function waterScriptState(script)
+  -- Native script descriptors may expose wrapper methods/opaque identities.
+  -- Only the documented descriptor fields define the construction recipe.
+  return {fileName=script.fileName,params=copy(script.params)}
+ end
+ local function waterFacilityState(args)
+  local size=args.harbor_size or "small"
+  assert(size=="small" or size=="large","harbor_size must be small or large")
+  assert(args.kind=="harbor" or args.harbor_size==nil,"harbor_size only applies to harbor")
+  local kinds={harbor={"::/stations/water/harbor_modular.con","::/stations/water/harbor_modular.script@updateFn","Harbors"},
+   shipyard={"::/depots/water/water_depot.con","::/depots/water/water_depot.script@updateFn","Depots"},
+   maintenance={"::/depots/water/water_maint_station.con","::/depots/water/water_maint_station.script@updateFn","Depots"}}
+  local spec=kinds[args.kind];assert(spec,"water facility kind must be harbor, shipyard or maintenance")
+  local d=lookup("construction",spec[1]);assert(available(d)==true,"water facility unavailable")
+  local update=field(d,"updateScript")
+  assert(update and update.fileName==spec[2],"unrecognized native water facility update script")
+  if args.kind=="maintenance" then assert(currentYear()>=1900,"water maintenance unavailable before 1900") end
+  local company=ug_require("::/game_mechanics/company/company_util.tl")
+  local cache=company.getConstructionDisableCacheData({{spec[1],d.metadata,spec[3]}})
+  local disabled=company.getConstructionDisableReason(spec[1],d.metadata,cache)
+  assert(not disabled or disabled.reason==nil,"water facility locked by native permission")
+  local modules={}
+  if args.kind=="harbor" then
+   local function add(x,y,face,name,typ)
+    local record,actual=moduleRecord("::/stations/water/"..name..".module")
+    assert(actual==typ,"unrecognized water starter module type")
+    modules[1000000*(x+100)+100*(y+100)+face]=record
+   end
+   if size=="small" then
+    -- Native createTemplateFn, smallterminals=1; no existing source required.
+    for _,x in ipairs({0,-1}) do add(x,1,50,"pedestrian_entrance","pedestrian_entrance") end
+    add(-1,0,53,"passenger_dock_25_25","water_module_25_25")
+    add(0,-2,4,"passenger_dock_50_12","water_module_50_12")
+    add(0,-3,36,"small_pier","water_pier_50_12")
+   else
+    -- Native createTemplateFn, largeterminals=1: one medium (SHIP) pier.
+    for _,x in ipairs({1,-2,0,-1}) do add(x,1,50,"pedestrian_entrance","pedestrian_entrance") end
+    add(0,-3,22,"passenger_dock_100_50","water_module_100_50")
+    add(0,-4,12,"passenger_dock_100_25","water_module_100_25")
+    add(0,-6,44,"medium_pier","water_pier_100_12")
+   end
+  else
+   local template=field(d,"createTemplateScript")
+   assert(template and template.fileName==spec[2]:gsub("@updateFn$","@createTemplateFn"),"unrecognized water depot template")
+  end
+  api.engine.forEachEntityWithComponent(function(id)
+   local c=getComponent(id,"CONSTRUCTION")
+   if c.fileName==spec[1] then local p=constructionPosition(id)
+    assert(not p or dist2d(p,args)>=5,"water facility already exists at site; inspect before building")
+   end
+  end,componentTypes().CONSTRUCTION)
+  return {entity=api.engine.util.getWorld(),resource=spec[1],world=api.engine.util.getWorld(),player=api.engine.util.getPlayer(),
+   kind=args.kind,modules=copy(modules),update=waterScriptState(update),metadata=copy(d.metadata)}
+ end
+ commands.build_water_facility=function(args)
+  for _,k in ipairs({"x","y","z"}) do roadNumber(args[k],k) end
+  roadNumber(args.rotation or 0,"rotation")
+  assert(api.engine.terrain.isValidCoordinate(V2(args.x,args.y)),"water facility outside map")
+  local before=waterFacilityState(args)
+  local params={seed=1,year=currentYear(),modules=copy(before.modules)}
+  local check=facilityPreview(buildProposal({resource=before.resource,params=params,args=args}))
+  if not check.ok or #check.collisions>0 then return {preview=true,blocked=true,check=check} end
+  local out=issue("water_starter",before,params,args,check)
+  out.resource=before.resource;out.waterFacilityVersion=1;out.waterFacilityFingerprintVersion=2;out.waterHarborLayoutVersion=1
+  out.harborSize=args.kind=="harbor" and (args.harbor_size or "small") or nil
+  out.expectedService=args.kind=="harbor" and (out.harborSize=="small" and "SMALL_SHIP passenger/cargo terminal" or "SHIP/SMALL_SHIP passenger/cargo terminal") or args.kind=="shipyard" and "purchase depot" or "maintenance pool 12, radius 1400"
+  out.externalConnectionsBuilt=false;out.serviceVerified=false;out.navigationVerified=false
+  return out
+ end
  commands.commit_facility=function(args)
   local t=tickets[args.preview_token];tickets[args.preview_token]=nil
   checkpoint() -- consume before validation/submission, including failed commits
@@ -3876,7 +4225,8 @@ do
   elseif t.mode=="warehouse" then before=warehouseState(t.args)
   elseif t.mode=="helipad" then before=helipadState(t.args)
   elseif t.mode=="heliport" then before=heliportState(t.args)
-  elseif t.mode=="airfield" then before=airfieldState(t.args) else before=inspect(t.entity) end
+  elseif t.mode=="airfield" then before=airfieldState(t.args)
+  elseif t.mode=="water_starter" then before=waterFacilityState(t.args) else before=inspect(t.entity) end
   if canonical(before)~=t.snapshot then error("facility changed since preview; inspect and preview again",0) end
   local proposal;local existing={}
   api.engine.forEachEntityWithComponent(function(id)
@@ -3907,6 +4257,11 @@ do
    for k,v in pairs(t.params) do if k~="modules" and canonical(after.params[k])~=canonical(v) then matches=false end end
    for slot in pairs(after.params.modules or {}) do if not (t.params.modules or {})[slot] then matches=false end end
    out.verified=matches and after.owner==api.engine.util.getPlayer() and math.abs(after.position.x-pos.x)<0.1 and math.abs(after.position.y-pos.y)<0.1 and math.abs(after.position.z-pos.z)<0.1
+   if t.mode=="water_starter" then
+    out.configurationVerified=out.verified
+    out.serviceVerified=false;out.navigationVerified=false;out.externalConnectionsBuilt=false
+    out.acceptanceRequired="Read terminal cargo/modes or depot purchase/maintenance service, then directed navigation and shared stock; configuration alone is insufficient"
+   end
    if t.mode=="headquarters" then
     out.town=tryField(function()return api.engine.system.streetConnectorSystem.getConstructionClosestTown(id) end)
     out.verified=out.verified and out.town==t.entity
@@ -4105,7 +4460,7 @@ do
   end
   for _,name in ipairs({"list_industry_resources","preview_industry","commit_industry","get_industry_operation"}) do ENGINE_COMMANDS[name]=true end
  end
- for _,name in ipairs({"list_facility_resources","list_facilities","get_facility_config","configure_facility","build_facility","build_headquarters","build_warehouse","build_helipad","build_heliport","build_airfield","commit_facility"}) do ENGINE_COMMANDS[name]=true end
+ for _,name in ipairs({"list_facility_resources","list_facilities","get_facility_config","configure_facility","build_facility","build_headquarters","build_warehouse","build_helipad","build_heliport","build_airfield","build_water_facility","commit_facility"}) do ENGINE_COMMANDS[name]=true end
 end
 
 -- City cargo kinds: optimistic preview, one-shot commit, independent readback.
@@ -4828,6 +5183,25 @@ do
 		return out
 	end
 
+ local function confirmAcceptance(row,player)
+  if row.acceptedTime==nil or not ({Active=true,Complete=true,Failed=true})[row.status] then return end
+  local sent=submitted[tostring(row.uid)]
+  if not sent then return end
+  -- UID alone is insufficient. Older submissions may recover identity from their operation.
+  local matches=false
+  if sent.player==player and sent.resource==row.resource and sent.spawnTime==row.spawnTime then matches=true end
+  for _,op in pairs(operations) do
+   if op.uid==row.uid and op.player==player and op.resource==row.resource and op.spawnTime==row.spawnTime then
+    op.acceptanceEvidence={uid=row.uid,player=player,resource=row.resource,spawnTime=row.spawnTime,acceptedTime=row.acceptedTime,status=row.status}
+    op.phase="confirmed";matches=true
+   end
+  end
+  if matches then
+   sent.resolved=true;sent.phase="confirmed"
+   sent.acceptanceEvidence={uid=row.uid,player=player,resource=row.resource,spawnTime=row.spawnTime,acceptedTime=row.acceptedTime,status=row.status}
+   checkpoint()
+  end
+ end
 	commands.get_subventions = function(args)
 		local state, entity = readState()
 		local t, dms, yms = now(), dayMs(), yearMs()
@@ -4837,6 +5211,7 @@ do
 		for _, l in ipairs(LISTS) do
 			for _, v in ipairs(listOf(state[l[1]])) do
 				local row = describe(v, l[2], t, dms, yms)
+                confirmAcceptance(row,api.engine.util.getPlayer())
 				if args.assess ~= false and l[2] == "Proposed" then row.assessment = assess(row, yms) end
 				local op = submitted[tostring(v.uid)]
 				if op then row.submission = {gameTime=op.gameTime, callbackAccepted=op.callbackAccepted, dispatchError=op.dispatchError} end
@@ -4851,15 +5226,8 @@ do
 		if type(uid) ~= "number" or uid % 1 ~= 0 then error("uid must be an integer from get_subventions", 0) end
 		if submitted[tostring(uid)] then error("accept already submitted for this uid; inspect get_subventions and never resend", 0) end
 		local state = readState()
-		-- One outstanding native event at a time, also for manual callers.
-		local confirmed = {}
-		for _, key in ipairs({"activeSubventions", "completedSubventions", "failedSubventions"}) do
-			for _, v in ipairs(listOf(state[key])) do confirmed[tostring(v.uid)] = true end
-		end
-		for previous, op in pairs(submitted) do
-			if confirmed[previous] then op.resolved = true end
-			if not op.resolved then error("previous subvention accept requires reconciliation; query state and never resend", 0) end
-		end
+		-- Explicit acceptance is scoped to this UID. Old contract history is not
+		-- a prerequisite for accepting a different currently available offer.
 		local t = now()
 		local found
 		for _, v in ipairs(listOf(state.proposedSubventions)) do if v.uid == uid then found = v end end
@@ -4876,13 +5244,16 @@ do
 				if actual[k] ~= v then error("subvention terms changed: " .. k, 0) end
 			end
 		end
-		local op = {uid=uid, gameTime=t}
-		submitted[tostring(uid)] = op;checkpoint()
+		local op = {uid=uid, gameTime=t,player=api.engine.util.getPlayer(),resource=row.resource,spawnTime=row.spawnTime,phase="dispatch_started"}
+		submitted[tostring(uid)] = op
+        if args.operation_id then operations[args.operation_id].phase="dispatch_started" end
+        checkpoint() -- Durable uncertainty begins BEFORE touching the native command API.
 		local ok, err = pcall(function()
 			api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Subvention", "onAccept", {uid=uid}),
 				function(_, success) op.callbackAccepted = success end)
 		end)
 		if not ok then op.dispatchError = tostring(err) end
+        checkpoint()
 		return {uid=uid, submitted=ok, callbackAccepted=op.callbackAccepted, dispatchError=op.dispatchError, task=row,
 			instruction="The native script applies the accept on its own update. Confirm with get_subventions "
 				.. "(status Active, acceptedTime set). Never resend; the bridge refuses a second accept for this uid."}
@@ -4898,28 +5269,34 @@ do
  end
  commands.preview_subvention=function(args)
   local row,signature=terms(args.uid)
-  assert(not submitted[tostring(args.uid)],"UID already submitted; reconcile instead")
+  assert(not submitted[tostring(args.uid)],"UID already submitted; read current status, never resend")
   local token="subvention:"..tostring(sessionEpoch)..":"..tostring(args.uid)..":"..tostring(wallClock())
   previews[token]={uid=args.uid,signature=signature,clock=assert(wallClock())};checkpoint()
   return {preview=true,preview_token=token,task=row,networkFeasibilityVerified=false,
-   warning="Terms only; review real network capacity, deadline, failure cost and reserves before accepting"}
+   warning="Terms only; explicit user acceptance may proceed directly without a network assessment or historical contract reconciliation"}
  end
  commands.get_subvention_operation=function(args)
   local op=assert(operations[args.operation_id],"Unknown subvention operation")
   local state=commands.get_subventions({assess=false});local found
   for _,row in ipairs(state.tasks) do if row.uid==op.uid then found=row end end
   local verified=found and op.player==api.engine.util.getPlayer() and found.resource==op.resource and found.spawnTime==op.spawnTime and found.acceptedTime~=nil and (found.status=="Active" or found.status=="Complete" or found.status=="Failed") or false
-  return {operation_id=args.operation_id,uid=op.uid,verified=verified,submitted=true,task=found,
-   status=verified and "verified" or "needs_reconciliation",verificationScope="native acceptance, not successful contract completion",do_not_resubmit=true}
+  local evidence=op.acceptanceEvidence
+  if not verified and evidence and op.player==api.engine.util.getPlayer() and evidence.uid==op.uid
+   and evidence.player==op.player and evidence.resource==op.resource and evidence.spawnTime==op.spawnTime and evidence.acceptedTime~=nil then verified=true end
+  return {operation_id=args.operation_id,uid=op.uid,verified=verified,submitted=submitted[tostring(op.uid)]~=nil,task=found,
+   phase=op.phase,acceptanceEvidence=evidence,
+   status=verified and "verified" or (op.phase=="rejected_before_dispatch" and op.phase or "needs_reconciliation"),verificationScope="native acceptance, not successful contract completion",do_not_resubmit=true}
  end
  commands.commit_subvention=function(args)
   local t=previews[args.preview_token];previews[args.preview_token]=nil;checkpoint()
   assert(t,"Unknown or consumed subvention preview")
+  local operation={uid=t.uid,player=api.engine.util.getPlayer(),phase="prepared",gameTime=now()}
+  operations[args.preview_token]=operation;checkpoint()
   local clock=assert(wallClock());assert(clock>=t.clock and clock-t.clock<=60,"Subvention preview expired")
   local _,signature=terms(t.uid);assert(signature==t.signature,"Subvention terms changed")
   local row=terms(t.uid)
-  operations[args.preview_token]={uid=t.uid,player=api.engine.util.getPlayer(),resource=row.resource,spawnTime=row.spawnTime};checkpoint()
-  commands.accept_subvention({uid=t.uid})
+  operation.resource=row.resource;operation.spawnTime=row.spawnTime;checkpoint()
+  commands.accept_subvention({uid=t.uid,operation_id=args.preview_token})
   checkpoint()
   return commands.get_subvention_operation({operation_id=args.preview_token})
  end
@@ -5830,7 +6207,7 @@ do
   for i=1,#points-1 do
    local a,b=points[i].pos,points[i+1].pos;local len=dist2d(a,b)
    assert(len>=10 and len<=200,"Each network span must be 10 to 200 metres")
-   assert(math.abs(b.z-a.z)/len<=.12,"Network grade exceeds adapter bound")
+   -- Grade is decided by the mandatory native network preview, not a fixed percentage.
    lengths[i]=len;total=total+len
   end
   assert(total<=600,"Network test exceeds 600 metres")
@@ -6182,7 +6559,7 @@ do
   return signalPlan({preference="YES",traffic_light_type=old.trafficLightType,states=phases},count)
  end
  local function prepare(args)
-  assert(args.isolated_test==true,"v35 topology requires explicit isolated_test=true until native acceptance")
+  -- isolated_test is retained for client compatibility; current-map use is authorized.
   local g=args.graph;keys(g,{nodes=true,edges=true});array(g.nodes,1,32);array(g.edges,0,48)
   local p=api.type.SimpleProposal.new();local sp=p.streetProposal
   local nodes,edges,remove,configs,removeConfigs={},{},{},{},{}
@@ -6344,7 +6721,12 @@ do
    local pair=math.min(ai,bi)..":"..math.max(ai,bi);assert(not pairsSeen[pair],"Duplicate graph edge");pairsSeen[pair]=true;used[ai]=true;used[bi]=true
    for _,old in ipairs(a.old)do assert(not ((old.comp.node0==a.id and old.comp.node1==b.id) or (old.comp.node1==a.id and old.comp.node0==b.id)),"Graph duplicates an existing road edge")end
    local len=dist2d(a.pos,b.pos);assert(len>=10 and len<=200,"Each graph span must be 10-200 metres")
-   assert(math.abs(b.pos.z-a.pos.z)/len<=.12,"Graph grade exceeds bound");total=total+len
+   -- Replacement graphs deliberately have no native preview. They cannot be
+   -- used to introduce an unpreviewed steep new span; put that span in a
+   -- separate native-preview batch. Pure curve-preserving splits add no span.
+   if #remove>0 then assert(math.abs(b.pos.z-a.pos.z)/len<=.12,
+    "Steep new span requires a separate native-preview graph without removals") end
+   total=total+len
    local name,tpl=resolveStreetTemplate(text(spec.template));assert(tpl.roadType==api.type.enum.RoadType.STREET or (allowRail and tpl.roadType==api.type.enum.RoadType.TRACK),"Rail templates require an explicit crossing")
    resources[name]={lanes=toPlain(tpl.laneConfigs,0,nil,{element="LaneConfig"}),style=tpl.streetStyle}
    local delta={x=b.pos.x-a.pos.x,y=b.pos.y-a.pos.y,z=b.pos.z-a.pos.z}
@@ -6512,7 +6894,7 @@ do
   end;return result
  end
  commands.preview_road_graph=function(args)
-  local d=prepare(args);local r=check(d);r.preview=true;r.nativeAcceptance="pending_isolated_test";r.serviceConnectivityVerified=false
+  local d=prepare(args);local r=check(d);r.preview=true;r.serviceConnectivityVerified=false
   r.specialCases={objects={},crossings={},preservedTunnelNeighbors={}};for id,v in pairs(d.splitEdges)do if v.preservedNeighbor then r.specialCases.preservedTunnelNeighbors[#r.specialCases.preservedTunnelNeighbors+1]=id end end;for id,o in pairs(d.objects)do r.specialCases.objects[#r.specialCases.objects+1]={id=id,targetEdge=o.edge,nativeParam=o.param,projectedSourceParam=o.projectedSourceParam,projectedChildParam=o.projectedChildParam}end
   for id,c in pairs(d.crossings)do r.specialCases.crossings[#r.specialCases.crossings+1]={node=id,resource=c.resource,index=c.index}end
   r.junctionPlans={};for _,c in ipairs(d.proposal.streetProposal.nodeConfigsToAdd)do
@@ -6531,7 +6913,7 @@ do
   local now=assert(wallClock());assert(now>=r.clock and now-r.clock<=60,"Road graph preview expired");assert(r.player==api.engine.util.getPlayer(),"Player changed")
   local d=prepare(r.args);assert(d.signature==r.signature,"Road graph identity changed")
   local c=check(d);assert(c.ok and not c.critical and not c.blocked and not c.placementBlocked and #c.collisions==0,"Road graph no longer buildable")
-  assert(type(args.backup_save)=="string" and #args.backup_save>0,"Record isolated preconstruction backup slot")
+  assert(type(args.backup_save)=="string" and #args.backup_save>0,"Record preconstruction backup slot")
   local expectedConfigs={};for _,row in ipairs(d.proposal.streetProposal.nodeConfigsToAdd)do expectedConfigs[row.entity]=networkNodeConfigSnapshot(row.comp)end
   local before=edgeSet();local adjacencyBefore=adjacencySignature()
   op.phase="dispatching";op.backup_save=args.backup_save;checkpoint()
@@ -6671,8 +7053,10 @@ end
 -- Engine-side UI construction transport. Deliberately separate from read queries.
 local uiBuild = {}
 do
- local SAVED_MUTATION_LIMIT=1024 -- finite lifetime budget; retain every mutation receipt for replay suppression
- local schemas={get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+ local SAVED_MUTATION_LIMIT=1024 -- active receipts; reset retires terminal IDs without forgetting them
+ local QUOTA_LIMIT=256
+ local REPLAY_ID_LIMIT=65536 -- finite storage guard, never reset or silently evict
+ local schemas={get_town_cargo_supply={town="entity"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
   get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
   begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
   read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
@@ -6681,8 +7065,10 @@ do
   preview_headquarters_access={town="entity",road="entity",x="number",y="number",z="number",rotation="number"},
   preview_subvention={uid="entity"},commit_subvention={preview_token="token"},get_subvention_operation={operation_id="token"},
   get_facility_layout={entity="entity",offset="offset",limit="page_limit"},get_facility_inventory={entity="entity"},
+  preview_depot_removal={entity="entity"},commit_depot_removal={preview_token="token",backup_save="save_slot"},get_depot_removal_operation={operation_id="token"},
   preview_test_removal={entity="entity"},commit_test_removal={preview_token="token"},
   get_validation_state={},
+  reset_operation_quota={expected_round="offset",expected_used="offset",expected_count="offset"},
   preview_flatten_terrain={bounds="bounds",target_height="number",max_height_change="number",max_edge_grade="number",transition_width="number"},
   commit_flatten_terrain={preview_token="token",backup_save="save_slot"},get_terrain_operation={operation_id="token"},
 
@@ -6713,7 +7099,7 @@ do
   commit_line_stop={preview_token="token"},
   get_terrain={x="number",y="number"},find_nearby={x="number",y="number",radius="radius",limit="page_limit"},
   list_facility_resources={kind="text",search="text",offset="offset",limit="page_limit"},
-  list_industry_resources={},list_prospections={},get_prospections={},get_loans={},get_subventions={assess="bool"},
+  list_industry_resources={},list_prospections={},get_prospections={},get_notifications={include_history="bool",offset="offset",limit="page_limit"},get_loans={},get_subventions={assess="bool"},
   get_town_cargo_needs={town="entity"},get_terrain_operation_capabilities={},
   list_map_entities={kind="text",offset="offset",limit="page_limit",snapshot="token",ids_only="bool"},release_map_snapshot={snapshot="token"},
   get_terrain_grid={x="number",y="number",spacing="spacing",columns="page_limit",rows="page_limit",offset="offset",limit="page_limit",mode="text"},
@@ -6727,9 +7113,10 @@ do
   build_heliport={x="number",y="number",z="number",rotation="number"},
   build_airfield={x="number",y="number",z="number",rotation="number"},
   preview_road={start="endpoint",["end"]="endpoint",street_type="text"},
-  reconcile_road_rejection={request_id="request_id"},reconcile_network_rejection={request_id="request_id"},reconcile_depot_rejection={request_id="request_id"},reconcile_town_cargo_rejection={request_id="request_id"},
+  reconcile_road_rejection={request_id="request_id"},reconcile_network_rejection={request_id="request_id"},reconcile_depot_rejection={request_id="request_id"},reconcile_assignment_rejection={request_id="request_id",vehicle="entity",line="entity"},reconcile_town_cargo_rejection={request_id="request_id"},reconcile_subvention_rejection={request_id="request_id"},reconcile_facility_rejection={request_id="request_id"},
   commit_road={preview_token="token"},get_entity={id="entity",components="component_names"},list_street_types={filter="text"},
   survey_build_site={x="number",y="number"},list_facilities={},
+  build_water_facility={x="number",y="number",z="number",rotation="number",kind="water_facility_kind",harbor_size="harbor_size"},
   build_warehouse={x="number",y="number",z="number",rotation="number",module_count="modules"},
   build_facility={source_entity="entity",x="number",y="number",z="number",rotation="number"},
   commit_facility={preview_token="token"},get_facility_config={entity="entity",offset="offset",limit="page_limit"},get_facility_access={entity="entity",person_graph="bool",person_geometry="bool"},check_road_junction_path={node="entity",from_edge="entity",to_edge="entity",mode="text"},
@@ -6737,13 +7124,13 @@ do
  }
  -- Only audited world-read commands may release incorrectly charged legacy slots.
  -- Previews, mutations, unknown commands and unresolved non-read requests stay protected.
- local pureEngineReads={get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
+ local pureEngineReads={get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
   list_facilities=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,check_road_junction_path=true,check_network_junction_path=true,
   list_cargo_types=true,get_terrain=true,find_nearby=true,list_facility_resources=true,
   list_industry_resources=true,list_prospections=true,get_prospections=true,get_loans=true,
   get_subventions=true,get_town_cargo_needs=true,get_terrain_operation_capabilities=true,
   list_map_entities=true,release_map_snapshot=true,get_terrain_grid=true,get_map_data=true,get_terrain_tile=true}
- local sent={};local sentCount=0;local sentReadOrder={}
+ local sent={};local sentReadOrder={}
  local function endpoint(value)
   if type(value)~="table" then return false end
   if value.node~=nil then
@@ -6858,6 +7245,8 @@ do
     or (kind=="stop_param" and type(value)=="number" and value>=.15 and value<=.85)
     or (kind=="number" and type(value)=="number" and value==value and math.abs(value)<math.huge)
     or (kind=="depot_carrier" and type(value)=="string" and ({ROAD=true,TRAM=true,RAIL=true,WATER=true})[value])
+    or (kind=="water_facility_kind" and type(value)=="string" and ({harbor=true,shipyard=true,maintenance=true})[value])
+    or (kind=="harbor_size" and type(value)=="string" and ({small=true,large=true})[value])
     or (kind=="specialization" and type(value)=="string" and ({universal=true,liquid=true,bulk=true,flatbed=true,goods=true})[value])
     or (kind=="station_size" and type(value)=="number" and value%1==0 and value>=1 and value<=3)
     or (kind=="tracks" and type(value)=="number" and value%1==0 and value>=1 and value<=4)
@@ -6881,14 +7270,14 @@ do
     or (kind=="token" and type(value)=="string" and #value>=1 and #value<=128)
    assert(valid,"Invalid construction argument: "..tostring(key))
   end
-  local required=cmd=="create_line" and {"station_groups","name"} or (cmd=="build_warehouse" or cmd=="build_helipad" or cmd=="build_heliport" or cmd=="build_airfield") and {"x","y","z"} or cmd=="build_facility" and {"source_entity","x","y","z"}
+  local required=cmd=="create_line" and {"station_groups","name"} or (cmd=="build_warehouse" or cmd=="build_helipad" or cmd=="build_heliport" or cmd=="build_airfield") and {"x","y","z"} or cmd=="build_water_facility" and {"x","y","z","kind"} or cmd=="build_facility" and {"source_entity","x","y","z"}
    or cmd=="buy_vehicles" and {"depot","model","count"} or cmd=="assign_vehicles" and {"vehicles","line","stop_index"}
    or cmd=="set_vehicle_stopped" and {"vehicle","stopped"} or (cmd=="send_to_depot" or cmd=="get_vehicle_motion") and {"vehicle"}
    or (cmd=="commit_facility" or cmd=="commit_road") and {"preview_token"}
-   or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection") and {"request_id"}
+   or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection" or cmd=="reconcile_subvention_rejection" or cmd=="reconcile_facility_rejection") and {"request_id"}
    or cmd=="preview_road" and {"start","end","street_type"} or cmd=="get_entity" and {"id"}
    or cmd=="survey_build_site" and {"x","y"} or (cmd=="list_facilities" or cmd=="list_street_types") and {} or {"entity"}
-  local extraRequired={get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
+  local extraRequired={get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
    check_network_junction_path={"node","from_edge","to_edge","mode"},
    preview_road_upgrade={"edge","street_type"},preview_street_stop={"edge","param","side","two_sided"},commit_edge_edit={"preview_token"},
    preview_facility_module={"entity","slot","resource"},preview_facility_parameter={"entity","key","value"},build_headquarters={"town","x","y","z"},
@@ -6896,12 +7285,12 @@ do
    preview_town_cargo_needs={"town"},commit_town_cargo_needs={"preview_token"},get_town_cargo_operation={"operation_id"},
    preview_prospection={"town","resource"},commit_prospection={"preview_token"},get_prospection_operation={"operation_id"},
    preview_loan={"action"},commit_loan={"preview_token"},get_loan_operation={"operation_id"},
-get_network_template={"template"},list_road_structures={},preview_road_graph={"graph","isolated_test"},commit_road_graph={"preview_token","backup_save"},get_road_graph_operation={"operation_id"},list_network_templates={},preview_network={"start","end","template"},commit_network={"preview_token"},list_multiple_units={},preview_multiple_unit={"depot","resource"},get_vehicle_cargo={"vehicle","cargo"},get_sim_entity={"id"},get_stop_cargo={"line","stop_index","cargo"},get_stock_cargo={"stock_list","cargo"},preview_consist={"depot","models"},commit_consist={"preview_token"},check_road_junction_path={"node","from_edge","to_edge","mode"},delete_line={"line"},sell_vehicles={"vehicles"},list_cargo_types={},
+get_network_template={"template"},list_road_structures={},preview_road_graph={"graph"},commit_road_graph={"preview_token","backup_save"},get_road_graph_operation={"operation_id"},list_network_templates={},preview_network={"start","end","template"},commit_network={"preview_token"},list_multiple_units={},preview_multiple_unit={"depot","resource"},get_vehicle_cargo={"vehicle","cargo"},get_sim_entity={"id"},get_stop_cargo={"line","stop_index","cargo"},get_stock_cargo={"stock_list","cargo"},preview_consist={"depot","models"},commit_consist={"preview_token"},check_road_junction_path={"node","from_edge","to_edge","mode"},delete_line={"line"},sell_vehicles={"vehicles"},list_cargo_types={},
    preview_depot={"x","y","rotation","carrier"},preview_station={"x","y","rotation","cargo","size"},
    preview_rail_station={"x","y","rotation","tracks","length","specialization"},commit_structure={"preview_token"},
    preview_line_stop={"line","stop_index","loads","max_load","force_unload","extra_wait"},commit_line_stop={"preview_token"},
    get_terrain={"x","y"},find_nearby={"x","y","radius","limit"},list_facility_resources={},
-   list_industry_resources={},list_prospections={},get_prospections={},get_loans={},get_subventions={},
+   list_industry_resources={},list_prospections={},get_prospections={},get_notifications={},get_loans={},get_subventions={},
    get_town_cargo_needs={"town"},get_terrain_operation_capabilities={},list_map_entities={},release_map_snapshot={"snapshot"},
    get_terrain_grid={},get_map_data={},get_terrain_tile={"tile_x","tile_y"}}
   required=extraRequired[cmd] or required
@@ -6910,6 +7299,9 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
  local function emit(req,ok,value)
   local r={id=req.id,cmd=req.cmd,ok=ok}
   if ok then r.result=value else r.error=tostring(value) end
+  if not ok and type(value)=="table" and value.rejectedBeforeDispatch==true then
+   r.error=value.message;r.rejectedBeforeDispatch=true;r.code=value.code
+  end
   local good,text=pcall(json.encode,r)
   if not good or #text>65536 then
    text=json.encode({id=req.id,cmd=req.cmd,ok=false,error="Construction result unavailable; reconcile, never retry",
@@ -6934,11 +7326,12 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if not valid then return tostring(err) end
   if sent[id] then return "Duplicate request; inspect existing log" end
   local rollingRead=continualRead==true and pureEngineReads[cmd]==true
-  if not rollingRead and sentCount>=256 then return "Session request limit reached" end
+  -- The engine owns the durable round quota. GUI admission must not stop
+  -- heartbeats or prevent the free reset/read commands at the boundary.
   if rollingRead then
    if #sentReadOrder>=256 then sent[table.remove(sentReadOrder,1)]=nil end
    sentReadOrder[#sentReadOrder+1]=id
-  else sentCount=sentCount+1 end
+  end
   sent[id]=true -- reserve before dispatch; mutation IDs are never evicted
   local req={id=id,cmd=cmd,args=args,facilityEpoch=terrainEpoch}
   if cmd:find("terrain",1,true) then req.terrainEpoch=terrainEpoch end
@@ -7252,6 +7645,36 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   return {town=town,population=r.used,residentialCapacity=r.capacity,gameTime=cargoReadTime()}
  end
  ENGINE_COMMANDS.get_town_population=true
+ commands.get_town_cargo_supply=function(args)
+  local town=requireEntity(args,"town","TOWN")
+  local system=assert(api.engine.system.townBuildingSystem,"Town building system unavailable")
+  assert(system.getCargoSupplyAndLimit~=nil,"Native city supply API unavailable") -- native bindings may be callable tables
+  local districts={};local totals={}
+  local function finite(n)return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge and n>=0 end
+  for _,name in ipairs({"residential","commercial","industrial"}) do
+   local landUse=assert(api.type.enum.LandUseType[string.upper(name)],"Land use enum unavailable")
+   local values=assert(system.getCargoSupplyAndLimit(town,landUse),"Native supply data unavailable")
+   local rows={}
+   for cargo,v in pairs(values) do
+    assert(finite(cargo) and cargo%1==0 and finite(v[1]) and finite(v[2]),"Invalid native supply or demand")
+    local demand=math.floor(v[2]);local supply=math.min(math.ceil(v[1]),demand)
+    rows[#rows+1]={cargo=cargo,rawSupply=v[1],rawDemand=v[2],supply=supply,demand=demand,
+     rateKnown=demand>0,supplyRate=demand>0 and supply/demand or nil}
+    local t=totals[cargo] or {cargo=cargo,supply=0,demand=0};totals[cargo]=t
+    t.supply=t.supply+supply;t.demand=t.demand+demand
+   end
+   table.sort(rows,function(a,b)if a.demand~=b.demand then return a.demand>b.demand end;return a.cargo<b.cargo end)
+   districts[name]=rows
+  end
+  local items={}
+  for _,t in pairs(totals) do t.rateKnown=t.demand>0;t.supplyRate=t.demand>0 and t.supply/t.demand or nil;items[#items+1]=t end
+  table.sort(items,function(a,b)return a.cargo<b.cargo end)
+  return {town=town,gameTime=cargoReadTime(),districts=districts,items=items,readOnly=true,townCargoSupplyVersion=2,
+   source="api.engine.system.townBuildingSystem.getCargoSupplyAndLimit",
+   scope="Native city-panel cargo supply/demand; district rounding matches town_util.getCargoSupplyDemandsLandUse; totals sum district display values",
+   periodKnown=false,period="Native panel metric; temporal window not exposed by this API; not annual or half-year delivery counters"}
+ end
+ ENGINE_COMMANDS.get_town_cargo_supply=true
  commands.get_town_building_stats=function(args)
   local out={};local cargos=api.res.cargoTypeRep.getAll(true)
   for _,id in ipairs(args.ids) do
@@ -7369,6 +7792,12 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   end
   return stableDataSignature(snapshot)
  end
+ local function quotaState(ledger)
+  if not ledger.quota then ledger.quota={round=0,used=math.min(ledger.count,QUOTA_LIMIT)} end
+  ledger.retiredRequests=ledger.retiredRequests or {}
+  ledger.retiredCount=ledger.retiredCount or 0
+  return ledger.quota
+ end
  local function reclaimReadBudget(ledger)
   local removed={}
   for id,row in pairs(ledger.requests)do
@@ -7380,6 +7809,252 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   ledger.reclaimedReadRequests=(ledger.reclaimedReadRequests or 0)+#removed
   ledger.accountingVersion=2
  end
+ -- General demolition is intentionally not exposed. This workflow handles one
+ -- owned, empty road depot, with paused simulation and independently read state.
+ function uiBuild.depotRemovalNodeConfig(cfg,removedEdges)
+  if cfg==nil then return false end
+  local c=networkNodeConfigSnapshot(cfg)
+  stableDataSignature(c) -- reject unreadable records before deriving an expectation
+  assert(type(c.laneConnections)=="table" and type(c.crosswalks)=="table"
+   and type(c.trafficLightConfig)=="table" and type(c.trafficLightConfig.states)=="table","Incomplete node configuration")
+  local turns,walks={},{};local changed=false
+  for _,v in ipairs(c.laneConnections) do
+   if removedEdges and (removedEdges[tostring(v.segment0)] or removedEdges[tostring(v.segment1)]) then changed=true
+   else turns[#turns+1]=v end
+  end
+  for _,v in ipairs(c.crosswalks) do
+   if removedEdges and removedEdges[tostring(v)] then changed=true else walks[#walks+1]=v end
+  end
+  -- Signal phase indices refer to lane/crosswalk order; do not guess remapping.
+  assert(not changed or #c.trafficLightConfig.states==0,"Depot boundary has signal phases; guarded phase remapping is not supported")
+  if #c.trafficLightConfig.states==0 then
+   table.sort(turns,function(x,y)return stableDataSignature(x)<stableDataSignature(y) end)
+   table.sort(walks)
+  end
+  c.laneConnections=turns;c.crosswalks=walks
+  return c
+ end
+ function uiBuild.depotRemovalSnapshot(entity)
+  assert(commands.get_game_state({}).speedup==0,"Pause before depot removal")
+  local target=entity
+  if getComponent(entity,"VEHICLE_DEPOT") then
+   target=api.engine.system.streetConnectorSystem.getConstructionEntityForDepot(entity)
+  end
+  local c=assert(getComponent(target,"CONSTRUCTION"),"Depot construction missing")
+  assert(c.fileName=="::/depots/road/road_depot/road_depot.con","Only road depots are supported")
+  local ds=listOf(c.depots);assert(#ds==1,"Expected exactly one depot subentity")
+  local depot=ds[1];assert(getComponent(depot,"VEHICLE_DEPOT"),"Depot subentity missing")
+  local player=api.engine.util.getPlayer()
+  assert(ownerOf(depot)==player,"Depot is not owned by current player")
+  local co=ownerOf(target);assert(co==nil or co<0 or co==player,"Construction belongs to another player")
+  for _,field in ipairs({"stations","industries","townBuildings"}) do
+   assert(#listOf(c[field])==0,"Depot has attached facilities; removal refused")
+  end
+  -- Native road depots list their own VEHICLE_DEPOT in subconstructions.
+  -- Permit only that already-verified subentity, never an additional facility.
+  for _,id in ipairs(listOf(c.subconstructions)) do
+   assert(id==depot,"Depot has additional subconstructions; removal refused")
+  end
+  local inside=assert(api.engine.system.transportVehicleSystem.getDepotVehicles(depot),"Depot inventory unavailable")
+  assert(#listOf(inside)==0,"Depot contains vehicles")
+  local s={entity=target,depot=depot,player=player,config=toPlain(c,0,nil,"Engine.Component.Construction"),
+   ownedEdges={},ownedNodes={},roads={},nodes={},nodeConfigs={},expectedNodeConfigs={},boundaryNodes={},vehicles={},dependentVehicles={}}
+  local endpoints={}
+  for _,n in ipairs(listOf(c.frozenNodes)) do s.ownedNodes[tostring(n)]=true;endpoints[tostring(n)]=n end
+  for _,e in ipairs(listOf(c.frozenEdges)) do
+   local b=assert(getComponent(e,"BASE_EDGE"),"Depot internal edge missing")
+   assert(#listOf(b.objects)==0,"Depot internal edge has objects")
+   s.ownedEdges[tostring(e)]=true;endpoints[tostring(b.node0)]=b.node0;endpoints[tostring(b.node1)]=b.node1
+  end
+  for _,n in pairs(endpoints) do
+   for _,e in ipairs(listOf(assert(api.engine.system.streetSystem.getNodeSegments(n),"Adjacent road inventory unavailable"))) do
+    if not s.ownedEdges[tostring(e)] then
+     local b=assert(getComponent(e,"BASE_EDGE"),"Adjacent road missing")
+     s.roads[tostring(e)]=stableDataSignature(toPlain(b,0,nil,"Network.BaseEdge"))
+     for _,nn in ipairs({b.node0,b.node1}) do
+      s.nodes[tostring(nn)]=stableDataSignature(toPlain(assert(getComponent(nn,"BASE_NODE")),0,nil,"Engine.Component.BaseNode"))
+      assert(not s.ownedNodes[tostring(nn)],"External road uses a depot-owned node; removal refused")
+     end
+    end
+   end
+  end
+  for _,n in pairs(endpoints) do
+   if not s.ownedNodes[tostring(n)] then
+    s.boundaryNodes[tostring(n)]=true
+    s.nodes[tostring(n)]=stableDataSignature(toPlain(assert(getComponent(n,"BASE_NODE")),0,nil,"Engine.Component.BaseNode"))
+   end
+  end
+  for id in pairs(s.nodes) do
+   local cfg=getComponent(tonumber(id),"BASE_NODE_CONFIG")
+   s.nodeConfigs[id]=uiBuild.depotRemovalNodeConfig(cfg)
+   s.expectedNodeConfigs[id]=uiBuild.depotRemovalNodeConfig(cfg,s.ownedEdges)
+  end
+  local vehicleCount=0
+  api.engine.forEachEntityWithComponent(function(id)
+   vehicleCount=vehicleCount+1;assert(vehicleCount<=2048,"Vehicle inventory exceeds guarded removal limit")
+   local v=assert(getComponent(id,"TRANSPORT_VEHICLE"))
+   if v.depot==depot then
+    local state=enumName("TransportVehicleState",v.state)
+    assert(state=="EN_ROUTE" or state=="AT_TERMINAL","Vehicle in/returning to depot or unknown state")
+    assert(v.line and v.line>=0 and getComponent(v.line,"LINE"),"Dependent vehicle has no valid line")
+    s.dependentVehicles[#s.dependentVehicles+1]=id
+   end
+   s.vehicles[tostring(id)]=uiBuild.depotRemovalVehicle(v)
+  end,componentTypes().TRANSPORT_VEHICLE)
+  table.sort(s.dependentVehicles)
+  s.signature=stableDataSignature(s)
+  return s
+ end
+ function uiBuild.depotRemovalVehicle(v)
+  local parts={}
+  for _,p in ipairs(listOf(v.transportVehicleConfig.vehicles)) do
+   parts[#parts+1]={part=toPlain(p.part,0,nil,"VehiclePart"),purchaseTime=p.purchaseTime}
+  end
+  return {signature=stableDataSignature({line=v.line,userStopped=v.userStopped,parts=parts}),noPath=v.noPath==true}
+ end
+ function uiBuild.depotRemovalProposal(s)
+  -- createProposalRemove returns Proposal, NOT SimpleProposal. See the shipped
+  -- api/tealdef/api/type.d.tl: Proposal.toRemove/toAdd/proposal fields.
+  local p=assert(api.engine.util.proposal.createProposalRemove(s.entity,api.type.Context.new()),"Native removal proposal unavailable")
+  local function values(v,label,entityRecords)
+   assert(v~=nil,"Native removal field unavailable: "..label)
+   local out={}
+   for _,x in pairs(v) do
+    assert(#out<2048,"Native removal scope exceeds limit: "..label)
+    if entityRecords then x=x.entity end
+    assert(type(x)=="number" and x>=0,"Invalid native entity in "..label)
+    out[#out+1]=x
+   end
+   table.sort(out);return out
+  end
+  local function size(v,label)
+   assert(v~=nil,"Native removal field unavailable: "..label)
+   local n=0;for _ in pairs(v) do n=n+1;assert(n<=2048,"Native removal scope exceeds limit") end
+   return n
+  end
+  local street=assert(p.proposal,"Native Proposal.proposal unavailable")
+  local scope={toRemove=values(p.toRemove,"toRemove"),toAdd=size(p.toAdd,"toAdd"),
+   old2new=size(p.old2new,"old2new"),
+   removedSegments=values(street.removedSegments,"removedSegments",true),
+   removedNodes=values(street.removedNodes,"removedNodes",true),
+   addedSegments=size(street.addedSegments,"addedSegments"),addedNodes=size(street.addedNodes,"addedNodes"),
+   edgeObjectsToAdd=size(street.edgeObjectsToAdd,"edgeObjectsToAdd"),
+   new2oldEdgeObjects=size(street.new2oldEdgeObjects,"new2oldEdgeObjects"),
+   old2newEdgeObjects=size(street.old2newEdgeObjects,"old2newEdgeObjects"),
+   nodeConfigsToAdd=values(street.nodeConfigsToAdd,"nodeConfigsToAdd",true),
+   nodeConfigsToRemove=values(street.nodeConfigsToRemove,"nodeConfigsToRemove")}
+  local function check(ok,reason)
+   assert(ok,reason.."; nativeScope="..json.encode(scope))
+  end
+  check(#scope.toRemove==1 and scope.toRemove[1]==s.entity,"Removal proposal includes unexpected constructions")
+  check(scope.toAdd==0 and scope.old2new==0,"Removal proposal adds/replaces constructions")
+  check(scope.addedSegments==0 and scope.addedNodes==0 and scope.edgeObjectsToAdd==0
+   and scope.new2oldEdgeObjects==0 and scope.old2newEdgeObjects==0,"Removal proposal modifies additional network objects")
+  for _,id in ipairs(scope.removedSegments) do check(s.ownedEdges[tostring(id)],"Removal would remove external road") end
+  for _,id in ipairs(scope.removedNodes) do check(s.ownedNodes[tostring(id)] and not s.nodes[tostring(id)],"Removal would remove external node") end
+  local paired={};local expectedUpdates={}
+  for id,c in pairs(s.nodeConfigs) do
+   if stableDataSignature(c)~=stableDataSignature(s.expectedNodeConfigs[id]) then expectedUpdates[id]=true end
+  end
+  for _,id in ipairs(scope.nodeConfigsToRemove) do
+   local k=tostring(id)
+   check(s.boundaryNodes[k] and expectedUpdates[k] and not paired[k],"Unexpected or duplicate boundary configuration removal")
+   paired[k]=true
+  end
+  scope.boundaryConfigs={}
+  for _,row in pairs(street.nodeConfigsToAdd) do
+   local k=tostring(row.entity)
+   check(paired[k]==true,"Unpaired or duplicate boundary configuration replacement")
+   local cfg=uiBuild.depotRemovalNodeConfig(row.comp)
+   scope.boundaryConfigs[k]={before=s.nodeConfigs[k],expected=s.expectedNodeConfigs[k],proposed=cfg}
+   check(stableDataSignature(cfg)==stableDataSignature(s.expectedNodeConfigs[k]),"Boundary configuration changes unrelated to removed depot")
+   paired[k]="verified"
+  end
+  for id in pairs(expectedUpdates) do check(paired[id]=="verified","Missing boundary configuration cleanup") end
+  for id in pairs(paired) do check(paired[id]=="verified","Boundary configuration replacement missing") end
+  -- Keep the complete native Proposal unchanged. Never feed it to the
+  -- SimpleProposal-only conversion path or bypass native errors.
+  return p,scope
+ end
+ function uiBuild.depotRemovalReadback(op)
+  local s=op.before;local issues={}
+  for _,id in ipairs({s.entity,s.depot}) do if api.engine.entityExists(id) then issues[#issues+1]="target_present:"..id end end
+  for id in pairs(s.ownedEdges) do if api.engine.entityExists(tonumber(id)) then issues[#issues+1]="internal_edge_present:"..id end end
+  for id in pairs(s.ownedNodes) do if api.engine.entityExists(tonumber(id)) then issues[#issues+1]="internal_node_present:"..id end end
+  for id,signature in pairs(s.roads) do
+   local c=getComponent(tonumber(id),"BASE_EDGE")
+   if not c or stableDataSignature(toPlain(c,0,nil,"Network.BaseEdge"))~=signature then issues[#issues+1]="external_road_changed:"..id end
+  end
+  for id,signature in pairs(s.nodes) do
+   local c=getComponent(tonumber(id),"BASE_NODE")
+   if not c or stableDataSignature(toPlain(c,0,nil,"Engine.Component.BaseNode"))~=signature then issues[#issues+1]="external_node_changed:"..id end
+  end
+  for id,expected in pairs(s.expectedNodeConfigs) do
+   local c=uiBuild.depotRemovalNodeConfig(getComponent(tonumber(id),"BASE_NODE_CONFIG"))
+   if stableDataSignature(c)~=stableDataSignature(expected) then issues[#issues+1]="external_node_config_changed:"..id end
+  end
+  for id,old in pairs(s.vehicles) do
+   local v=getComponent(tonumber(id),"TRANSPORT_VEHICLE")
+   if not v then issues[#issues+1]="vehicle_missing:"..id
+   else
+    local now=uiBuild.depotRemovalVehicle(v)
+    if now.signature~=old.signature or (now.noPath and not old.noPath) then issues[#issues+1]="vehicle_changed:"..id end
+   end
+  end
+  return #issues==0,issues
+ end
+ function uiBuild.depotRemoval(state,root,ledger,req)
+  ledger.depotRemovalPreviews=ledger.depotRemovalPreviews or {}
+  ledger.depotRemovalOperations=ledger.depotRemovalOperations or {}
+  local function result(op)
+   return {operation_id=op.token,request_id=op.request,entity=op.before.entity,depot=op.before.depot,
+    session=op.epoch,phase=op.phase,removed=op.verified==true,verified=op.verified==true,
+    nativeAccepted=op.nativeAccepted,issues=op.issues,backup_save=op.backup,do_not_resubmit=true}
+  end
+  local function reconcile(op)
+   assert(op.epoch==req.facilityEpoch and op.before.player==api.engine.util.getPlayer(),"Removal operation session/player changed; no automatic reconciliation")
+   if op.phase=="dispatch_started" then
+    local verified,issues=uiBuild.depotRemovalReadback(op);op.issues=issues
+    if verified then
+     op.verified=true;op.phase="confirmed"
+     if ledger.pending==op.request then ledger.pending=nil end
+    end
+   end
+   state:set(root);return result(op)
+  end
+  if req.cmd=="get_depot_removal_operation" then
+   local op=assert(ledger.depotRemovalOperations[req.args.operation_id],"Unknown depot removal operation")
+   return reconcile(op)
+  end
+  assert(not ledger.pending and not ledger.pendingWorkflow,"Previous mutation unresolved")
+  if req.cmd=="preview_depot_removal" then
+   local s=uiBuild.depotRemovalSnapshot(req.args.entity)
+   local _,scope=uiBuild.depotRemovalProposal(s)
+   local token="ui-depot-remove:"..req.id
+   ledger.depotRemovalPreviews[token]={before=s,epoch=req.facilityEpoch,clock=assert(wallClock()),round=quotaState(ledger).round}
+   state:set(root)
+   return {preview=true,preview_token=token,entity=s.entity,depot=s.depot,dependentVehicles=s.dependentVehicles,
+    validation="structural_and_native_proposal_scope",nativePreview=false,nativeScope=scope,
+    warning="Maintenance coverage changes. Existing operating vehicles are preserved; future routing needs live verification."}
+  end
+  local token=req.args.preview_token;local t=ledger.depotRemovalPreviews[token]
+  ledger.depotRemovalPreviews[token]=nil;state:set(root)
+  assert(t and t.epoch==req.facilityEpoch and t.round==quotaState(ledger).round,"Unknown, consumed or stale depot removal preview")
+  local now=assert(wallClock());assert(now>=t.clock and now-t.clock<=60,"Depot removal preview expired")
+  local fresh=uiBuild.depotRemovalSnapshot(t.before.entity)
+  assert(fresh.signature==t.before.signature,"Depot/network/vehicle state changed since preview")
+  local p=uiBuild.depotRemovalProposal(fresh)
+  local op={token=token,request=req.id,epoch=req.facilityEpoch,before=fresh,backup=req.args.backup_save,phase="dispatch_started"}
+  ledger.depotRemovalOperations[token]=op;ledger.pending=req.id;state:set(root)
+  -- Persist before native dispatch. Callback mutates local state only; never
+  -- writes stale root state from a later callback. Read-only reconciliation is
+  -- authoritative when a callback is delayed/lost or dispatch raises.
+  local accepted
+  applyProposal(p,false,function(ok)accepted=ok==true end)
+  op.nativeAccepted=accepted;state:set(root)
+  return reconcile(op)
+ end
+
  uiBuild.engine=function(state,param)
   -- Native get() may expose an event-start snapshot. Preserve all nested writes.
   local native,current=state,state:get() or {}
@@ -7391,8 +8066,55 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   assert(type(req.facilityEpoch)=="string","Missing construction session")
   local root=state:get() or {};local ledger=root.uiConstruction or {requests={},tokens={},count=0}
   reclaimReadBudget(ledger);root.uiConstruction=ledger;state:set(root)
-  if ledger.requests[req.id] then return end -- durable engine duplicate suppression
-  if ledger.count>=SAVED_MUTATION_LIMIT and not pureEngineReads[req.cmd] then emit(req,false,"Saved construction request limit reached");return end
+  local quota=quotaState(ledger)
+  if ledger.requests[req.id] or ledger.retiredRequests[req.id] then return end -- including all prior rounds
+  local function rejectQuota(message)
+   -- Retain rejected IDs as well: a later reset never turns a rejected envelope
+   -- into an executable command. The finite history guard remains independent.
+   if ledger.retiredCount+ledger.count<REPLAY_ID_LIMIT then
+    ledger.retiredRequests[req.id]=true;ledger.retiredCount=ledger.retiredCount+1
+   end
+   state:set(root)
+   emit(req,false,{message=message,code="operation_quota_rejected",rejectedBeforeDispatch=true})
+  end
+  if req.cmd=="reset_operation_quota" then
+   local ok,value=pcall(function()
+    assert(not ledger.pending and not ledger.pendingWorkflow,"Previous mutation unresolved; cannot reset quota")
+    assert(req.args.expected_round==quota.round and req.args.expected_used==quota.used
+     and req.args.expected_count==ledger.count,"Quota changed; read status before reset")
+    assert(quota.used>0,"Quota is unused; nothing to reset")
+    local count=0
+    for _,row in pairs(ledger.requests) do
+     count=count+1
+     assert(row.status=="returned" or row.status=="error" or row.status=="rejected"
+      or row.status=="reconciled_rejected","Unresolved request receipt; cannot reset quota")
+    end
+    assert(count==ledger.count,"Receipt accounting mismatch; cannot reset quota")
+    assert(ledger.retiredCount+count+1<REPLAY_ID_LIMIT,"Replay history storage limit reached; cannot reset quota")
+    local previous={round=quota.round,used=quota.used,activeRequestCount=ledger.count}
+    for id in pairs(ledger.requests)do ledger.retiredRequests[id]=true end
+    ledger.retiredRequests[req.id]=true -- reset itself is never replayable
+    ledger.retiredCount=ledger.retiredCount+count+1
+    ledger.requests={};ledger.count=0
+    -- No preview from an earlier round may be committed after resetting.
+    ledger.tokens={};ledger.linePreviews={};ledger.edgePreviews={};ledger.workflowTokens={}
+    ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
+    quota.round=quota.round+1;quota.used=0
+    return {reset=true,previous=previous,round=quota.round,used=0,limit=QUOTA_LIMIT,
+     remaining=QUOTA_LIMIT,retiredRequestCount=ledger.retiredCount,session=req.facilityEpoch,
+     historyPreserved=true,previewsInvalidated=true}
+   end)
+   if not ok and ledger.retiredCount+ledger.count<REPLAY_ID_LIMIT then
+    ledger.retiredRequests[req.id]=true;ledger.retiredCount=ledger.retiredCount+1
+   end
+   state:set(root);emit(req,ok,value);return
+  end
+  if not pureEngineReads[req.cmd] then
+   if quota.used>=QUOTA_LIMIT then rejectQuota("Operation quota exhausted; read status and explicitly reset after reconciliation");return end
+   if ledger.count>=SAVED_MUTATION_LIMIT then rejectQuota("Saved construction request limit reached; explicit quota reset required");return end
+   if ledger.retiredCount+ledger.count>=REPLAY_ID_LIMIT then rejectQuota("Replay history storage limit reached");return end
+   quota.used=quota.used+1
+  end
   ledger.requests[req.id]={status="started",cmd=req.cmd};ledger.count=ledger.count+1
   root.uiConstruction=ledger;state:set(root)
   if req.cmd=="begin_snapshot" or req.cmd=="read_snapshot_page" or req.cmd=="release_snapshot" then
@@ -7492,6 +8214,11 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    table.sort(stocks)
    return stableDataSignature({kind="warehouse",config=commands.get_facility_config({entity=id}),stocks=stocks}),"warehouse"
   end
+  if req.cmd=="preview_depot_removal" or req.cmd=="commit_depot_removal" or req.cmd=="get_depot_removal_operation" then
+   local ok,value=pcall(uiBuild.depotRemoval,state,root,ledger,req)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
+   state:set(root);emit(req,ok,value);return
+  end
   if req.cmd=="preview_test_removal" or req.cmd=="commit_test_removal" then
    local ok,value=pcall(function()
     assert(not ledger.pending,"Previous mutation unresolved")
@@ -7520,12 +8247,16 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{capabilityRevision="consolidated-20261011-v40",edgeEditSignaturePolicy="crosswalk-membership-v1",commands=names,
-    roadGraph={command="preview_road_graph",nativeAcceptance="pending_isolated_test",isolatedTestRequired=true,
+   emit(req,true,{townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
+    roadGraph={command="preview_road_graph",isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1",
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
-    roadJunctionBranch={command="preview_network",flag="connect_road_junctions",existingDegree=2,nativeAcceptance="pending_isolated_test"},
+    roadJunctionBranch={command="preview_network",flag="connect_road_junctions",existingDegree=2,isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1"},
     durableRequestCount=ledger.count,pending=ledger.pending,mutationLimit=SAVED_MUTATION_LIMIT,
+    operationQuota={version=1,round=quota.round,used=quota.used,limit=QUOTA_LIMIT,
+     remaining=math.max(0,QUOTA_LIMIT-quota.used),activeRequestCount=ledger.count-1,
+     retiredRequestCount=ledger.retiredCount,replayIdLimit=REPLAY_ID_LIMIT,
+     resetCommand="reset_operation_quota",requiresReconciliation=true},
     session=req.facilityEpoch,verification="capabilities only, not live feature acceptance"});return
   end
   local structureCommands={preview_depot="build_depot",preview_station="build_station",preview_rail_station="build_rail_station"}
@@ -7735,6 +8466,59 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    return
   end
   local ok,value=pcall(function()
+   if req.cmd=="reconcile_facility_rejection" then
+    -- Exact durable error emitted only before proposal creation/applyProposal.
+    -- No timeout, collision result, native failure, or arbitrary error qualifies.
+    local id=req.args.request_id;local old=ledger.requests[id]
+    local reason="facility changed since preview; inspect and preview again"
+    assert(ledger.pending==id and old and old.cmd=="commit_facility" and old.status=="error" and old.ok==false
+     and old.error==reason,"No matching pre-submit facility rejection; pending remains blocked")
+    local found=false
+    for _,row in ipairs((state:get() or {}).responses or {}) do if row.id==id then
+     assert(not found,"Ambiguous facility rejection evidence");found=true
+     local proof=json.decode(row.text)
+     assert(proof.id==id and proof.ok==false and proof.error==reason,"Conflicting facility rejection evidence")
+    end end
+    old.status="reconciled_rejected";old.retryAllowed=false;old.nativeSubmissionAttempted=false
+    ledger.pending=nil
+    return {request_id=id,status="reconciled_rejected",nativeSubmissionAttempted=false,retryAllowed=false,
+     verificationScope="persisted pre-submit fingerprint rejection; fresh survey and preview required"}
+   end
+   if req.cmd=="reconcile_assignment_rejection" then
+    -- Close only one explicit native false callback, never a lost/partial result.
+    -- The original durable result is retained and its request ID stays replay-blocked.
+    local a=req.args;local id=a.request_id;local old=ledger.requests[id]
+    assert(ledger.pending==id and not ledger.pendingWorkflow and old and old.cmd=="assign_vehicles"
+     and old.status=="error" and old.ok==false,"No matching terminal assignment rejection")
+    local proof=old.result
+    assert(type(proof)=="table" and proof.line==a.line and type(proof.assigned)=="table"
+     and next(proof.assigned)==nil and type(proof.failures)=="table"
+     and proof.failures[1]=="vehicle "..tostring(a.vehicle).." rejected",
+     "Assignment result is not an explicit single-vehicle rejection")
+    local count=0;for key in pairs(proof.failures) do count=count+1;assert(key==1,"Ambiguous failure evidence") end
+    assert(count==1,"Missing failure evidence")
+    requireEntity(a,"vehicle","TRANSPORT_VEHICLE");requireEntity(a,"line","LINE")
+    local player=api.engine.util.getPlayer();local v=getComponent(a.vehicle,"TRANSPORT_VEHICLE")
+    assert(commands.get_game_state({}).speedup==0,"Pause required for rejection reconciliation")
+    assert(ownerOf(a.vehicle)==player and ownerOf(a.line)==player,"Assignment ownership changed")
+    assert(v.line==-1 and v.state==api.type.enum.TransportVehicleState.IN_DEPOT,
+     "Vehicle state conflicts with assignment rejection")
+    local found=false
+    for _,vehicle in ipairs(listOf(api.engine.system.transportVehicleSystem.getDepotVehicles(v.depot))) do
+     if vehicle==a.vehicle then found=true end
+    end
+    assert(found,"Vehicle not independently listed in depot")
+    for _,vehicle in ipairs(listOf(api.engine.system.transportVehicleSystem.getLineVehicles(a.line))) do
+     assert(vehicle~=a.vehicle,"Vehicle is listed on rejected line")
+    end
+    old.status="reconciled_rejected";old.retryAllowed=false;old.nativeAccepted=false
+    old.reconciliation={vehicle=a.vehicle,line=a.line,depot=v.depot,player=player,
+     evidenceSource="durable_native_false_callback_and_unassigned_depot_readback"}
+    ledger.pending=nil
+    return {request_id=id,status="reconciled_rejected",nativeAccepted=false,retryAllowed=false,
+     vehicle=a.vehicle,line=a.line,depot=v.depot,gameMutation=false,
+     verificationScope="rejected assignment only; no retry, route repair or operation acceptance"}
+   end
    if req.cmd=="reconcile_depot_rejection" then
     -- A single depot command with an explicit native false callback only.
     -- Do not accept a timeout, partial response, thrown error or other mutation.
@@ -7822,6 +8606,29 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     ledger.pending=nil
     return {request_id=id,status="reconciled_rejected",mutationAttempted=false,retryAllowed=false,evidenceSource=source,identityDelta=identityDelta}
    end
+   if req.cmd=="reconcile_subvention_rejection" then
+    local id=req.args.request_id;local old=ledger.requests[id];local p=ledger.pendingWorkflow
+    assert(ledger.pending==id and old and old.cmd=="commit_subvention" and old.status=="error" and old.ok==false
+     and old.error=="previous subvention accept requires reconciliation; query state and never resend","No matching pre-dispatch subvention rejection")
+    assert(p and p.id==id and p.read=="get_subvention_operation","Subvention workflow lineage missing")
+    local adapter=(state:get() or {}).subventionAdapter or {};local token=p.token
+    local op=(adapter.operations or {})[token]
+    assert(type(adapter.epoch)=="string" and type(token)=="string" and token:sub(1,#adapter.epoch+12)=="subvention:"..adapter.epoch..":"
+     and op and op.player==api.engine.util.getPlayer() and type(op.uid)=="number" and type(op.resource)=="string" and type(op.spawnTime)=="number"
+     and not (adapter.previews or {})[token] and not (ledger.workflowTokens or {})[token]
+     and not (adapter.submitted or {})[tostring(op.uid)] and not op.acceptanceEvidence
+     and (op.phase==nil or op.phase=="prepared"),"Subvention may have dispatched or rejection proof is incomplete")
+    local native=commands.get_subventions({assess=false})
+    for _,row in ipairs(native.tasks) do
+     assert(row.uid~=op.uid or (row.status=="Proposed" and row.acceptedTime==nil and row.resource==op.resource and row.spawnTime==op.spawnTime),"Native evidence conflicts with rejection")
+    end
+    assert(native.gameTime>=op.spawnTime,"Native time regressed")
+    op.phase="rejected_before_dispatch";op.rejectionEvidenceSource="durable_exact_error_consumed_workflow_no_submission"
+    old.status="reconciled_rejected";old.mutationAttempted=false;old.retryAllowed=false;old.rejectionEvidenceSource=op.rejectionEvidenceSource
+    ledger.pending=nil;ledger.pendingWorkflow=nil
+    local updated=state:get() or {};updated.subventionAdapter=adapter;updated.uiConstruction=ledger;state:set(updated)
+    return {request_id=id,status="reconciled_rejected",mutationAttempted=false,retryAllowed=false,evidenceSource=op.rejectionEvidenceSource}
+   end
    if req.cmd=="reconcile_town_cargo_rejection" then
     -- The town handler creates an operation and consumes its preview BEFORE any
     -- native dispatch. An intact matching preview plus no operation, an exact
@@ -7874,7 +8681,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     else mapSnapshots={};mapSnapshotSerial=0 end
     mapSnapshotSession=req.facilityEpoch
    end
-   if ({get_facility_config=true,commit_facility=true,build_facility=true,build_headquarters=true,build_warehouse=true,build_heliport=true,build_airfield=true,build_helipad=true,preview_facility_module=true,preview_facility_parameter=true})[req.cmd] then req.args.compact=true end
+   if ({get_facility_config=true,commit_facility=true,build_facility=true,build_headquarters=true,build_warehouse=true,build_heliport=true,build_airfield=true,build_water_facility=true,build_helipad=true,preview_facility_module=true,preview_facility_parameter=true})[req.cmd] then req.args.compact=true end
    handleEngineEvent(state,json.encode(req))
    if req.cmd=="list_map_entities" or req.cmd=="release_map_snapshot" then
     local updated=state:get() or {}
@@ -7906,7 +8713,23 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if ledger.pending==req.id and req.cmd=="commit_road_graph" and ok and type(value)=="table"
    and value.id==req.id and value.built==false and value.phase=="rejected_unchanged" and value.rejectionVerified==true
    and value.nativeResult and value.nativeResult.explicitRejection==true and value.retryAllowed==false then ledger.pending=nil end
+  -- Only this handler's durable pre-dispatch phase proves that an error is safe to close.
+  local rejectedBeforeDispatch=false
+  if not ok and req.cmd=="commit_subvention" and ledger.pending==req.id then
+   local p=ledger.pendingWorkflow;local adapter=(state:get() or {}).subventionAdapter or {}
+   local op=p and (adapter.operations or {})[p.token]
+   if p and p.id==req.id and p.read=="get_subvention_operation" and op and op.phase=="prepared"
+    and not (adapter.submitted or {})[tostring(op.uid)] then
+    op.phase="rejected_before_dispatch";op.error=tostring(value):sub(1,2048)
+    local updated=state:get() or {};updated.subventionAdapter=adapter;state:set(updated)
+    ledger.pending=nil;ledger.pendingWorkflow=nil;rejectedBeforeDispatch=true
+   end
+  end
   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,error=not ok and tostring(value):sub(1,2048) or nil}
+  if rejectedBeforeDispatch then
+   local record=ledger.requests[req.id];record.status="reconciled_rejected";record.mutationAttempted=false;record.retryAllowed=false
+   record.rejectionEvidenceSource="durable_engine_pre_dispatch_phase"
+  end
   root=state:get() or {};root.uiConstruction=ledger;state:set(root)
   emit(req,ok,value)
  end
@@ -8005,6 +8828,45 @@ function headless.canSave()
 	-- Native bindings can be callable tables with a hidden metatable.
 	return type(app)=="table" and (type(app.saveGame)=="function" or type(app.saveGame)=="table")
 end
+function headless.canLoad()
+	return type(app)=="table" and isCallable(app.loadGame) and isCallable(app.findAllSavegames)
+		and isCallable(app.setWaitForStartReadyGame) and type(app.SaveGameNamespace)=="table"
+		and isCallable(app.SaveGameNamespace.getSavegame) and api.type.SavegameId~=nil
+end
+-- Same native entry and identifier construction as gui/menu/savegame_react_util.tl.
+-- Acknowledgement precedes the destructive state transition and is NOT completion.
+function headless.load(input)
+	local id,cmd,raw=input:match("^([0-9a-f]+) ([a-z_]+) (.+)$")
+	assert(id and #id==32 and cmd=="load_game" and raw:match("^%s*{"),"Invalid load request")
+	local args=json.decode(raw)
+	assert(type(args)=="table","Invalid load arguments")
+	for k in pairs(args)do assert(k=="slot" or k=="backup_save","Unknown load argument")end
+	for _,key in ipairs({"slot","backup_save"})do
+		local slot=args[key]
+		assert(type(slot)=="string" and #slot>=1 and #slot<=80 and slot:match("^[A-Za-z0-9][A-Za-z0-9_%-]*$"),"Invalid load slot")
+		local lower=slot:lower()
+		assert(not ({con=true,prn=true,aux=true,nul=true})[lower] and not lower:match("^com%d$") and not lower:match("^lpt%d$"),"Reserved load slot")
+	end
+	assert(args.slot~=args.backup_save,"Load target must differ from backup")
+	assert(headless.canLoad(),"Native load API unavailable")
+	local current=commands.get_game_state({});assert(current.speedup==0,"Pause before loading")
+	local namespace=app.SaveGameNamespace.getSavegame()
+	local selected,count=nil,0
+	for _,info in pairs(app.findAllSavegames(namespace))do
+		if info.saveName==args.slot then selected=info;count=count+1 end
+	end
+	assert(count==1 and selected.size>0,"Load target missing, empty or ambiguous")
+	local saveId=api.type.SavegameId.new()
+	saveId.path=selected.path;saveId.saveGameName=selected.saveName;saveId.saveGameNamespace=namespace
+	headless.stopped=true -- Never process another command in the departing session, even on error.
+	local encoded=json.encode({id=id,cmd=cmd,ok=true,result={requested=true,verified=false,
+		slot=args.slot,session=terrainEpoch,verification="new_session_and_readback_required"}})
+	local payload=hexEncode(encoded);local total=math.max(1,math.ceil(#payload/1500))
+	for part=1,total do print("[TNJ_UI_READ_V1] id="..id.." part="..part.." total="..total.." hex="..payload:sub((part-1)*1500+1,part*1500))end
+	app.setWaitForStartReadyGame()
+	app.loadGame(saveId,false,nil)
+	return "Result logged"
+end
 -- Saving runs in the application/GUI state without a visible panel or engine event.
 -- Keep the callback empty; the host verifies that the .sav was actually written.
 function headless.save(input)
@@ -8027,7 +8889,7 @@ function headless.save(input)
 	headless.saveIds[id]=true;headless.saveCount=headless.saveCount+1
 	app.saveGame(slot,function() end,false,true)
 	local encoded=json.encode({id=id,cmd=cmd,ok=true,result={requested=true,verified=false,
-		slot=slot,session=terrainEpoch,gameTime=current.gameTime,verification="host_file_check_required"}})
+		slot=slot,session=terrainEpoch,gameTime=current.gameTime,player=current.player,world=current.world,verification="host_file_check_required"}})
 	local payload=hexEncode(encoded)
 	local total=math.max(1,math.ceil(#payload/1500))
 	for part=1,total do
@@ -8042,8 +8904,18 @@ local function headlessTick()
 		row.generation=HEADLESS_GENERATION;row.slot=headless.slot
 		row.mode=HEADLESS_ON_DEMAND and "demand" or "bounded"
 		row.saveGameAvailable=headless.canSave()
+		row.loadGameVersion=1;row.loadGameAvailable=headless.canLoad()
 		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
 		row.saveRequestCount=headless.saveCount;row.saveRequestLimit=256
+		row.operationQuotaVersion=1
+		row.depotRemovalVersion=1
+		row.waterFacilityVersion=1
+		row.waterHarborLayoutVersion=1
+		row.industryBonusesVersion=1
+		row.townCargoSupplyVersion=2
+		row.assignmentReconciliationVersion=1
+		row.notificationsVersion=1
+		row.waterFacilityFingerprintVersion=2
 		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192};row.roadGraphVersion=40
 		if HEADLESS_ON_DEMAND then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua" end
 		row.utc=os.time();row.clock=wallClock()
@@ -8088,11 +8960,13 @@ local function headlessTick()
 			status=uiBuild.forward(req.input,HEADLESS_ON_DEMAND)
 		elseif req.kind=="read" then status=handleUiRead(req.input,HEADLESS_ON_DEMAND)
 		elseif req.kind=="save" then status=headless.save(req.input)
+		elseif req.kind=="load" then status=headless.load(req.input)
 		else error("Unsupported request kind") end
 		emit("dispatched",{id=id,detail=status})
 		assert(status=="Submitted; inspect log" or status=="Result logged","Dispatch failed or unknown: "..tostring(status))
 	end)
 	if not ok then headless.stopped=true;emit("stopped",{error=tostring(err)});return end
+	if headless.stopped then return end
 	if not HEADLESS_ON_DEMAND and headless.slot>=1024 then headless.stopped=true;emit("exhausted");return end
 	-- Never catch up missed frames or perform multiple reads on one update.
 	if not HEADLESS_ON_DEMAND or consumed then headless.slot=headless.slot+1 end

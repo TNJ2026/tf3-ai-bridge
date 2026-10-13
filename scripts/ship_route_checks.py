@@ -55,7 +55,8 @@ def compile_checks(plan,port_id=None):
         expected=set(p.get('service_industries',[p['industry']]if 'industry'in p else []))
         if not served[pid]or expected!=served[pid]:raise ValueError('Missing/extra fishing route assignments: '+pid)
     return {'pairs':list(pairs.values()),'directionsBeforeNodeDedup':2*len(pairs),
-            'cacheScope':'single engine evaluation','nativeVerified':False,'operationalAccepted':False}
+            'cacheScope':'single engine evaluation','nativeVerified':False,'operationalAccepted':False,
+            'diagnosticOnly':True,'requiredForCommissioning':False}
 
 def prelude():return Path(__file__).with_suffix('.lua').read_text('utf8')+'\n'
 
@@ -106,9 +107,11 @@ async def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--plan',type=Path,required=True);ap.add_argument('--output',type=Path,required=True)
     ap.add_argument('--port-id');ap.add_argument('--readback',action='store_true')
+    ap.add_argument('--diagnose-round-trip',action='store_true')
     a=ap.parse_args();p=json.loads(a.plan.read_text('utf8'));checks=compile_checks(p,a.port_id)
     if a.output.exists():raise ValueError('Output exists; preserve evidence')
     if not a.readback:write_json(a.output,checks);return
+    if not a.diagnose_round_trip:raise ValueError('Use --diagnose-round-trip only for explicit route diagnosis; ordinary commissioning needs no round-trip checks')
     b=Batch(argparse.Namespace(plan=a.plan,output=a.output.with_suffix('.audit'),action='verify',ids=None,limit=0))
     with batch_lock(b.b.dir):
         await b.session();r=await b.eval(audit_source(checks));write_json(a.output,r);b.flush()

@@ -171,7 +171,7 @@ for i in sorted(I.values(),key=lambda i:i['id']):
  port=dict(id=fid+'_harbor',kind='harbor',industry=i['id'],position=shore,rotation=rot,water_direction=pt(dx,dy),warehouse=wf['id'],helipad=pads[0]['id'],helipad2=pads[1]['id'],transfer_mode='HELICOPTER',node=n,shoreline_revision='native_small_pier_v1',candidates=[{'position':v,'water_direction':pt(a,b),'node':nn}for _,v,a,b,nn in sorted(options,key=lambda x:x[0])[:80]],waterRoute=waterpath(i['position'],shore),status='requires_fine_coast_preview')
  port.update(service_industries=[i['id']],annual_forecast=fish_annual[i['id']],
   water_routes_by_industry={str(i['id']):dict(outbound=port['waterRoute'],inbound=waterpath(shore,i['position']),native_verified=False)},
-  capacity_review=dict(annual_handling_budget=fish_budget,verified=False,required=['both field round trips and ship type','shipyard round trip','maintenance area','berths fleet and two helipads throughput','shared warehouse inventory']))
+  capacity_review=dict(annual_handling_budget=fish_budget,verified=False,required=['field access and ship type','actual ship departure without native fault','maintenance area','berths fleet and two helipads throughput','shared warehouse inventory']))
  if not port['waterRoute'] or not port['water_routes_by_industry'][str(i['id'])]['inbound']:raise ValueError('No sampled fishing round trip '+str(i['id']))
  fish_decisions.append(dict(industry=i['id'],port=port['id'],decision='independent_port',native_verified=False))
  ports.append(port);reserves.append(box(shore,45));pos[fid]=wh
@@ -333,7 +333,7 @@ for owner in sorted({v['hub_owner']for v in L.get('shared_industry_hubs',{}).val
   for end in ('source','destination'):
    if isinstance(line[end],str)and line[end]in members:
     traffic.append(dict(line=line['id'],direction=end,mode=line['mode'],cargos=line['cargos']))
- plan['shared_hub_capacity_review'].append(dict(owner=owner,industries=[int(i)for i,v in L['shared_industry_hubs'].items()if v['hub_owner']==owner],traffic=traffic,capacity_verified=False,required_checks=['industry round-trip road path','common warehouse stock','aggregate storage and truck terminal throughput','two landing terminals and fleet capacity'],note='Directional handling forecasts; do not sum both ends as additional supply. Expand or restore separate production hub if capacity fails.'))
+ plan['shared_hub_capacity_review'].append(dict(owner=owner,industries=[int(i)for i,v in L['shared_industry_hubs'].items()if v['hub_owner']==owner],traffic=traffic,capacity_verified=False,required_checks=['industry road access; diagnose paths only on actual faults','common warehouse stock','aggregate storage and truck terminal throughput','two landing terminals and fleet capacity'],note='Directional handling forecasts; do not sum both ends as additional supply. Expand or restore separate production hub if capacity fails.'))
 from planning_operations import enrich
 plan['cargo_deadlines_seconds']={str(k):v['timeToDeliverInSeconds'] for k,v in C.items() if v.get('timeToDeliverInSeconds',0)>0}
 enrich(plan)

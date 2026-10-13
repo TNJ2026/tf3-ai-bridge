@@ -353,7 +353,7 @@ class WorkflowClient:
         self.calls.append((command, args))
         if on_ticket:
             on_ticket({'id': str(len(self.calls))})
-        if command == 'get_game_state': return dict(balance=100, player=2, world=1)
+        if command == 'get_game_state': return dict(balance=100, player=2, world=1, gameTime=1)
         if command == 'get_map_info': return dict(towns=[], industries=[])
         if command == 'buy_vehicles': return dict(bought=[101], failures=[])
         if command == 'assign_vehicles':
@@ -448,7 +448,7 @@ def test_monitor_samples_deltas_without_mutations_or_duplicate_notices(tmp_path)
             self.maintenance = .3
         async def request(self, command, args, **kwargs):
             self.calls.append((command, args))
-            if command == 'get_game_state': return dict(balance=100, player=2, world=1)
+            if command == 'get_game_state': return dict(balance=100, player=2, world=1, gameTime=1)
             if command == 'get_map_info': return dict(towns=[{'id': 100}], industries=[])
             if command in ('get_finances', 'get_loans'): return {}
             if command == 'get_subventions': return {'tasks': [dict(uid=1, status='Proposed')]}
@@ -470,14 +470,16 @@ def test_monitor_samples_deltas_without_mutations_or_duplicate_notices(tmp_path)
         client = MonitorClient()
         monitor = OperationsMonitor(client, tmp_path)
         first = await monitor.once()
-        assert {e['type'] for e in first['events']} == {'new_no_path', 'low_maintenance', 'subvention_changed'}
+        assert {e['type'] for e in first['events']} == {'cash_reserve_low'}
         assert (await monitor.once())['events'] == []
         restarted = OperationsMonitor(client, tmp_path)
         assert (await restarted.once())['events'] == []
         client.fault = False
         client.maintenance = .8
-        assert {e['type'] for e in (await restarted.once())['events']} == {'path_recovered', 'maintenance_recovered'}
-        assert restarted.previous['towns'][0]['cargos']['1']['consumed'] == 50
+        assert {e['type'] for e in (await restarted.once())['events']} == set()
+        assert restarted.previous['towns'] == []
+        assert restarted.previous['accountWatch']['income'] is None
+        assert {c for c, _ in client.calls} == {'get_game_state','get_map_info','get_finances'}
         assert not monitor.status()['running']
         assert all(c.startswith(('get_', 'list_', 'release_')) for c, _ in client.calls)
     asyncio.run(run())

@@ -53,7 +53,7 @@ if f.road_maintenance then
  local c=api.engine.getComponent(f.road_maintenance,CT.CONSTRUCTION);local p=c.transf:cols(3);local y=c.transf:cols(1)
  local snap={x=p.x-16*y.x,y=p.y-16*y.y};local nearest=math.huge;local service=false
  for _,id in ipairs(c.depots)do local d=api.engine.getComponent(id,CT.VEHICLE_DEPOT)
-  if d and d.maintenancePool==16 and d.catchmentArea and d.catchmentArea.radius==600 and d.transportModes[3]and d.transportModes[4]then service=true end
+  if d and d.maintenancePool>0 and d.catchmentArea and d.catchmentArea.radius>0 and d.transportModes[3]and d.transportModes[4]then service=true end
  end
  for _,id in ipairs(roads)do local e=api.engine.getComponent(id,CT.BASE_EDGE)
   if e then local a=api.engine.getComponent(e.node0,CT.BASE_NODE).position;local b=api.engine.getComponent(e.node1,CT.BASE_NODE).position

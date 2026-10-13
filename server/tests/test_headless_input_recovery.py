@@ -13,6 +13,26 @@ from tf3_mcp.headless_client import HeadlessClient, HeadlessRequestRejected
 from test_channel_migration import Requests
 
 
+def test_request_window_tolerates_non_protocol_windows_diagnostics(host):
+    ticket = host.send('get_game_state', {}, kind='read')
+    row = host._load()['requests'][ticket['id']]
+    with host.log.open('ab') as stream:
+        stream.write(b'native diagnostic: \x81\xff\n')
+    data, lines = headless_recovery.request_window(host, row)
+    assert b'\x81\xff' in data
+    assert len(lines) == 1
+    assert headless_recovery.native_input_rejection(host, row) is None
+
+
+def test_request_window_keeps_protocol_encoding_strict(host):
+    ticket = host.send('get_game_state', {}, kind='read')
+    row = host._load()['requests'][ticket['id']]
+    with host.log.open('ab') as stream:
+        stream.write(TAG.encode('ascii') + b'\x81\xff\n')
+    with pytest.raises(UnicodeDecodeError):
+        headless_recovery.request_window(host, row)
+
+
 def test_client_reports_known_rejection_without_polling_or_retry():
     requests = Requests()
     requests.outcome = 'rejected'

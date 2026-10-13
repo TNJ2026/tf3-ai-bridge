@@ -27,7 +27,7 @@ def test_tram_frontage_requires_bidirectional_electric_lanes(frontage):
     assert check['ok'] and result['nativeEntranceNode']==-8
     assert p['streetProposal']['edgesToAdd'][1]['comp']['laneConfigs'][1]['transportModes'][6]
     for cfg in p['streetProposal']['nodeConfigsToAdd'].values():
-        assert list(cfg['comp']['crosswalks'].values())==[-2,-3]
+        assert list(cfg['comp']['crosswalks'].values())==[-3,-4]
     lua.execute('edges[21].laneConfigs[2].transportModes[6]=false')
     with pytest.raises(LuaError,match='both directions'):
         a['bind'](lua.eval('{streetProposal={}}'),10,'TRAM')

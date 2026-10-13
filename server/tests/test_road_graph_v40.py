@@ -6,7 +6,7 @@ from test_road_graph_special import special,crossing_graph
 from tf3_mcp.road_graph import road_graph
 
 
-@pytest.mark.parametrize('count,pending',[(256,False),(1024,False),(256,True)])
+@pytest.mark.parametrize('count,pending',[(255,False),(256,False),(1024,False),(255,True)])
 def test_saved_budget_retains_receipts_pending_and_finite_limit(tmp_path,count,pending):
     c=graph_channel(tmp_path)
     c.lua.globals().TEST_STATE=c.state
@@ -15,10 +15,10 @@ def test_saved_budget_retains_receipts_pending_and_finite_limit(tmp_path,count,p
       TEST_STATE.v.uiConstruction={{requests=requests,tokens={{}},count={count},pending={"'unresolved'" if pending else 'nil'}}}''')
     old=c.state['v']['uiConstruction']['requests']['00000000000000000000000000000001']
     r=c.query('preview_road_graph',{'graph':{'nodes':[node(700,700),node(800,700)],'edges':[edge(0,1)]},'isolated_test':True})
-    assert r['ok']==(count<1024),r
+    assert r['ok']==(count<256),r
     ledger=c.state['v']['uiConstruction']
     assert ledger['requests']['00000000000000000000000000000001']['cmd']==old['cmd']
-    assert ledger['count']==count+(count<1024)
+    assert ledger['count']==count+(count<256)
     assert ledger['pending']==('unresolved' if pending else None)
     assert c.lua.globals().dispatches==0
     # Re-delivery of this exact engine event must neither emit nor consume again.

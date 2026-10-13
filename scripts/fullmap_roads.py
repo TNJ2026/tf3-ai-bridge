@@ -57,7 +57,7 @@ return B.json.encode({nodes=out})'''.replace('POS',quote(p))
    return await run_road_reads(self)
   await self.session();self.tasks_all=super().tasks();selected=[s for s in self.p['roads']if s['to_facility']in{f['id']for f in self.tasks_all}]
   if self.a.road_ids:selected=[s for s in selected if s['id']in self.a.road_ids.split(',')]
-  if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions '+str(unfinished(self.ledger)))
+  # Historical business ledger entries do not gate unrelated work.
   if self.a.action=='build':await self.save('roads_before')
   done=0
   for spec in selected:

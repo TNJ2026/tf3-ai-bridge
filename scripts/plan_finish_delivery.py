@@ -64,7 +64,7 @@ def node(v):
   if anchor is not None:return anchor
  q=loc(v);return min(nodes,key=lambda n:dist(nodes[n],q))
 for l in p['line_specs']:
- l['path']=[loc(l['source']),loc(l['destination'])];l['acceptance_required']=['current cargo/model compatibility','explicit source load and destination unload','round trip including queues','cargo delivered to final town/factory stock','deadline headroom','maintenance coverage and capacity']
+ l['path']=[loc(l['source']),loc(l['destination'])];l['acceptance_required']=['current cargo/model compatibility','explicit source load and destination unload','actual departure from base','normal assigned-line operation','no native line/path fault']
  if l['mode']=='TRUCK':
   start=node(l['source']);end=node(l['destination']);length,edges=shortest(start,end);l['road_edge_hints']=edges;l['existing_graph_connected']=length is not None;l['road_length_forecast']=length
   if isinstance(l['destination'],dict)and'town'in l['destination']:
@@ -85,7 +85,7 @@ for h in p['hubs']:
 assert all(l.get('existing_graph_connected',True)for l in p['line_specs'])
 p['validation'].update(facility_single_native_passed=len(native),building_group_native_passed=sum(x['previewPassed']for x in groups.values()),connected_joint_preview_passed=False,construction_authorized=False,static_and_operational_acceptance_required=True)
 p['capacity_policy']='Current measured annual output is the baseline. Missing volume stays unmet; exploration, growth or booster benefits are not invented.'
-p['execution_gates']=['session/map fingerprint and current entities','native group + connected roads after port resolution','inventory coverage for each cargo','current stopping/terminal indexes','bidirectional paths','explicit cargo config','small fleet measured cycles','same rolling save slot with stable changed file signature']
+p['execution_gates']=['session/map fingerprint and current entities','native group + connected roads after port resolution','inventory coverage for each cargo','current stopping/terminal indexes','actual infrastructure connections','explicit cargo config','actual departure, normal assigned-line operation and no native fault','same rolling save slot with stable changed file signature']
 write_json(R/'network_plan.json',p)
 
 # Fully represented dependency graph. Creation of lines follows all endpoint infrastructure.

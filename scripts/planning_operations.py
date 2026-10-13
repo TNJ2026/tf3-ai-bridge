@@ -53,7 +53,7 @@ def assign_air_maintenance(plan):
         line['maintenance_base'] = selected['id']
         line['maintenance_assignment'] = dict(status='candidate_pending_native_readback',
             nativeVerified=False, endpointBase=bool(local), detourEstimateM=detour(selected),
-            requiredChecks=['maintenance capability', 'actual outbound and return', 'maintenance load'])
+            requiredChecks=['maintenance capability', 'normal operation without native faults', 'maintenance load'])
         result.append(dict(line=line['id'], base=selected['id'], fleetForecast=fleet, **line['maintenance_assignment']))
     # Routes can split across bases: preserve an explicit list instead of an
     # obsolete arbitrary single maintenance reference.
@@ -113,11 +113,11 @@ def chain_forecasts(plan):
             travelSeconds=travel, estimatedTotalSeconds=estimate, deadlineSeconds=deadline,
             deadlineBasis='cargo' if cargo in plan.get('cargo_deadlines_seconds', {}) else 'conservative line minimum',
             riskForecast=estimate > deadline if complete and positive(deadline) else None,
-            nativeTimingVerified=False, basis='travel + half headway per leg; parallel services weighted by cargo; loading not separately measured'))
+            nativeTimingVerified=False, acceptanceGate=False, basis='travel + half headway per leg; parallel services weighted by cargo; loading not separately measured'))
     return results
 
 
-def platform_forecasts(plan, dwell_seconds=60):
+def platform_forecasts(plan, dwell_seconds=60, *, detailed=True):
     if not positive(dwell_seconds): raise ValueError('Positive dwell assumption required')
     pads = defaultdict(list)
     for line in plan['line_specs']:
@@ -125,25 +125,35 @@ def platform_forecasts(plan, dwell_seconds=60):
         for end in ('source', 'destination'):
             terminal = line.get(end + '_terminal_index')
             if not isinstance(terminal, int) or isinstance(terminal, bool) or terminal < 0:
-                raise ValueError('Explicit landing terminal required: ' + line['id'])
+                if detailed:
+                    raise ValueError('Explicit landing terminal required: ' + line['id'])
+                terminal = None  # Route draft; bind actual terminals before execution.
             pads[(endpoint_key(line[end]), terminal)].append(line)
     rows = []
     for (facility, terminal), lines in sorted(pads.items()):
-        valid = all(positive(l.get('headway_seconds_forecast')) for l in lines)
+        valid = detailed and all(positive(l.get('headway_seconds_forecast')) for l in lines)
         frequency = sum(3600 / l['headway_seconds_forecast'] for l in lines) if valid else None
         occupancy = frequency * dwell_seconds / 3600 if valid else None
         rows.append(dict(facility=facility, terminal=terminal, lines=[l['id'] for l in lines],
-            lineLimitPassed=len(lines) <= 3, arrivalsPerHour=frequency, dwellAssumptionSeconds=dwell_seconds,
-            occupancyEstimate=occupancy, capacityReviewRequired=occupancy is None or occupancy >= .7,
-            nativeTerminalVerified=False, queueVerified=False, maintenanceOccupancyIncluded=False))
+            lineLimitPassed=len(lines) <= 3 if terminal is not None else None,
+            arrivalsPerHour=frequency, dwellAssumptionSeconds=dwell_seconds if detailed else None,
+            occupancyEstimate=occupancy,
+            forecastStatus='not_requested' if not detailed else 'estimated' if valid else 'unknown',
+            capacityReviewRequired=(terminal is not None and len(lines) > 3) or (occupancy is not None and occupancy >= .7),
+            acceptanceGate=False, nativeTerminalVerified=False, queueVerified=False, maintenanceOccupancyIncluded=False))
     return rows
 
 
 def enrich(plan):
-    for line in plan['line_specs']:
-        if positive(line.get('oneway_seconds_forecast')) and positive(line.get('fleet_forecast')):
-            line.setdefault('roundtrip_seconds_forecast',2*line['oneway_seconds_forecast'])
-            line.setdefault('headway_seconds_forecast',line['roundtrip_seconds_forecast']/line['fleet_forecast'])
+    mode = plan.get('operationsAnalysis', 'basic')
+    if mode not in ('basic', 'detailed'):
+        raise ValueError('operationsAnalysis must be basic or detailed')
+    detailed = mode == 'detailed'
+    if detailed:
+        for line in plan['line_specs']:
+            if positive(line.get('oneway_seconds_forecast')) and positive(line.get('fleet_forecast')):
+                line.setdefault('roundtrip_seconds_forecast',2*line['oneway_seconds_forecast'])
+                line.setdefault('headway_seconds_forecast',line['roundtrip_seconds_forecast']/line['fleet_forecast'])
     maintenance = assign_air_maintenance(plan)
     for hub in plan.get('hubs', []):
         f = hub['facilities']
@@ -157,6 +167,7 @@ def enrich(plan):
                   for l in plan['line_specs'] if r['id'] in l.get('flows', []) for e in ('source', 'destination'))]
         decision['traffic'] = [dict(route=r['id'], annual=r.get('annual'), cargo=r['cargo']) for r in routes]
         decision['maintenanceLines'] = [l['id'] for l in plan['line_specs'] if l.get('maintenance_base') in members]
-    plan['operations_review'] = dict(schema=1, maintenance=maintenance, chains=chain_forecasts(plan),
-        platforms=platform_forecasts(plan), operationalAccepted=False)
+    plan['operations_review'] = dict(schema=2, mode=mode, maintenance=maintenance,
+        chains=chain_forecasts(plan) if detailed else [],
+        platforms=platform_forecasts(plan, detailed=detailed), operationalAccepted=False)
     return plan['operations_review']

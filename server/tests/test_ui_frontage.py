@@ -66,11 +66,49 @@ def test_frontage_preserves_and_remaps_outer_config(frontage):
     assert set(street['nodeConfigsToRemove'].values())=={10,11,12}
     assert set(v['entity'] for v in street['nodeConfigsToAdd'].values())=={11,12}
     for v in street['nodeConfigsToAdd'].values():
-        assert v['comp']['laneConnections'][1]['segment0']==-2
-        assert v['comp']['laneConnections'][1]['segment1']==-3
-        assert list(v['comp']['crosswalks'].values())==[-2,-3]
+        assert v['comp']['laneConnections'][1]['segment0']==-3
+        assert v['comp']['laneConnections'][1]['segment1']==-4
+        assert list(v['comp']['crosswalks'].values())==[-3,-4]
     assert lua.globals().configs[11]['laneConnections'][1]['segment0']==21
     assert result['connectionsVerified'] is False
+
+
+def test_exact_native_entrance_does_not_duplicate_a_placeholder(frontage):
+    """Model the native rejection seen at all three Hengshui road nodes."""
+    lua,a=frontage
+    lua.execute('''
+      local original=previewProposal
+      function previewProposal(p)
+       -- The construction contributes a node exactly at (0,0,1).
+       local removesOriginal=false
+       for _,id in ipairs(p.streetProposal.nodesToRemove or {})do if id==10 then removesOriginal=true end end
+       if not removesOriginal then return {critical=true,ok=false,messages={'coincident existing node'}},{entity2tn={}} end
+       for _,n in ipairs(p.streetProposal.nodesToAdd or {}) do
+        local v=n.comp.position
+        if v.x==0 and v.y==0 and v.z==1 then
+         return {critical=true,ok=false,messages={'duplicate base nodes'}},nil
+        end
+       end
+       if previews==0 then
+        assert(p.streetProposal.nodesToRemove[1]==10,'discovery must remove the coincident real node')
+        assert(#p.streetProposal.nodesToAdd==1 and p.streetProposal.nodesToAdd[1].comp.position.x==-2)
+        assert(p.streetProposal.edgesToAdd[1].comp.node1==-2)
+        assert(p.streetProposal.edgesToAdd[2].comp.node0==-2)
+       else
+        assert(p.streetProposal.nodesToRemove[1]==10)
+        assert(p.streetProposal.edgesToAdd[1].comp.node1==-8)
+        assert(p.streetProposal.edgesToAdd[2].comp.node0==-8)
+       end
+       return original(p)
+      end
+    ''')
+    p,result,check=a['bind'](lua.eval('{streetProposal={}}'),10)
+    assert check['ok'] and result['nativeEntranceNode']==-8
+    assert lua.globals().previews==2
+    assert list(p['streetProposal']['nodesToRemove'].values())==[10]
+    assert len(p['streetProposal']['nodesToAdd'])==0
+    assert p['streetProposal']['edgesToAdd'][1]['comp']['position1']['x']==0
+    assert p['streetProposal']['edgesToAdd'][2]['comp']['position0']['x']==0
 
 @pytest.mark.parametrize('change',[
  'frozen=11','configs[11].userModifiedLaneConnections=true',
@@ -147,7 +185,7 @@ def test_lane_signature_uses_values_not_opaque_wrapper_addresses(frontage):
     assert a['inspect'](10)[1]!=before
 
 
-@pytest.mark.parametrize('failure', ['missing_data', 'initial_critical', 'final_critical', 'height'])
+@pytest.mark.parametrize('failure', ['missing_data', 'missing_network', 'final_critical', 'height'])
 def test_native_failure_keeps_details_without_another_preview(frontage, failure):
     lua,a=frontage
     lua.globals().failure=failure
@@ -158,7 +196,8 @@ def test_native_failure_keeps_details_without_another_preview(frontage, failure)
       c.messages={{key="native_rejection",detail="specific native reason"}}
       c.warnings={"warning"};c.infos={"info"}
       if failure=="missing_data" then return c,nil end
-      if failure=="initial_critical" or (failure=="final_critical" and previews==2) then c.critical=true end
+      if failure=="missing_network" then d.entity2tn=nil end
+      if failure=="final_critical" and previews==2 then c.critical=true end
       return c,d
      end
      if failure=="height" then height=2 end
@@ -172,6 +211,48 @@ def test_native_failure_keeps_details_without_another_preview(frontage, failure)
     assert diagnostic['stage']==({'height':'port_height','final_critical':'bound_preview'}.get(failure,'discover_port'))
     assert lua.globals().previews==(2 if failure=='final_critical' else 1)
     assert set(lua.globals().edges.keys())=={21,22}
+
+
+@pytest.mark.parametrize('final_critical', [False, True])
+def test_unbound_discovery_geometry_requires_independent_final_preview(frontage, final_critical):
+    """An unbound discovery verdict cannot reject or approve a bound proposal."""
+    lua,a=frontage
+    lua.globals().finalCritical=final_critical
+    lua.execute('''
+      local original=previewProposal
+      function previewProposal(p)
+       local c,d=original(p)
+       c.critical=previews==1 or finalCritical
+       c.ok=not c.critical
+       c.messages=c.critical and {'无法建造'} or {}
+       return c,d
+      end
+    ''')
+    proposal=lua.eval('{streetProposal={}}')
+    if final_critical:
+        with pytest.raises(LuaError,match='Final native frontage preview failed'):
+            a['bind'](proposal,10)
+    else:
+        _,result,check=a['bind'](proposal,10)
+        assert result['discoveryCritical'] is True
+        assert list(result['discoveryMessages'].values())==['无法建造']
+        assert check['ok'] and not check['critical']
+    assert lua.globals().previews==2
+
+
+def test_critical_discovery_without_a_matching_port_stops_before_final_preview(frontage):
+    lua,a=frontage
+    lua.execute('''
+      local original=previewProposal
+      function previewProposal(p)
+       local c,d=original(p)
+       c.critical=true;c.ok=false;d.entity2tn={}
+       return c,d
+      end
+    ''')
+    with pytest.raises(LuaError,match='Native entrance does not uniquely match'):
+        a['bind'](lua.eval('{streetProposal={}}'),10)
+    assert lua.globals().previews==1
 
 
 def test_failure_diagnostics_are_bounded_and_cycle_safe(frontage):
@@ -214,8 +295,8 @@ def test_native_read_only_configuration_flags_are_not_written(frontage):
     p,_,check=a['bind'](lua.eval('{streetProposal={}}'),10)
     assert check['ok']
     for cfg in p['streetProposal']['nodeConfigsToAdd'].values():
-        assert list(cfg['comp']['crosswalks'].values())==[-2,-3]
-        assert cfg['comp']['laneConnections'][1]['segment0']==-2
+        assert list(cfg['comp']['crosswalks'].values())==[-3,-4]
+        assert cfg['comp']['laneConnections'][1]['segment0']==-3
         assert cfg['comp']['trafficLightPreference']==0
         assert cfg['comp']['doubleSlipSwitch'] is False
 
@@ -227,3 +308,96 @@ def test_read_only_custom_flags_still_block_frontage(frontage,flag):
     with pytest.raises(LuaError,match='Custom frontage node configuration'):
         a['bind'](lua.eval('{streetProposal={}}'),10)
     assert lua.globals().previews==0
+
+
+def test_missing_joint_geometry_reports_construction_only_control(frontage):
+    lua,a=frontage
+    lua.execute("""
+      api.type.SimpleProposal={new=function()return {streetProposal={}}end}
+      local original=previewProposal
+      function previewProposal(p)
+       local c,d=original(p)
+       if p.streetProposal.edgesToRemove then
+        c.critical=true;c.ok=false;d.entity2tn={}
+       else
+        c.critical=false;c.ok=false;c.collisions={21}
+       end
+       return c,d
+      end
+    """)
+    with pytest.raises(LuaError) as error:
+        a['bind'](lua.eval('{streetProposal={},constructionsToAdd={{fileName="depot"}}}'),10)
+    raw=str(error.value).split('; diagnostic=',1)[1]
+    diagnostic=json.JSONDecoder().raw_decode(raw)[0]
+    assert diagnostic['stage']=='unique_port'
+    assert diagnostic['context']['joint']['networkCount']==0
+    control=diagnostic['context']['control']
+    assert control['critical'] is False and control['collisions']==[21]
+    assert any('reason=match' in row for row in control['geometry']['rows'])
+    assert diagnostic['native']['critical'] is True
+    assert lua.globals().previews==2  # Only failed joint discovery and independent read-only control.
+    assert set(lua.globals().edges.keys())=={21,22}
+
+
+def test_geometry_summary_records_rejection_reasons_and_bounds(frontage):
+    lua,a=frontage
+    pd=lua.execute("""
+      local edges={}
+      for i=1,30 do edges[i]={transportModes={[2]=true,[3]=true,[4]=true},
+       conns={{entity=-8},{entity=-7}},geometry={cubicSpline={pos={V3(i,0,1),V3(0,10,1)}},height={x=1,y=1}}} end
+      return {entity2tn={[-8]={edges=edges}}}
+    """)
+    result=a['geometrySummary'](pd,lua.eval('V3(0,0,1)'),'ROAD')
+    assert result['networkCount']==1 and result['edgeCount']==30
+    assert result['endpointCount']==31 and result['truncated'] is True
+    assert len(result['rows'])==12
+    assert all('reason=xy' in row for row in result['rows'].values())
+
+
+@pytest.mark.parametrize('native_height',[1.05,5,-4])
+def test_measured_height_alignment_keeps_existing_road_height(frontage,native_height):
+    lua,a=frontage
+    lua.globals().height=native_height
+    corrections=[]
+    def align(delta):
+        corrections.append(delta)
+        lua.globals().height=native_height+delta
+        return lua.eval('{streetProposal={}}')
+    p,result,check=a['bind'](lua.eval('{streetProposal={}}'),10,'ROAD',align)
+    assert corrections==pytest.approx([1-native_height])
+    assert check['ok'] and lua.globals().previews==3
+    assert result['heightAlignment']['roadHeightPreserved'] is True
+    assert result['heightAlignment']['iterations']==1
+    assert result['nativePosition']['z']==pytest.approx(1)
+    for e in p['streetProposal']['edgesToAdd'].values():
+        assert e['comp']['position0']['z']==1 and e['comp']['position1']['z']==1
+
+
+def test_height_alignment_is_bounded_and_never_accepts_nonconvergence(frontage):
+    lua,a=frontage;lua.globals().height=5
+    calls=[]
+    def bad_alignment(delta):
+        calls.append(delta)
+        return lua.eval('{streetProposal={}}')
+    with pytest.raises(LuaError,match='did not converge'):
+        a['bind'](lua.eval('{streetProposal={}}'),10,'ROAD',bad_alignment)
+    assert calls==[-4] and lua.globals().previews==2
+    assert set(lua.globals().edges.keys())=={21,22}
+
+
+def test_height_correction_still_requires_clean_final_native_preview(frontage):
+    lua,a=frontage;lua.globals().height=5
+    lua.execute('''
+      local original=previewProposal
+      function previewProposal(p)
+       local c,d=original(p)
+       if previews==3 then c.critical=true end
+       return c,d
+      end
+    ''')
+    def align(delta):
+        lua.globals().height=1
+        return lua.eval('{streetProposal={}}')
+    with pytest.raises(LuaError,match='Final native frontage preview failed'):
+        a['bind'](lua.eval('{streetProposal={}}'),10,'ROAD',align)
+    assert lua.globals().previews==3

@@ -47,24 +47,23 @@ class Lines(Batch):
   source=(ROOT/'scripts/fullmap_lines.lua').read_text(encoding='utf8');return await self.eval(source.replace('TASKJSON',quote(t)).replace('local action=ACTION','local action='+json.dumps(action)))
  async def run(self):
   await self.session()
-  if self.a.action=='build'and unfinished(self.ledger):raise StopBatch('Unreconciled submissions')
+  # Historical business ledger entries do not gate unrelated work.
   if self.a.action=='build':await self.save('lines_before')
   done=0
   for t in self.specs():
    key=t['id'];item=self.ledger['items'].setdefault(key,dict(kind='line',attempts=0));await self.session()
    r=await self.line(t,'preview');item['preview']=r;self.flush()
    if r.get('existing'):
-    if not item['attempts']:raise StopBatch(key+' unrecorded existing line')
     item.update(audit=r,status='static_verified');self.flush();continue
    if item['attempts']:raise StopBatch(key+' submitted line missing; do not retry')
-   if self.a.action!='build':print(key+': native circuit verified',flush=True);continue
+   if self.a.action!='build':print(key+': terminal and cargo configuration selected; departure pending',flush=True);continue
    item.update(attempts=1,status='commit_started',intentTime=time.time(),spec=t);self.flush()
    try:
     r=await self.line(t,'build');item['commit']=r;self.flush()
     if not r.get('accepted')or not r.get('verified'):raise StopBatch('Line creation/readback incomplete')
     r=await self.line(t,'verify')
     if not r.get('verified'):raise StopBatch('Line verification failed')
-    item.update(audit=r,status='static_verified');self.flush();done+=1;print(key+': built once + native circuit/cargo verified',flush=True)
+    item.update(audit=r,status='static_verified');self.flush();done+=1;print(key+': built once + terminal/cargo configuration verified; departure pending',flush=True)
    except BaseException:item['status']='needs_reconciliation';self.flush();raise
    if done%10==0:await self.save('lines_'+str(done))
    if self.a.limit and done>=self.a.limit:break

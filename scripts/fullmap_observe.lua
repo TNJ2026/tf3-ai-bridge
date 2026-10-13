@@ -9,14 +9,14 @@ if FULL then
  out.townSupply={}
  for _,id in ipairs(api.engine.getEntitiesWithComponent(CT.TOWN))do
   local r={town=id,supply=0,demand=0,cargos={}}
-  for _,u in ipairs({api.type.enum.LandUseType.RESIDENTIAL,api.type.enum.LandUseType.COMMERCIAL,api.type.enum.LandUseType.INDUSTRIAL})do
-   for c,v in pairs(api.engine.system.townBuildingSystem.getCargoSupplyAndLimit(id,u))do if c>0 then r.supply=r.supply+v[1];r.demand=r.demand+v[2];local k=tostring(c);r.cargos[k]=r.cargos[k]or{supply=0,demand=0};r.cargos[k].supply=r.cargos[k].supply+v[1];r.cargos[k].demand=r.cargos[k].demand+v[2]end end
+  local panel=B.commands.get_town_cargo_supply({town=id})
+  for _,v in ipairs(panel.items) do
+   r.supply=r.supply+v.supply;r.demand=r.demand+v.demand
+   r.cargos[tostring(v.cargo)]=v
   end
+  r.scope=panel.scope;r.gameTime=panel.gameTime
   out.townSupply[#out.townSupply+1]=r
+  out.cities[tostring(id)]={cargos=r.cargos,scope=panel.scope,annualDeliveredKnown=false}
  end
- api.engine.forEachEntityWithComponent(function(id)local b=api.engine.getComponent(id,CT.TOWN_BUILDING);if b.stockList>=0 and api.engine.entityExists(b.stockList)then
-  local key=tostring(b.town);out.cities[key]=out.cities[key]or{deliveredPerYear=0,cargos={}};local r=out.cities[key]
-  for _,c in ipairs(cargos)do local n=api.engine.util.stock.getCargoTypeDeliveredPerYear(b.stockList,c);if n>0 then r.deliveredPerYear=r.deliveredPerYear+n;r.cargos[tostring(c)]=(r.cargos[tostring(c)]or 0)+n end end
- end end,CT.TOWN_BUILDING)
 end
 return B.json.encode(out)

@@ -183,7 +183,7 @@ async def run(a):
                 item['status']='static_verified';item['reconciledBy']='Fresh native role-specific readback; no build replay';b.flush()
                 await b.save('road_first_verified_complete')
                 print(json.dumps({'verified':True,'walking':audit['paths'].get('walking'),'buildSubmissions':0}));return
-            if unfinished(b.ledger):raise StopBatch('Unreconciled prior submission')
+            # Historical business ledger entries do not gate unrelated work.
             key=stage_key(b,a.owner,a.stage);item=b.ledger['items'].get(key,{})
             if item.get('attempts'):raise StopBatch('Stage already attempted; no automatic replay')
             if a.stage=='roads':s=stage_spec(base,'roads')

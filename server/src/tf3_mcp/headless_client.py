@@ -51,24 +51,132 @@ class HeadlessClient:
                 self.session = previous
                 raise
 
+    async def reconcile_subvention_rejection(self, request_id, expected_session):
+        """Close one proven legacy pre-dispatch rejection; never replay the accept."""
+        async with self.lock:
+            status = await self.status()
+            if status['receiver']['session'] != expected_session or status.get('pending'):
+                raise ValueError('Session mismatch or unresolved host request')
+            current = await self.request('get_validation_state', {})
+            if (current.get('session') != expected_session or current.get('pending') != request_id
+                    or current.get('subventionReconciliationVersion') != 1):
+                raise ValueError('Loaded adapter/session/pending does not match reconciliation')
+            result = await self.request('reconcile_subvention_rejection', {'request_id': request_id})
+            check = await self.request('get_validation_state', {})
+            if (result.get('request_id') != request_id or result.get('status') != 'reconciled_rejected'
+                    or result.get('mutationAttempted') is not False or result.get('retryAllowed') is not False
+                    or check.get('pending') or check.get('session') != expected_session):
+                raise HeadlessOutcomeUnknown('Subvention reconciliation readback mismatch; never replay')
+            return dict(result, verification=check)
+
+    async def reset_operation_quota(self, expected_session, expected_round, expected_used):
+        """Explicit CAS reset; ordinary requests and batch workflows never call it."""
+        async with self.lock:
+            status = await self.status()
+            receiver = status['receiver']
+            if receiver['session'] != expected_session or status.get('pending'):
+                raise ValueError('Session mismatch or unresolved host request; cannot reset quota')
+            if receiver.get('operationQuotaVersion') != 1:
+                raise ValueError('Loaded receiver lacks quota reset support')
+            current = await self.request('get_validation_state', {})
+            quota = current.get('operationQuota', {})
+            if (current.get('session') != expected_session or current.get('pending')
+                    or quota.get('version') != 1 or quota.get('round') != expected_round
+                    or quota.get('used') != expected_used):
+                raise ValueError('Quota/session changed or engine mutation unresolved; read status again')
+            result = await self.request('reset_operation_quota', dict(expected_round=expected_round,
+                expected_used=expected_used, expected_count=quota['activeRequestCount']))
+            check = await self.request('get_validation_state', {})
+            after = check.get('operationQuota', {})
+            if (result.get('reset') is not True or check.get('session') != expected_session
+                    or after.get('round') != expected_round + 1 or after.get('used') != 0
+                    or check.get('pending')):
+                raise ValueError('Quota reset readback mismatch; reconcile, never retry')
+            return dict(result, verified=True, readback=after)
+
     @staticmethod
     def map_digest(world):
         data = {k: sorted(world.get(k, []), key=lambda r: r['id']) for k in ('towns', 'industries')}
         data.update(width=world.get('width'), height=world.get('height'))
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
+    async def load_game(self, slot, expected_session):
+        """Explicit load only; save current progress first, never retry a load."""
+        import uuid
+        from .headless import workflow_lock
+        from .headless_load import verified_save
+        from .ui_log import validate_save_arguments
+        validate_save_arguments('save_game', {'slot': slot})
+        async with self.lock:
+            with workflow_lock(self.requests.directory):
+                status = await self.status()
+                if (status['receiver']['session'] != expected_session or status.get('pending') or status.get('loadVerification')
+                        or status['receiver'].get('loadGameVersion') != 1
+                        or status['receiver'].get('loadGameAvailable') is not True):
+                    raise ValueError('Fresh native-load-v1 session without pending required')
+                self.session = expected_session
+                await asyncio.to_thread(verified_save, self.requests, self.requests._load(), slot)
+                state = await self.request('get_game_state', {})
+                validation = await self.request('get_validation_state', {})
+                if state['speedup'] != 0 or validation.get('pending'):
+                    raise ValueError('Pause and resolve pending before loading; nothing loaded')
+                backup = 'tf3_before_load_' + uuid.uuid4().hex
+                await self.request('save_game', {'slot': backup, 'overwrite': False})
+                await self.request('get_game_state', {})
+                await self.request('get_validation_state', {})
+                ticket = {}
+                self.identity = None
+                result = await self.request('load_game', {'slot': slot, 'backup_save': backup}, on_ticket=ticket.update)
+                return await self._verify_loaded_game(ticket['id'], result)
+
+    async def _verify_loaded_game(self, request_id, result):
+        if not result.get('reloadObserved'):
+            raise HeadlessOutcomeUnknown('No new load session observed; never replay')
+        self.session = result['newSession'];self.identity = None
+        for command in ('get_game_state', 'get_map_info', 'get_validation_state'):
+            await self.request(command, {})
+        verified = await asyncio.to_thread(self.requests.verify_load, request_id)
+        self.identity = verified['identity']
+        return dict(verified, request_id=request_id)
+
+    async def verify_loaded_game(self, request_id, *, deployment_evidence=None):
+        """Resume only observation of an existing load after interruption/timeout."""
+        from .headless import workflow_lock
+        async with self.lock:
+            with workflow_lock(self.requests.directory):
+                if deployment_evidence is not None:
+                    from .headless_load import authorize_installed_upgrade
+                    await asyncio.to_thread(authorize_installed_upgrade, self.requests, request_id, deployment_evidence)
+                response = await asyncio.to_thread(self.requests.read, request_id)
+                if response['status'] != 'received' or response['response'].get('cmd') != 'load_game':
+                    raise HeadlessOutcomeUnknown('Original load has no observed new session; never replay')
+                return await self._verify_loaded_game(request_id, response['response']['result'])
+
     async def request(self, command, args, *, on_ticket=None):
         """Caller holds client lock; the host also enforces the public process lock."""
         status = await self.status()
         if self.session is None:
             self.session = status['receiver']['session']
-        kind = 'read' if command in SCHEMAS else 'save' if command == 'save_game' else 'build'
+        if command == 'build_water_facility' and status['receiver'].get('waterFacilityVersion') != 1:
+            raise ValueError('Loaded receiver lacks water facility starters; load the installed bridge before previewing')
+        if (command == 'build_water_facility' and args.get('kind') == 'harbor'
+                and status['receiver'].get('waterHarborLayoutVersion') != 1):
+            raise ValueError('Loaded receiver lacks small/large harbor layouts; nothing dispatched')
+        if command == 'get_town_cargo_supply' and status['receiver'].get('townCargoSupplyVersion') != 2:
+            raise ValueError('Loaded receiver lacks town cargo supply v2; nothing dispatched')
+        if command == 'get_industry_bonuses' and status['receiver'].get('industryBonusesVersion') != 1:
+            raise ValueError('Loaded receiver lacks industry bonuses v1; nothing dispatched')
+        if command == 'reconcile_assignment_rejection' and status['receiver'].get('assignmentReconciliationVersion') != 1:
+            raise ValueError('Loaded receiver lacks assignment reconciliation v1; nothing dispatched')
+        if command == 'get_notifications' and status['receiver'].get('notificationsVersion') != 1:
+            raise ValueError('Loaded receiver lacks notifications v1; nothing dispatched')
+        kind = 'read' if command in SCHEMAS else 'save' if command == 'save_game' else 'load' if command == 'load_game' else 'build'
         if kind == 'build' and command not in BUILD_SCHEMAS:
             raise ValueError(f'{command} is not implemented by the headless channel; no file fallback')
         ticket = await asyncio.to_thread(self.requests.send, command, args, kind=kind, expected_session=self.session)
         if on_ticket:
             on_ticket(ticket)
-        deadline = time.monotonic() + (125 if kind == 'save' else 65)
+        deadline = time.monotonic() + (185 if kind == 'load' else 125 if kind == 'save' else 65)
         while True:
             result = await asyncio.to_thread(self.requests.read, ticket['id'])
             if result['status'] == 'rejected':
@@ -76,6 +184,8 @@ class HeadlessClient:
             if result['status'] == 'received':
                 response = result['response']
                 if not response['ok']:
+                    if response.get('rejectedBeforeDispatch') is True and response.get('code') == 'operation_quota_rejected':
+                        raise HeadlessRequestRejected(f"Request {ticket['id']} rejected before dispatch: {response.get('error')}; never replay")
                     raise HeadlessOutcomeUnknown(f"Request {ticket['id']} failed; inspect original result, never replay: {response.get('error')}")
                 return response['result']
             if result['status'] == 'timeout_unknown' or time.monotonic() >= deadline:

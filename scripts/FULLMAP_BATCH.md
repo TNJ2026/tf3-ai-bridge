@@ -13,7 +13,7 @@
 | 中转覆盖 | `fullmap_hub_audit.py` | 货站/直升机坪/码头对同一仓库实体和库存的实际catchables |
 | 城市覆盖 | `fullmap_city_coverage.py` | 全城有需求库存点的实际卸货覆盖，不以半径估算替代 |
 | 线路 | `fullmap_lines.py`、`fullmap_lines.lua` | 原生闭合寻路选择站台；来源装目标货物、目的地不装货；完整cargoId+1向量 |
-| 首批车辆 | `fullmap_vehicles.py`、`fullmap_vehicles.lua` | 每条已验收线路最多1辆；购置设施往返路径、分配、noPath；船舶限定本港计划船坞 |
+| 首批车辆 | `fullmap_vehicles.py`、`fullmap_vehicles.lua` | 每条已验收线路最多1辆；购置设施兼容、分配；实际驶离基地、正常运行和原生故障结果；船舶限定本港计划船坞 |
 | 运行观察 | `fullmap_observe.py`、`fullmap_observe.lua` | 有限时运行，采集装货、城市收货和寻路状态，结束暂停并原生存档 |
 
 ## 运行规则

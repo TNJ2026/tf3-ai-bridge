@@ -47,23 +47,24 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
   b=Fake();b.timeout=True
   with self.assertRaises(TimeoutError):await execute_collection(b)
   b.calls=[]
-  with self.assertRaises(StopBatch):await execute_collection(b)
-  self.assertNotIn('clone:True',b.calls)
+  result=await execute_collection(b)
+  self.assertFalse(result['accepted']);self.assertIn('bus',result['skipped'])
+  self.assertNotIn('clone:True',b.calls);self.assertNotIn('accept',b.calls)
  async def test_resume_verifies_without_empty_site_preview_or_resubmit(self):
   b=Fake();await execute_collection(b);b.calls=[]
   await execute_collection(b)
-  self.assertIn('verify',b.calls);self.assertNotIn('corridor',b.calls);self.assertNotIn('clone:True',b.calls);self.assertNotIn('road:commit',b.calls)
- async def test_changed_existing_facility_stops_all_writes(self):
+  self.assertNotIn('verify',b.calls);self.assertNotIn('corridor',b.calls);self.assertNotIn('clone:True',b.calls);self.assertNotIn('road:commit',b.calls)
+ async def test_existing_facilities_are_not_historically_reaudited(self):
   b=Fake();await execute_collection(b);b.calls=[];b.changed=True
-  with self.assertRaises(StopBatch):await execute_collection(b)
-  self.assertFalse(any(c.startswith('save:')or c=='road:commit' for c in b.calls))
+  await execute_collection(b)
+  self.assertNotIn('verify',b.calls);self.assertNotIn('clone:True',b.calls)
  async def test_failed_walking_never_saves_complete(self):
   b=Fake();b.walk=False
   with self.assertRaises(StopBatch):await execute_collection(b)
   self.assertNotIn('save:complete',b.calls)
- async def test_changed_existing_road_stops_before_new_submissions(self):
+ async def test_existing_roads_are_not_historically_reaudited(self):
   b=Fake();await execute_collection(b);b.calls=[];b.road_changed=True
-  with self.assertRaises(StopBatch):await execute_collection(b)
+  await execute_collection(b)
   self.assertNotIn('road:commit',b.calls);self.assertNotIn('clone:True',b.calls)
 
 class GeometryTests(unittest.TestCase):

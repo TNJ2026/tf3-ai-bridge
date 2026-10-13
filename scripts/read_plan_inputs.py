@@ -7,15 +7,21 @@ from fullmap_batch import quote
 INVENTORY="""local CT=api.type.ComponentType;local m=B.commands.get_map_info({});local out={state=B.commands.get_game_state({}),industries={},buildings={},cargos={},frozenNodes={},stations={}}
 for id,name in pairs(api.res.cargoTypeRep.getAll(true))do local c=api.res.cargoTypeRep.get(id);out.cargos[#out.cargos+1]={id=id,resource=name,name=c.name,timeToDeliverInSeconds=c.timeToDeliverInSeconds}end
 api.engine.forEachEntityWithComponent(function(id)local c=api.engine.getComponent(id,CT.CONSTRUCTION);for _,n in ipairs(c.frozenNodes)do out.frozenNodes[#out.frozenNodes+1]=n end end,CT.CONSTRUCTION)
-api.engine.forEachEntityWithComponent(function(id)local b=api.engine.getComponent(id,CT.TOWN_BUILDING);out.buildings[#out.buildings+1]={id=id,town=b.town}end,CT.TOWN_BUILDING)
+local buildingMap=api.engine.system.townBuildingSystem.getTown2BuildingMap()
+out.townSupply={}
+for _,town in ipairs(m.towns) do
+ out.townSupply[tostring(town.id)]=B.commands.get_town_cargo_supply({town=town.id})
+ for _,id in pairs(buildingMap[town.id] or {}) do out.buildings[#out.buildings+1]={id=id,town=town.id} end
+end
+table.sort(out.buildings,function(a,b)return a.id<b.id end)
 for _,i in ipairs(m.industries)do local c=assert(api.engine.getComponent(i.id,CT.INDUSTRY));local con=assert(api.engine.getComponent(c.construction,CT.CONSTRUCTION));out.industries[#out.industries+1]={id=i.id,resource=i.fileName,position=i.position,construction=c.construction,stations=B.toPlain(con.stations)}end
 return B.json.encode(out)"""
-BUILDINGS="""local CT=api.type.ComponentType;local rows=B.json.decode(ROWS);local cargos=B.json.decode(CARGOS);local out={}
+BUILDINGS="""local CT=api.type.ComponentType;local rows=B.json.decode(ROWS);local townCargos=B.json.decode(TOWN_CARGOS);local out={}
 assert(api.engine.util.getPlayer()==PLAYER,'Map changed')
 for _,row in ipairs(rows)do
  local b=assert(api.engine.getComponent(row.id,CT.TOWN_BUILDING),'Building changed');assert(b.town==row.town,'Town changed');local dem={}
  if b.stockList>=0 and api.engine.entityExists(b.stockList) and api.engine.getComponent(b.stockList,CT.STOCK_LIST)then
-  for _,c in ipairs(cargos)do local v=api.engine.util.stock.getCargoMaxConsumptionPerYear(b.stockList,c.id);if v>0 then dem[tostring(c.id)]=v end end
+  for _,c in ipairs(townCargos[tostring(row.town)] or {})do local v=api.engine.util.stock.getCargoMaxConsumptionPerYear(b.stockList,c);if v>0 then dem[tostring(c)]=v end end
  end
  out[#out+1]={id=row.id,town=row.town,demands=dem}
 end;return B.json.encode(out)"""
@@ -40,7 +46,7 @@ async def main():
  start=time.perf_counter()
  with batch_lock(b.dir):
   details=await read(INVENTORY);write_json(a.output/'inventory.json',details);buildings=details.pop('buildings');details['buildings']=[]
-  def code(template,rows):return template.replace('ROWS',quote(rows)).replace('CARGOS',quote(details['cargos'])).replace('PLAYER',str(details['state']['player']))
+  def code(template,rows):return template.replace('ROWS',quote(rows)).replace('TOWN_CARGOS',quote({k:[r['cargo'] for r in v['items']] for k,v in details['townSupply'].items()})).replace('CARGOS',quote(details['cargos'])).replace('PLAYER',str(details['state']['player']))
   # Small first batch verifies the schema; later batches remain bounded.
   chunks=[buildings[:8]]+[buildings[k:k+100]for k in range(8,len(buildings),100)]
   for rows in chunks:

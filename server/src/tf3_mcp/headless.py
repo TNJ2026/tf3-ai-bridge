@@ -6,6 +6,8 @@ userdata fallback, slot recycling, automatic reload or unknown-outcome retry.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
+import asyncio
 import hashlib
 import json
 import os
@@ -17,12 +19,27 @@ import uuid
 from .ui_log import UiLogRequests
 
 TAG = "[TNJ_HEADLESS_V1]"
+_workflow_locks = ContextVar('tf3_workflow_locks', default=())
 
 
 @contextmanager
 def public_lock(directory):
     """Same nonblocking process lock used by scripts.batch_warehouses.batch_lock."""
     path = Path(directory) / "warehouse_batch.lock"
+    key = (os.getpid(), str(path.resolve()))
+    # A recovery workflow holds the OS lock across awaits. Its own to_thread
+    # requests inherit this context; unrelated tasks/processes still take the
+    # nonblocking OS lock. Do not spawn concurrent writers inside this context.
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        task = None  # asyncio.to_thread inherits the lease context
+    for lease in _workflow_locks.get():
+        if lease['key'] == key and lease['active']:
+            if task is not None and task is not lease['task']:
+                raise RuntimeError('Concurrent child writer cannot inherit a workflow lock')
+            yield
+            return
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
         if os.fstat(handle.fileno()).st_size == 0:
@@ -42,6 +59,26 @@ def public_lock(directory):
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def workflow_lock(directory):
+    """Explicit async workflow lease; ordinary public_lock stays non-reentrant."""
+    key = (os.getpid(), str((Path(directory) / 'warehouse_batch.lock').resolve()))
+    if any(lease['key'] == key and lease['active'] for lease in _workflow_locks.get()):
+        raise RuntimeError('Workflow already active in this context')
+    with public_lock(directory):
+        try:
+            task = asyncio.current_task()
+        except RuntimeError:
+            task = None
+        lease = dict(key=key, task=task, active=True)
+        token = _workflow_locks.set((*_workflow_locks.get(), lease))
+        try:
+            yield
+        finally:
+            lease['active'] = False
+            _workflow_locks.reset(token)
 
 
 def atomic(path, data):
@@ -135,7 +172,7 @@ class HeadlessRequests:
         for request_id, record in list(ledger["requests"].items()):
             if excess <= 0:
                 break
-            if "response" not in record or ledger.get("pending") == request_id:
+            if "response" not in record or ledger.get("pending") == request_id or ledger.get('loadVerification') == request_id:
                 continue
             destination = history / (request_id + ".json")
             data = json.dumps(record, ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -175,8 +212,9 @@ class HeadlessRequests:
         age = time.time() - latest["utc"]
         if not 0 <= age <= 5:
             raise ValueError("Headless heartbeat stale; no dispatch")
+        ledger = self._load()
         return {"receiver": latest, "ageSeconds": age,
-                "pending": self._load().get("pending"), "bounded": not demand,
+                "pending": ledger.get("pending"), "loadVerification": ledger.get('loadVerification'), "bounded": not demand,
                 "nativeCacheReclamationVerified": False}
 
     def send(self, command, arguments=None, *, kind="read", expected_session=None):
@@ -184,6 +222,8 @@ class HeadlessRequests:
             ledger = self._load()
             if ledger.get("pending"):
                 raise ValueError("Previous request unresolved; read its result, never resubmit")
+            if ledger.get('loadVerification') and not (kind == 'read' or command == 'get_validation_state'):
+                raise ValueError('Loaded session requires independent readback; writes blocked')
             self._archive(ledger)
             if len(ledger["requests"]) >= 4096:
                 raise ValueError("Unresolved ledger bound reached; reconcile before new work")
@@ -194,9 +234,11 @@ class HeadlessRequests:
                 ticket = reader.prepare_build(self.log, command, arguments or {})
             elif kind == 'save':
                 ticket = reader.prepare_save(self.log, command, arguments)
+            elif kind == 'load':
+                ticket = reader.prepare_load(self.log, command, arguments)
             else:
                 raise ValueError("Unsupported request kind")
-            if kind in ('build', 'save') and not expected_session:
+            if kind in ('build', 'save', 'load') and not expected_session:
                 raise ValueError("Operations require an independently verified current session")
             # Wait for a fresh ready window rather than racing a nearly expired slot.
             deadline = time.monotonic() + 6
@@ -211,6 +253,41 @@ class HeadlessRequests:
                 raise ValueError("Session changed; invalidate previous IDs and previews")
             # Old loaded receivers do not advertise limits and only accept 512.
             # Check before intent/slot publication, even if the host allows more.
+            if command == 'get_town_cargo_supply' and row.get('townCargoSupplyVersion') != 2:
+                raise ValueError('Loaded receiver lacks town cargo supply v2; nothing dispatched')
+            if command == 'get_industry_bonuses' and row.get('industryBonusesVersion') != 1:
+                raise ValueError('Loaded receiver lacks industry bonuses v1; nothing submitted')
+            if command == 'reconcile_assignment_rejection' and row.get('assignmentReconciliationVersion') != 1:
+                raise ValueError('Loaded receiver lacks assignment reconciliation v1; nothing dispatched')
+            if command == 'get_notifications' and row.get('notificationsVersion') != 1:
+                raise ValueError('Loaded receiver lacks notifications v1; nothing submitted')
+            if (command == 'build_water_facility' and arguments.get('kind') == 'harbor'
+                    and row.get('waterHarborLayoutVersion') != 1):
+                raise ValueError('Loaded receiver lacks small/large harbor layouts; nothing submitted')
+            if command in {'preview_depot_removal', 'commit_depot_removal', 'get_depot_removal_operation'}:
+                if row.get('depotRemovalVersion') != 1:
+                    raise ValueError('Loaded receiver lacks depot removal v1; nothing submitted')
+                if command == 'commit_depot_removal':
+                    # Require fresh, unchanged save evidence from this host/session;
+                    # a user-supplied filename is not proof of a completed backup.
+                    saved = [r for r in ledger['requests'].values()
+                             if r.get('saveSlot') == arguments['backup_save']
+                             and r.get('kind') == 'save'
+                             and r.get('session') == row['session']
+                             and r.get('generation') == row['generation']
+                             and isinstance(r.get('saveVerification'), dict)
+                             and r.get('response', {}).get('result', {}).get('verified') is True]
+                    if not saved:
+                        raise ValueError('Verified current-session backup required; nothing submitted')
+                    backup = max(saved, key=lambda r: r['created'])
+                    if not 0 <= time.time() - backup['created'] <= 120:
+                        raise ValueError('Backup is not recent; nothing submitted')
+                    evidence = backup['saveVerification']
+                    path = self._save_path(arguments['backup_save'])
+                    if (self._signature(path) != evidence['signature']
+                            or hashlib.sha256(path.read_bytes()).hexdigest() != evidence['sha256']
+                            or self._signature(path) != evidence['signature']):
+                        raise ValueError('Backup changed since verification; nothing submitted')
             limits = row.get('inputLimits', {'default': 512})
             if command in {'get_network_template', 'list_road_structures', 'preview_road_graph',
                            'commit_road_graph', 'get_road_graph_operation'} and limits.get('preview_road_graph') != 8192:
@@ -227,12 +304,18 @@ class HeadlessRequests:
                                for n in graph['nodes'])
                 if advanced and row.get('roadGraphVersion') != 40:
                     raise ValueError('Loaded receiver lacks v40 preservation capability; nothing submitted')
+            if command == 'reset_operation_quota' and row.get('operationQuotaVersion') != 1:
+                raise ValueError('Loaded receiver lacks quota reset support; nothing submitted')
             limit = limits.get(command, limits.get('default', 512))
             if type(limit) is not int or not 1 <= limit <= 8192:
                 raise ValueError('Invalid receiver input limit; nothing submitted')
             if len(ticket['input'].encode('utf-8')) > limit:
                 raise ValueError(f'Loaded receiver accepts {limit} bytes for {command}; nothing submitted')
             save_before = None
+            load_evidence = None
+            if kind == 'load':
+                from .headless_load import prepare
+                load_evidence = prepare(self, ledger, row, arguments)
             if kind == 'save':
                 if row.get('saveGameAvailable') is not True:
                     raise ValueError('Loaded receiver does not support headless saves; load the updated mod')
@@ -267,6 +350,8 @@ class HeadlessRequests:
                           offset=offset, anchor=anchor.hex(), created=time.time(), status="intent")
             if kind == 'save':
                 record.update(saveSlot=arguments['slot'], saveBefore=save_before)
+            if kind == 'load':
+                record.update(load_evidence)
             ledger["requests"][ticket["id"]] = record
             ledger["pending"] = ticket["id"]
             high_water[key] = row['slot']
@@ -308,8 +393,15 @@ class HeadlessRequests:
             reader = UiLogRequests()
             reader.pending[request_id] = (self.log, row["inode"], row["offset"], row["command"],
                 bytes.fromhex(row["anchor"]), time.monotonic() - max(0, time.time() - row["created"]))
-            result = reader.read(request_id)
+            result = reader.read(request_id, allow_load_transition=row['kind'] == 'load')
             if result["status"] == "received":
+                if row['kind'] == 'load':
+                    from .headless_load import observe
+                    result = observe(self, row, result['response'])
+                    if result['status'] != 'received':
+                        self._save(ledger)
+                        return result
+                    ledger['loadVerification'] = request_id
                 if row['kind'] == 'save':
                     row['nativeResponse'] = result['response']
                     result = self._verify_save(row)
@@ -325,6 +417,11 @@ class HeadlessRequests:
                 self._save(ledger)
             return result
 
+    def verify_load(self, request_id):
+        from .headless_load import verify
+        with public_lock(self.directory):
+            return verify(self, self._load(), request_id)
+
     def reconcile_legacy_input_rejection(self, request_id, receiver_source, *, apply=False):
         """Explicit evidence audit; never fabricate a native response or replay."""
         from .headless_recovery import legacy_input_rejection
@@ -338,6 +435,26 @@ class HeadlessRequests:
             if ledger.get('pending') != request_id or 'response' in row:
                 raise ValueError('Only the current unresolved request can be reconciled')
             evidence = legacy_input_rejection(self, row, Path(receiver_source))
+            if apply:
+                row['reconciliation'] = evidence
+                row['status'] = 'rejected_before_dispatch'
+                ledger['pending'] = None
+                self._save(ledger)
+            return dict(evidence, applied=apply)
+
+    def reconcile_legacy_quota_rejection(self, request_id, receiver_source, *, apply=False):
+        """Audit a pinned old pre-dispatch rejection; retain intent and evidence."""
+        from .headless_recovery import legacy_quota_rejection
+        with public_lock(self.directory):
+            ledger = self._load()
+            row = ledger['requests'].get(request_id)
+            if not row:
+                raise ValueError('Unknown request')
+            if 'reconciliation' in row:
+                return row['reconciliation']
+            if ledger.get('pending') != request_id or 'response' in row:
+                raise ValueError('Only the current unresolved request can be reconciled')
+            evidence = legacy_quota_rejection(self, row, Path(receiver_source))
             if apply:
                 row['reconciliation'] = evidence
                 row['status'] = 'rejected_before_dispatch'

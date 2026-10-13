@@ -3,6 +3,7 @@ import argparse,asyncio,json,math,itertools,hashlib
 from pathlib import Path
 from fullmap_batch import ROOT,batch_lock,write_json
 from batch_warehouses import Bridge,fingerprint
+from carrier_acceptance import nearest_order
 
 async def main():
  ap=argparse.ArgumentParser();ap.add_argument('--root',type=Path,required=True);ap.add_argument('--towns',nargs='+',required=True);ap.add_argument('--identity-plan',type=Path,required=True);ap.add_argument('--minimum-population',type=int,default=150);a=ap.parse_args()
@@ -40,8 +41,7 @@ async def main():
    stops.append(dict(id='BUS_'+str(town['id'])+'_STOP'+str(n+1),position=p,edge_endpoints=[e['p0'],e['p1']],param=.5,side='right',kind='auto',two_sided=True,covered_building_hints=[b['id']for b in covered],existing=existing))
    if len(stops)>=3 and len(remaining)<=len(bs)*.07:break
   assert len(stops)>=2,'Insufficient service coverage: '+town['name']
-  order=min(itertools.permutations(stops[1:]),key=lambda perm:sum(math.dist(list(x['position'].values()),list(y['position'].values()))for x,y in zip([stops[0]]+list(perm),list(perm)+[stops[0]])))
-  ordered=[stops[0]]+list(order)
+  ordered=nearest_order(stops)
   directions=[('A','市区环线正向',ordered),('B','市区环线反向',list(reversed(ordered)))]if len(stops)>2 else [('A','市区往返线',ordered)]
   for d,label,seq in directions:
    specs.append(dict(id='BUS_'+str(town['id'])+'_'+d,name='人口公交·'+town['name']+'·'+label,mode='BUS',endpoints=[dict(id=t['id'],stop=t,loads=[0])for t in seq]))

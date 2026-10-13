@@ -9,6 +9,45 @@ from .headless import TAG
 # Its input assertion precedes ID reservation and every dispatcher call.
 LEGACY_SOURCE_SHA256 = '3562b0f7fe4046a115b5593a9fa26a926bfc61c6ccb28ce04a25a3480d2fc71c'
 
+# Independently audited installed image from the Panjin 2026-10-11 incident.
+# uiBuild.forward returns this exact limit message before sendCommand.
+QUOTA_SOURCE_SHA256 = '9b90889e66ed32c78ad3fe0e112fad215c75eecce675defcc7ffffbd24d3d8f1'
+
+
+def legacy_quota_rejection(host, row, source):
+    """Narrow evidence migration for a BUY rejected by the audited old GUI."""
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    if source_hash != QUOTA_SOURCE_SHA256:
+        raise ValueError('Source is not the audited quota receiver image')
+    if row['kind'] != 'build' or row['command'] != 'buy_vehicles' or not row['input'].startswith(row['id']+' buy_vehicles '):
+        raise ValueError('Not an audited legacy quota purchase')
+    filename = 's' + re.sub('[^a-zA-Z0-9]', '_', row['session']) + '_' + str(row['slot']) + '.lua'
+    payload = (host.mod / 'headless' / row['generation'] / filename).read_bytes()
+    if not re.fullmatch(rb'return "(?:\\[0-9]{3})+"\n', payload):
+        raise ValueError('Unrecognized original publication')
+    envelope = json.loads(bytes(int(n) for n in re.findall(rb'\\([0-9]{3})', payload)))
+    if envelope != {k: row[k] for k in ('session', 'generation', 'slot', 'expires', 'kind', 'input')}:
+        raise ValueError('Publication does not match durable request')
+    data, lines = request_window(host, row)
+    matches = matching_rows(lines, row)
+    events = [item for item in matches if item.get('status') != 'ready']
+    if [e.get('status') for e in events] != ['consumed', 'dispatched', 'stopped']:
+        raise ValueError('Missing or conflicting quota stop sequence')
+    if any('[TNJ_UI_READ_V1] id='+row['id'] in line for line in lines):
+        raise ValueError('Native response exists; do not migrate rejection')
+    if (any(e.get('id') != row['id'] for e in events[:2])
+            or events[1].get('detail') != 'Session request limit reached'
+            or not events[2].get('error', '').endswith(':8093: Dispatch failed or unknown: Session request limit reached')
+            or '/tnj_tf3_ai_bridge/content/tf3_mcp_bridge/bridge.script.lua' not in events[2].get('error', '')):
+        raise ValueError('Quota rejection identity or reason mismatch')
+    current = host.status()['receiver']
+    if current['status'] != 'ready' or current['session'] == row['session'] or current.get('operationQuotaVersion') != 1:
+        raise ValueError('Fresh quota-v1 session required')
+    return dict(kind='audited_legacy_quota_rejection', requestId=row['id'], engineDispatchAttempted=False,
+                sourceSha256=source_hash, publishedPayloadSha256=hashlib.sha256(payload).hexdigest(),
+                logWindowSha256=hashlib.sha256(data).hexdigest(), nativeEvents=events,
+                recoverySession=current['session'], requiresFreshMapVerification=True, retryAllowed=False)
+
 
 def request_window(host, row):
     with host.log.open('rb') as stream:
@@ -20,8 +59,15 @@ def request_window(host, row):
         if stream.read(len(anchor)) != anchor:
             raise ValueError('Original log anchor changed')
         data = stream.read(16 * 1024 * 1024)
-    return data, [line for line in data.decode('utf-8', errors='strict').splitlines(keepends=True)
-                  if line.endswith('\n')]
+    # Native diagnostics can use the Windows code page. Decode protocol rows
+    # strictly, but do not let unrelated diagnostics block a valid receipt.
+    lines = []
+    for raw in data.splitlines(keepends=True):
+        if not raw.endswith(b'\n'):
+            continue
+        protocol = TAG.encode('ascii') in raw or b'[TNJ_UI_READ_V1]' in raw
+        lines.append(raw.decode('utf-8', errors='strict' if protocol else 'replace'))
+    return data, lines
 
 
 def matching_rows(lines, row):

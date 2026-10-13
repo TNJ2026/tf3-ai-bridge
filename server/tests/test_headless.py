@@ -213,7 +213,8 @@ def test_demand_idle_and_more_than_256_reads(warehouse_game,kind,command):
         assert state['v']['uiConstruction']['reclaimedReadRequests']==300
     assert not any(r['status']=='stopped' for r in rows)
     if kind=='build':
-        # Rolling pure reads must neither consume nor erase the mutation budget.
+        # GUI forwarding no longer kills the receiver at 256. The durable
+        # engine quota is tested separately, including its rejection/read/reset.
         gui=script['guiHandleEvent']
         for n in range(1000,1256):
             status=gui(None,None,None,'','tnj_bridge_readonly','tnj_bridge_readonly.request',
@@ -222,8 +223,8 @@ def test_demand_idle_and_more_than_256_reads(warehouse_game,kind,command):
         before=lua.globals().forwarded
         status=gui(None,None,None,'','tnj_bridge_readonly','tnj_bridge_readonly.request',
                    f'{1256:032x} build_warehouse '+json.dumps(dict(x=700,y=740,z=2)))
-        assert status=='Session request limit reached'
-        assert lua.globals().forwarded['param']==before['param']
+        assert status=='Submitted; inspect log'
+        assert lua.globals().forwarded['param']!=before['param']
         status=gui(None,None,None,'','tnj_bridge_readonly','tnj_bridge_readonly.request',
                    f'{1000:032x} build_warehouse '+json.dumps(dict(x=700,y=740,z=2)))
         assert status=='Duplicate request; inspect existing log'
