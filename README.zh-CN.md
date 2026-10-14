@@ -4,8 +4,6 @@
 
 连接 AI 助手与《Transport Fever 3》，支持地图分析、运输规划及游戏操作。
 
-[在 mod.io 下载模组](https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai)
-
 ![Transport Fever 3 AI Bridge](mod/tf3_mcp_bridge/_metadata/0.png)
 
 项目包含游戏端模组和本地 Python MCP 服务。你需要自行配置兼容 MCP 的 AI 客户端；模组不内置 AI 模型，也不包含模型服务订阅。
@@ -22,15 +20,21 @@
 
 ## 工作原理
 
+使用 `headless` 通道，通过一次性 Lua 资源文件传入请求，通过游戏日志返回结果与接收器状态。
+
 ```text
-AI 客户端 → MCP（标准输入输出）→ Python 服务 → 本地文件桥接 → 游戏模组 → 游戏引擎
+AI 客户端 → MCP（标准输入输出）→ Python 服务 → 一次性请求资源 → 游戏模组 → 游戏引擎
+                                      ↑                           ↓
+                                      └────── 游戏日志中的响应 ────┘
 ```
 
-模组通过 GUI 环境中的 `app.saveUserdata` / `app.loadUserdata` 与服务交换请求、响应和心跳文件。默认桥接目录：
+请求资源位于已安装模组的 `content/tf3_mcp_bridge/headless/`；本地请求账本和协调文件默认位于：
 
 ```text
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
+
+此通道需要配置启用：安装并加载匹配的接收器，在 MCP 服务中设置 `TF3_MCP_TRANSPORT=headless`，并将 `TF3_MCP_HEADLESS_MOD` 指向已安装模组的 `content/tf3_mcp_bridge` 目录。仅下载并激活模组不会自动完成这项配置。配置流程见[headless 通道说明](docs/HEADLESS_TRANSPORT_20261009.md)。
 
 ## 环境要求
 
@@ -47,29 +51,41 @@ AI 客户端 → MCP（标准输入输出）→ Python 服务 → 本地文件�
 
 设施选址与铁路规划的显示文字也遵循该语言设置。快照／规划 JSON 导入和恢复配置支持带 BOM 或不带 BOM 的 UTF-8。`TF3_RECOVERY_CONFIG` 支持用户目录与环境变量展开；读取配置不会启用恢复或监控。
 
-`TF3_MCP_DIR` 可指定桥接目录，支持 `~` 和环境变量展开。`TF3_PLANNING_FONT` 可指定报告图片字体文件；含中文名称时应选支持中文字形的字体。程序会尝试常见 Windows 字体及可用的 Linux／macOS 字体作为回退。
-
-英文显示、Unicode 传输及含空格／非 ASCII 字符的路径已有离线测试。英文游戏已实测查询、地形采集、报告生成、仓库原生预览、保存验收和速度切换读回；测试地图现金为零，尚未验证付费施工和车辆运营。英文 Windows 未单独测试。详见[英文兼容验证](docs/reference/ENGLISH_COMPATIBILITY.md)。
+`TF3_MCP_DIR` 可指定本地账本与协调文件目录，支持 `~` 和环境变量展开。`TF3_PLANNING_FONT` 可指定报告图片字体文件；含中文名称时应选支持中文字形的字体。程序会尝试常见 Windows 字体及可用的 Linux／macOS 字体作为回退。
 
 ## 在 Agent 中快速开始
 
-在能够访问本地文件并配置 MCP 连接的 AI Agent 中打开本项目，然后在聊天中输入以下提示词。由 Agent 处理配置和工具调用，你只需描述目标。
+按以下步骤下载模组和项目文件，在支持本地文件访问及 MCP 连接的 Agent App 中创建项目，再配置服务并开始规划。
 
-### 1. 配置并连接游戏
+### 1. 下载并激活模组
 
-> 阅读本项目文档，帮我安装并配置 Transport Fever 3 AI Bridge，检查本地依赖和 MCP 连接。需要我在游戏中启用模组、载入存档时告诉我，然后验证连接是否正常。
+前往以下模组页面下载 **Transport Fever 3 AI Bridge**，并在开始新游戏或载入存档之前，在模组列表中激活它。
 
-### 2. 了解当前地图
+模组 URL：<https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai>
+
+### 2. 下载并解压项目
+
+打开 [GitHub Releases](https://github.com/TNJ2026/tf3-ai-bridge/releases)，选择对应版本，在 **Assets** 中下载 **Source code (zip)** 项目压缩文件，并解压到本地文件夹。
+
+### 3. 在 Agent App 中创建项目
+
+打开 Agent App，新建项目，并选择上一步解压后的项目文件夹路径（包含 `README.md`、`server/` 和 `mod/` 的目录）作为项目目录。
+
+### 4. 配置并连接游戏
+
+> 我已下载并激活游戏模组。阅读本项目文档，帮我安装并配置本地 MCP 服务及 headless 通道，检查本地依赖、接收器和 MCP 连接。游戏载入后，验证连接是否正常。
+
+### 5. 了解当前地图
 
 > 分析当前地图、城市需求、已有运输线路和资金情况，找出主要供给瓶颈和可以改善的地方。
 
-### 3. 规划一个项目
+### 6. 规划一个项目
 
 > 为承德规划一条供给路线，优先利用附近产业和现有设施，估算建设成本与运营费用。先展示方案，不要施工。
 
 将“承德”替换为当前地图上的城市。也可以要求规划公交线路、选择仓库位置，或优化已有运输网络。
 
-### 4. 执行已审阅的方案
+### 7. 执行已审阅的方案
 
 > 按刚才审阅的方案和预算施工，完成基础设施、线路配置及方案内的车辆采购。验证实际装货、交付和维护情况，报告阻碍和未完成事项。
 
@@ -121,6 +137,3 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 - [文档导航](docs/README.md)
 - [规划工具](docs/reference/PLANNING_TOOLS.md)
 - [官方模组发布指南](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
-
-
-**实机验收：** 已完成记录中的有限操作场景；铁路同一乘客下车按用户要求暂时跳过。固定翼部分为空载试飞，长期缓存回收、无限运行和所有车型／货品组合未获证明。详见[操作验收记录](docs/UI_OPERATION_ACCEPTANCE_20261009.md)。实验性[无 GUI 通道](docs/HEADLESS_TRANSPORT_20261009.md)需主动启用，源码默认配置中关闭。

@@ -4,8 +4,6 @@
 
 Connect AI assistants to Transport Fever 3 for map analysis, transport planning, and in-game operations.
 
-[Download the mod on mod.io](https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai)
-
 ![Transport Fever 3 AI Bridge](mod/tf3_mcp_bridge/_metadata/0.png)
 
 This project includes an in-game mod and a local Python MCP server. Bring your own MCP-compatible AI client; the mod does not include an AI model or a model-service subscription.
@@ -22,15 +20,21 @@ See the [documentation index](docs/README.md) for interface capabilities and val
 
 ## How it works
 
+The `headless` transport delivers requests through single-use Lua resource files and reads results and receiver status from the game log.
+
 ```text
-AI client → MCP (stdio) → Python server → local file bridge → game mod → game engine
+AI client → MCP (stdio) → Python server → single-use request resources → game mod → game engine
+                              ↑                                           ↓
+                              └──────── responses in the game log ────────┘
 ```
 
-The mod exchanges request, response, and heartbeat files with the server using `app.saveUserdata` / `app.loadUserdata` in the game's GUI environment. The default bridge directory is:
+Request resources reside in the installed mod's `content/tf3_mcp_bridge/headless/` directory. Local request ledgers and coordination files default to:
 
 ```text
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
+
+This transport requires explicit setup: install and load a matching receiver, set `TF3_MCP_TRANSPORT=headless` for the MCP server, and point `TF3_MCP_HEADLESS_MOD` to the installed mod's `content/tf3_mcp_bridge` directory. Downloading and activating the mod alone does not complete this configuration. See the [headless transport guide](docs/HEADLESS_TRANSPORT_20261009.md).
 
 ## Requirements
 
@@ -47,29 +51,41 @@ Native entity names, resource IDs, and custom titles remain unchanged. The in-ga
 
 Facility-siting and railway-plan labels also follow this language setting. Snapshot/plan JSON imports and recovery configuration accept UTF-8 with or without a BOM. `TF3_RECOVERY_CONFIG` supports user-directory and environment-variable expansion; reading configuration does not enable recovery or monitoring.
 
-`TF3_MCP_DIR` overrides the bridge directory and supports `~` and environment variables. `TF3_PLANNING_FONT` optionally selects a font file for report images; use a font with CJK glyphs for Chinese names. Common Windows fonts and available Linux/macOS fonts are tried as fallbacks.
-
-English presentation, Unicode transport, and paths containing spaces/non-ASCII characters have offline tests. An English game has passed live queries, terrain capture, report generation, native warehouse preview, save verification and speed-change readback. Paid construction and vehicle operation remain unverified in this language test (the test map had zero cash). English Windows has not been tested separately. See [English compatibility validation](docs/reference/ENGLISH_COMPATIBILITY.md).
+`TF3_MCP_DIR` overrides the local ledger and coordination directory and supports `~` and environment variables. `TF3_PLANNING_FONT` optionally selects a font file for report images; use a font with CJK glyphs for Chinese names. Common Windows fonts and available Linux/macOS fonts are tried as fallbacks.
 
 ## Quick start with an Agent
 
-Open this repository in an AI Agent that can access local files and configure MCP connections. Enter the prompts below in its chat. The Agent handles setup and tool calls; you describe what you want to achieve.
+Follow these steps to download the mod and project files, create a project in an Agent App with local file access and MCP support, then configure the server and start planning.
 
-### 1. Set up and connect
+### 1. Download and activate the mod
 
-> Read this project's documentation and help me install and configure Transport Fever 3 AI Bridge. Check the local dependencies and MCP connection. Tell me when I need to enable the mod and load a save in the game, then verify the connection.
+Download **Transport Fever 3 AI Bridge** from the mod page below, and activate it in the mod list before starting a new game or loading a save.
 
-### 2. Understand the current map
+Mod URL: <https://mod.io/g/transportfever3/m/transport-fever-3-ai-bridge-3-ai>
+
+### 2. Download and extract the project
+
+Open [GitHub Releases](https://github.com/TNJ2026/tf3-ai-bridge/releases), choose the matching version, and download **Source code (zip)** under **Assets**. Extract the archive to a local folder.
+
+### 3. Create a project in your Agent App
+
+Open your Agent App, create a new project, and select the extracted project folder as its directory. Use the folder containing `README.md`, `server/`, and `mod/`.
+
+### 4. Set up and connect
+
+> I have downloaded and activated the game mod. Read this project's documentation and help me install and configure the local MCP server and headless transport. Check the local dependencies, receiver, and MCP connection, then verify connectivity once the game has loaded.
+
+### 5. Understand the current map
 
 > Analyze the current map, city demand, existing transport lines, and finances. Identify the main supply bottlenecks and opportunities for improvement.
 
-### 3. Plan a project
+### 6. Plan a project
 
 > Plan a supply route for Chengde using nearby industries and existing infrastructure where possible. Estimate construction and operating costs, and show me the plan before building anything.
 
 Replace Chengde with a city on your map. You can also ask for bus routes, warehouse placement, or improvements to an existing network.
 
-### 4. Build the reviewed plan
+### 7. Build the reviewed plan
 
 > Implement the plan we just reviewed within its budget. Build the infrastructure, configure the lines, and purchase the vehicles included in the plan. Verify actual loading, delivery, and maintenance, and report any blockers or unfinished work.
 
@@ -121,6 +137,3 @@ Before uploading, run `python scripts/check_mod_package.py "<staging mod directo
 - [Documentation index](docs/README.md)
 - [Planning tools](docs/reference/PLANNING_TOOLS.md)
 - [Official mod publishing guide](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)
-
-
-**Live acceptance:** the recorded finite operation scenarios have been tested; same-person railway alighting is deferred by user request. Some fixed-wing flights were empty, and long-term cache reclamation, unlimited operation and all vehicle/cargo combinations are not certified. See the [operation acceptance record](docs/UI_OPERATION_ACCEPTANCE_20261009.md). The experimental [headless transport](docs/HEADLESS_TRANSPORT_20261009.md) is opt-in and disabled in the default source configuration.
