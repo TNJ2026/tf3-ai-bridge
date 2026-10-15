@@ -1045,6 +1045,16 @@ async def set_game_speed(speed: int) -> dict:
 
 
 @mcp.tool()
+async def get_town_overview(town: int) -> dict:
+    """Read native city ratings and detail sections: reputation, delivery, supply,
+    noise, bonuses, happiness, traffic and pollution. Read-only; unavailable fields
+    carry reasons, never guessed zeros. Native raw/cached values retain their units
+    and periods; this is not pixel verification or a monitoring/repair command.
+    """
+    return await _call("get_town_overview", _engine=True, town=town)
+
+
+@mcp.tool()
 async def get_town_cargo_supply(town: int, include_passengers: bool = False) -> dict:
     """Read native city-panel cargo supply, demand and ratios without building scans.
 
@@ -1572,6 +1582,45 @@ async def get_depot_removal_operation(operation_id: str) -> dict:
     session/player, partial removal or altered dependencies retain the unresolved block.
     """
     return await _call('get_depot_removal_operation', operation_id=operation_id)
+
+
+@mcp.tool()
+async def preview_station_removal(entity: int) -> dict:
+    """Preview removal of ONE owned empty road cargo station (construction or station ID).
+    Requires paused simulation. Checks line/group/network dependencies and native removal scope;
+    no makeProposalData on removal proposals. Structural preview, not native acceptance.
+    Returns a session-bound one-use 60-second token. Refuses shared groups, referenced lines, waiting persons and network vehicles.
+    """
+    return await _call("preview_station_removal", entity=entity)
+
+
+@mcp.tool()
+async def commit_station_removal(preview_token: str) -> dict:
+    """Save/verify an independent backup, then remove the previewed empty road cargo station ONCE.
+    Requires user demolition authorization, paused game and headless stationRemovalVersion=1.
+    No vehicle sale, unrelated road removal or collision override. Unknown results retain
+    the mutation block: use get_station_removal_operation, NEVER repeat commit.
+    """
+    import uuid
+    if transport_mode() != 'headless':
+        raise ToolError('Guarded station removal requires the headless channel')
+    status = await headless_client().status()
+    if status['receiver'].get('stationRemovalVersion') != 1 or status.get('pending'):
+        raise ToolError('Station removal v1 receiver without pending request required; nothing submitted')
+    slot = 'tf3_station_before_' + uuid.uuid4().hex
+    saved = await _call('save_game', slot=slot, overwrite=False)
+    if saved.get('verified') is not True:
+        raise ToolError('Backup not verified; station removal was not submitted')
+    return await _call('commit_station_removal', preview_token=preview_token, backup_save=slot)
+
+
+@mcp.tool()
+async def get_station_removal_operation(operation_id: str) -> dict:
+    """Read/reconcile one station removal from its preview token; never dispatch removal.
+    Checks target disappearance, adjacent roads and vehicle preservation. Different
+    session/player, partial removal or altered dependencies retain the unresolved block.
+    """
+    return await _call('get_station_removal_operation', operation_id=operation_id)
 
 
 @mcp.tool()

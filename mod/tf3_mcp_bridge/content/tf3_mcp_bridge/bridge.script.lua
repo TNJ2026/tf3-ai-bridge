@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.12.20"
+local BRIDGE_VERSION = "0.12.21"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -552,6 +552,13 @@ RECORD_SCHEMAS["LaneConnection"] = {segment0="",segment1="",lane0="",lane1="",wi
 RECORD_SCHEMAS["Engine.Component.TrafficLightConfig"] = {states={element="Engine.Component.TrafficLightState"},trafficLightType=""}
 RECORD_SCHEMAS["Engine.Component.TrafficLightState"] = {lockedLanes={element=""},duration="",minDuration="",canSkip=""}
 COMPONENT_RECORDS.BASE_NODE_CONFIG="Engine.Component.BaseNodeConfig"
+RECORD_SCHEMAS["TownOverviewCapacity"]={used="",capacity=""}
+RECORD_SCHEMAS["TownOverviewReachability"]={commercialPrivate="",commercialPublic="",industrialPrivate="",industrialPublic=""}
+RECORD_SCHEMAS["TownOverviewEmission"]={noise="",pollution="",areaSquareKm=""}
+RECORD_SCHEMAS["TownOverviewEmissionPower"]={noise="",pollution=""}
+RECORD_SCHEMAS["TownOverviewByResident"]={resident={element=""},nonResident={element=""}}
+RECORD_SCHEMAS["TownOverviewLineHappiness"]={[1]="",[2]="TownOverviewByResident"}
+RECORD_SCHEMAS["TownOverviewHappiness"]={travellingInside={element=""},travellingTo="TownOverviewByResident",travellingFrom="TownOverviewByResident",atBuilding={element=""},byCar={element=""},walking={element=""},byLine={element="TownOverviewLineHappiness"}}
 -- Build 40420 does not expose this documented flag (native nodes 37168/35712,
 -- resume7/01). Retain every actual lane/phase/crosswalk field in signatures.
 RECORD_SCHEMAS["Network.BaseNodeConfig"]={}
@@ -592,6 +599,16 @@ local function toPlain(v, depth, fields, hint)
 		return out
 	end
 	if tv == "userdata" then
+		-- Some native Terminal.vehicleEdges expose EdgeId records rather than
+		-- the documented EdgePos. Preserve all identity fields explicitly; do
+		-- not synthesize a position or accept partially readable EdgePos data.
+		if hint == "EdgePos" and readField(v,"edgeId")==nil and readField(v,"param")==nil then
+			local entity,index=readField(v,"entity"),readField(v,"index")
+			if type(entity)=="number" and entity>=0 and entity%1==0
+			 and type(index)=="number" and index>=0 and index%1==0 then
+				return {nativeEncoding="EdgeId",entity=entity,index=index}
+			end
+		end
 		-- Read coordinates independently: Vec2 throws on .z.
 		local x, y = readField(v, "x"), readField(v, "y")
 		if type(x) == "number" and type(y) == "number" then
@@ -7056,7 +7073,7 @@ do
  local SAVED_MUTATION_LIMIT=1024 -- active receipts; reset retires terminal IDs without forgetting them
  local QUOTA_LIMIT=256
  local REPLAY_ID_LIMIT=65536 -- finite storage guard, never reset or silently evict
- local schemas={get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+ local schemas={get_town_overview={town="entity"},get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
   get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
   begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
   read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
@@ -7065,6 +7082,7 @@ do
   preview_headquarters_access={town="entity",road="entity",x="number",y="number",z="number",rotation="number"},
   preview_subvention={uid="entity"},commit_subvention={preview_token="token"},get_subvention_operation={operation_id="token"},
   get_facility_layout={entity="entity",offset="offset",limit="page_limit"},get_facility_inventory={entity="entity"},
+  preview_station_removal={entity="entity"},commit_station_removal={preview_token="token",backup_save="save_slot"},get_station_removal_operation={operation_id="token"},
   preview_depot_removal={entity="entity"},commit_depot_removal={preview_token="token",backup_save="save_slot"},get_depot_removal_operation={operation_id="token"},
   preview_test_removal={entity="entity"},commit_test_removal={preview_token="token"},
   get_validation_state={},
@@ -7124,7 +7142,7 @@ do
  }
  -- Only audited world-read commands may release incorrectly charged legacy slots.
  -- Previews, mutations, unknown commands and unresolved non-read requests stay protected.
- local pureEngineReads={get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
+ local pureEngineReads={get_town_overview=true,get_station_removal_operation=true,get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
   list_facilities=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,check_road_junction_path=true,check_network_junction_path=true,
   list_cargo_types=true,get_terrain=true,find_nearby=true,list_facility_resources=true,
   list_industry_resources=true,list_prospections=true,get_prospections=true,get_loans=true,
@@ -7277,7 +7295,7 @@ do
    or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection" or cmd=="reconcile_subvention_rejection" or cmd=="reconcile_facility_rejection") and {"request_id"}
    or cmd=="preview_road" and {"start","end","street_type"} or cmd=="get_entity" and {"id"}
    or cmd=="survey_build_site" and {"x","y"} or (cmd=="list_facilities" or cmd=="list_street_types") and {} or {"entity"}
-  local extraRequired={get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
+  local extraRequired={get_town_overview={"town"},preview_station_removal={"entity"},commit_station_removal={"preview_token","backup_save"},get_station_removal_operation={"operation_id"},get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
    check_network_junction_path={"node","from_edge","to_edge","mode"},
    preview_road_upgrade={"edge","street_type"},preview_street_stop={"edge","param","side","two_sided"},commit_edge_edit={"preview_token"},
    preview_facility_module={"entity","slot","resource"},preview_facility_parameter={"entity","key","value"},build_headquarters={"town","x","y","z"},
@@ -7645,6 +7663,91 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   return {town=town,population=r.used,residentialCapacity=r.capacity,gameTime=cargoReadTime()}
  end
  ENGINE_COMMANDS.get_town_population=true
+ -- One bounded engine read, preserving native panel semantics and unknowns.
+ commands.get_town_overview=function(args)
+  local town=requireEntity(args,"town","TOWN")
+  local result={town=town,gameTime=cargoReadTime(),readOnly=true,townOverviewVersion=1,sections={},errors={},
+   scope="Native city overview and details; raw units and cached ratings preserved; not pixel verification"}
+  local function clean(v,path,depth)
+   depth=depth or 0;assert(depth<=20,"Overview nesting exceeds limit: "..path)
+   local t=type(v)
+   assert(t~="function" and t~="userdata","Unserialized native value: "..path)
+   if t=="number" then assert(v==v and v~=math.huge and v~=-math.huge,"Nonfinite value: "..path) end
+   if t=="table" then
+    local n=0;for k,x in pairs(v) do n=n+1;assert(n<=2000,"Overview collection exceeds limit: "..path)
+     assert(k~="_unavailable" and k~="_unavailableFields" and k~="_truncated" and k~="...","Unreadable/truncated native data: "..path)
+     clean(x,path.."."..tostring(k),depth+1)
+    end
+   end
+   return v
+  end
+  local function read(section,key,source,fn)
+   result.sections[section]=result.sections[section] or {}
+   local ok,value=pcall(function() local v=fn();assert(v~=nil,"Native value unavailable");return clean(toPlain(v),section.."."..key) end)
+   local row={available=ok,source=source}
+   if ok then row.value=value else row.reason=tostring(value);result.errors[#result.errors+1]={section=section,field=key,reason=row.reason} end
+   result.sections[section][key]=row
+   return ok and value or nil
+  end
+  read("overview","provider","town_util",function()return {module="::/game_mechanics/towns/town_util.tl"}end)
+  local ok,u=pcall(ug_require,"::/game_mechanics/towns/town_util.tl")
+  if not ok then u={} end
+  -- Work on a detached Lua state so rating helpers cannot alter native town caches.
+  local state=read("overview","state","town_util.externalGetTownState",function()return u.externalGetTownState(town)end)
+  local native=api.engine.util.town
+  read("overview","population","get_town_population",function()return commands.get_town_population({town=town})end)
+  read("overview","capacityUsage","town.getTownCapacityUsage",function()return toPlain(native.getTownCapacityUsage(town),0,nil,{element="TownOverviewCapacity"})end)
+  read("overview","reachability","town.getTownReachability",function()return toPlain(native.getTownReachability(town),0,nil,"TownOverviewReachability")end)
+  read("overview","ratings","town_util.GetRatings + TownState.cachedRatings",function()
+   assert(state,"Town state unavailable");local rows={}
+   for _,rating in ipairs(u.GetRatings()) do
+    assert(#rows<32,"Too many native ratings")
+    local cached=state.cachedRatings and state.cachedRatings[rating.key]
+    rows[#rows+1]={key=rating.key,name=rating.name,range=rating.range,hidden=rating.hidden,added=rating.added,
+     available=cached~=nil,cached=cached,source="TownState.cachedRatings"}
+   end
+   return rows
+  end)
+  local function rating(section,method)
+   read(section,"rating","town_util."..method,function()assert(state,"Town state unavailable");return u[method](town,state)end)
+  end
+  rating("reputation","getRatingUrbanCare")
+  read("reputation","score","TownState.authorityScore",function()return state and state.authorityScore end)
+  read("reputation","eventFactors","TownState.eventFactors",function()return state and state.eventFactors end)
+  read("reputation","reputation","town_util.getReputation",function()assert(state and state.eventFactors,"Event factors unavailable");return u.getReputation(state.eventFactors)end)
+  read("reputation","breakdown","town_util.getReputationBreakdown",function()assert(state and state.eventFactors,"Event factors unavailable");return u.getReputationBreakdown(state.eventFactors)end)
+  read("reputation","marketingActive","town_util.isMarketingActive",function()assert(state and state.eventFactors,"Event factors unavailable");return u.isMarketingActive(result.gameTime,state.eventFactors)end)
+  read("reputation","severedConnections","town_util.getSeveredMainConnections",function()return u.getSeveredMainConnections(town)end)
+  rating("delivery","getRatingCargoDelivery")
+  read("delivery","deliveries","get_town_deliveries",function()return commands.get_town_deliveries({town=town})end)
+  read("delivery","level","town_util.getRatingDeliveries",function()return u.getRatingDeliveries(town)end)
+  read("supply","cargoAndPassengers","get_town_cargo_supply",function()return commands.get_town_cargo_supply({town=town,include_passengers=true})end)
+  read("supply","stock","town.getTownStockCargo",function()return native.getTownStockCargo(town)end)
+  rating("noise","getRatingNoise");rating("pollution","getRatingPollution")
+  read("noise","districts","town.getTownNoisePerDistrict",function()return native.getTownNoisePerDistrict(town,u.getNoiseLandUseTypes())end)
+  read("noise","emitters","town_util.getTownEmissionEmitters(noise=true)",function()return u.getTownEmissionEmitters(town,true)end)
+  read("pollution","emitters","town_util.getTownEmissionEmitters(noise=false)",function()return u.getTownEmissionEmitters(town,false)end)
+  read("overview","emissionsPower","town.getTownEmission",function()return toPlain(native.getTownEmission(town),0,nil,"TownOverviewEmissionPower")end)
+  read("overview","emissionsDB","town.getTownEmissionDB",function()return toPlain(native.getTownEmissionDB(town),0,nil,"TownOverviewEmission")end)
+  rating("bonuses","getRatingBonuses")
+  read("bonuses","construction","TownState.constructionBoni",function()return state and state.constructionBoni end)
+  read("bonuses","xpFactor","town_util.getXpFactor",function()return u.getXpFactor(town)end)
+  read("bonuses","growthLevel","town_util.getGrowthLevelMult",function()assert(state,"Town state unavailable");return u.getGrowthLevelMult(town,state)end)
+  rating("happiness","getRatingHappiness")
+  read("happiness","stats","town.getTownHappinessStats",function()
+   local n=assert(u.NumLinesForHappinessStats,"Native top-line bound unavailable")
+   assert(type(n)=="number" and n>=0 and n<=100,"Invalid top-line bound")
+   return {numTopLines=n,data=toPlain(native.getTownHappinessStats(town,n),0,nil,"TownOverviewHappiness"),tupleMeaning="unhappy,total"}
+  end)
+  rating("traffic","getRatingTraffic")
+  read("traffic","speedAndCongestion","town_util.getTrafficSpeedRating",function()
+   -- Use the native default sample coefficient, not a synthetic congestion score.
+   return {data=u.getTrafficSpeedRating(town,1),samplesCoefficient=1,scope="native traffic sample; tuple is speed rating and counts by congestion level"}
+  end)
+  result.complete=#result.errors==0
+  return result
+ end
+ ENGINE_COMMANDS.get_town_overview=true
  commands.get_town_cargo_supply=function(args)
   local town=requireEntity(args,"town","TOWN")
   local system=assert(api.engine.system.townBuildingSystem,"Town building system unavailable")
@@ -8076,6 +8179,164 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   return reconcile(op)
  end
 
+ function uiBuild.stationRemovalSnapshot(entity)
+  assert(commands.get_game_state({}).speedup==0,"Pause before station removal")
+  local target=entity
+  if getComponent(entity,"STATION") then target=api.engine.system.streetConnectorSystem.getConstructionEntityForStation(entity) end
+  local c=assert(getComponent(target,"CONSTRUCTION"),"Station construction missing")
+  assert(c.fileName=="::/stations/street/modular_street_station/modular_terminal.con","Only standalone modular road cargo stations are supported")
+  local player=api.engine.util.getPlayer()
+  local co=ownerOf(target);assert(co==nil or co<0 or co==player,"Construction belongs to another player")
+  for _,field in ipairs({"depots","industries","townBuildings"}) do assert(#listOf(c[field])==0,"Station has attached facilities") end
+  local stations=listOf(c.stations);assert(#stations>0 and #stations<=32,"Invalid station inventory")
+  local owned,groups={},{}
+  for _,id in ipairs(stations) do owned[id]=true end
+  local s={entity=target,depot=stations[1],stations=stations,player=player,config=toPlain(c,0,nil,"Engine.Component.Construction"),
+   ownedEdges={},ownedNodes={},roads={},nodes={},nodeConfigs={},expectedNodeConfigs={},boundaryNodes={},vehicles={},dependentVehicles={},lines={},children={},groups={},stationData={}}
+  for _,id in ipairs(stations) do
+   assert(ownerOf(id)==player,"Station is not owned by current player")
+   local st=assert(getComponent(id,"STATION"),"Station missing")
+   s.stationData[tostring(id)]=stableDataSignature(toPlain(st,0,nil,"Station"))
+   local terminals=listOf(st.terminals);assert(#terminals>0,"Station terminals unavailable")
+   for _,t in ipairs(terminals) do assert(t.cargoUnload==true and t.passengersLoad==false and t.passengersUnload==false,"Passenger/mixed terminal refused") end
+   local g=api.engine.system.stationGroupSystem.getStationGroup(id)
+   local group=assert(getComponent(g,"STATION_GROUP"),"Station group unavailable")
+   for _,member in ipairs(listOf(group.stations)) do assert(owned[member],"Shared station group refused") end
+   groups[g]=true;s.groups[tostring(g)]=stableDataSignature(toPlain(group,0,nil,"Engine.Component.StationGroup"))
+  end
+  local networks={target};local seen={[target]=true}
+  local function child(id)
+   if not seen[id] then networks[#networks+1]=id;seen[id]=true end
+   local stock=getComponent(id,"STOCK_LIST")
+   if stock then
+    for i in ipairs(listOf(stock.stocks)) do
+     local count=api.engine.system.simEntityAtStockSystem.getStockCount(id,i-1)
+     assert(type(count)=="number" and count==0,"Station-owned stock nonempty or unknown")
+    end
+   end
+  end
+  child(target)
+  for _,id in ipairs(listOf(c.subconstructions)) do
+   assert(api.engine.entityExists(id),"Subconstruction missing")
+   assert(not getComponent(id,"CONSTRUCTION") and not getComponent(id,"VEHICLE_DEPOT") and not getComponent(id,"INDUSTRY") and not getComponent(id,"TOWN_BUILDING"),"Additional facility refused")
+   assert(not getComponent(id,"STATION") or owned[id],"Unexpected station subentity")
+   s.children[#s.children+1]=id;child(id)
+  end
+  for _,id in ipairs(stations) do child(id) end
+  for _,id in ipairs(listOf(c.frozenEdges)) do child(id) end
+  for _,id in ipairs(listOf(c.frozenNodes)) do child(id) end
+  -- Read actual networks, not station names or historic line assignments.
+  for _,id in ipairs(networks) do
+   assert(#listOf(assert(api.engine.system.transportVehicleSystem.getVehicles({id},false),"Vehicle network inventory unavailable"))==0,"Vehicle still uses station network")
+   assert(#listOf(assert(api.engine.system.simPersonSystem.getSimPersonsAtTerminalForTransportNetwork(id),"Waiting-person inventory unavailable"))==0,"Persons still use station network")
+  end
+  local count=0
+  for _,id in ipairs(listOf(assert(api.engine.system.lineSystem.getLines(),"Line inventory unavailable"))) do
+   count=count+1;assert(count<=2048,"Line inventory exceeds removal limit")
+   local line=assert(getComponent(id,"LINE"))
+   for _,stop in ipairs(listOf(line.stops)) do assert(not groups[stop.stationGroup],"Line still references station group") end
+   s.lines[tostring(id)]=stableDataSignature(toPlain(line,0,nil,"Engine.Component.Line"))
+  end
+  local endpoints={}
+  for _,n in ipairs(listOf(c.frozenNodes)) do s.ownedNodes[tostring(n)]=true;endpoints[tostring(n)]=n end
+  for _,e in ipairs(listOf(c.frozenEdges)) do
+   local b=assert(getComponent(e,"BASE_EDGE"),"Depot internal edge missing")
+   assert(#listOf(b.objects)==0,"Depot internal edge has objects")
+   s.ownedEdges[tostring(e)]=true;endpoints[tostring(b.node0)]=b.node0;endpoints[tostring(b.node1)]=b.node1
+  end
+  for _,n in pairs(endpoints) do
+   for _,e in ipairs(listOf(assert(api.engine.system.streetSystem.getNodeSegments(n),"Adjacent road inventory unavailable"))) do
+    if not s.ownedEdges[tostring(e)] then
+     local b=assert(getComponent(e,"BASE_EDGE"),"Adjacent road missing")
+     s.roads[tostring(e)]=stableDataSignature(toPlain(b,0,nil,"Network.BaseEdge"))
+     for _,nn in ipairs({b.node0,b.node1}) do
+      s.nodes[tostring(nn)]=stableDataSignature(toPlain(assert(getComponent(nn,"BASE_NODE")),0,nil,"Engine.Component.BaseNode"))
+      assert(not s.ownedNodes[tostring(nn)],"External road uses a depot-owned node; removal refused")
+     end
+    end
+   end
+  end
+  for _,n in pairs(endpoints) do
+   if not s.ownedNodes[tostring(n)] then
+    s.boundaryNodes[tostring(n)]=true
+    s.nodes[tostring(n)]=stableDataSignature(toPlain(assert(getComponent(n,"BASE_NODE")),0,nil,"Engine.Component.BaseNode"))
+   end
+  end
+  for id in pairs(s.nodes) do
+   local cfg=getComponent(tonumber(id),"BASE_NODE_CONFIG")
+   s.nodeConfigs[id]=uiBuild.depotRemovalNodeConfig(cfg)
+   s.expectedNodeConfigs[id]=uiBuild.depotRemovalNodeConfig(cfg,s.ownedEdges)
+  end
+  local count=0
+  api.engine.forEachEntityWithComponent(function(id)
+   count=count+1;assert(count<=2048,"Vehicle inventory exceeds removal limit")
+   s.vehicles[tostring(id)]=uiBuild.depotRemovalVehicle(assert(getComponent(id,"TRANSPORT_VEHICLE")))
+  end,componentTypes().TRANSPORT_VEHICLE)
+  s.signature=stableDataSignature(s);return s
+ end
+ function uiBuild.stationRemovalReadback(op)
+  local _,issues=uiBuild.depotRemovalReadback(op)
+  for _,ids in ipairs({op.before.stations,op.before.children}) do
+   for _,id in ipairs(ids) do if api.engine.entityExists(id) then issues[#issues+1]="station_child_present:"..id end end
+  end
+  for id,signature in pairs(op.before.lines) do
+   local line=getComponent(tonumber(id),"LINE")
+   if not line or stableDataSignature(toPlain(line,0,nil,"Engine.Component.Line"))~=signature then issues[#issues+1]="line_changed:"..id end
+  end
+  return #issues==0,issues
+ end
+ function uiBuild.stationRemoval(state,root,ledger,req)
+  ledger.stationRemovalPreviews=ledger.stationRemovalPreviews or {}
+  ledger.stationRemovalOperations=ledger.stationRemovalOperations or {}
+  local function result(op)
+   return {operation_id=op.token,request_id=op.request,entity=op.before.entity,stations=op.before.stations,
+    session=op.epoch,phase=op.phase,removed=op.verified==true,verified=op.verified==true,
+    nativeAccepted=op.nativeAccepted,issues=op.issues,backup_save=op.backup,do_not_resubmit=true}
+  end
+  local function reconcile(op)
+   assert(op.epoch==req.facilityEpoch and op.before.player==api.engine.util.getPlayer(),"Removal operation session/player changed; no automatic reconciliation")
+   if op.phase=="dispatch_started" then
+    local verified,issues=uiBuild.stationRemovalReadback(op);op.issues=issues
+    if verified then
+     op.verified=true;op.phase="confirmed"
+     if ledger.pending==op.request then ledger.pending=nil end
+    end
+   end
+   state:set(root);return result(op)
+  end
+  if req.cmd=="get_station_removal_operation" then
+   local op=assert(ledger.stationRemovalOperations[req.args.operation_id],"Unknown station removal operation")
+   return reconcile(op)
+  end
+  assert(not ledger.pending and not ledger.pendingWorkflow,"Previous mutation unresolved")
+  if req.cmd=="preview_station_removal" then
+   local s=uiBuild.stationRemovalSnapshot(req.args.entity)
+   local _,scope=uiBuild.depotRemovalProposal(s)
+   local token="ui-station-remove:"..req.id
+   ledger.stationRemovalPreviews[token]={before=s,epoch=req.facilityEpoch,clock=assert(wallClock()),round=quotaState(ledger).round}
+   state:set(root)
+   return {preview=true,preview_token=token,entity=s.entity,stations=s.stations,dependentVehicles=s.dependentVehicles,
+    validation="structural_and_native_proposal_scope",nativePreview=false,nativeScope=scope,
+    warning="Only an unused standalone cargo station is removed; shared catchment stocks are preserved."}
+  end
+  local token=req.args.preview_token;local t=ledger.stationRemovalPreviews[token]
+  ledger.stationRemovalPreviews[token]=nil;state:set(root)
+  assert(t and t.epoch==req.facilityEpoch and t.round==quotaState(ledger).round,"Unknown, consumed or stale station removal preview")
+  local now=assert(wallClock());assert(now>=t.clock and now-t.clock<=60,"Station removal preview expired")
+  local fresh=uiBuild.stationRemovalSnapshot(t.before.entity)
+  assert(fresh.signature==t.before.signature,"Station/network/line/vehicle state changed since preview")
+  local p=uiBuild.depotRemovalProposal(fresh)
+  local op={token=token,request=req.id,epoch=req.facilityEpoch,before=fresh,backup=req.args.backup_save,phase="dispatch_started"}
+  ledger.stationRemovalOperations[token]=op;ledger.pending=req.id;state:set(root)
+  -- Persist before native dispatch. Callback mutates local state only; never
+  -- writes stale root state from a later callback. Read-only reconciliation is
+  -- authoritative when a callback is delayed/lost or dispatch raises.
+  local accepted
+  applyProposal(p,false,function(ok)accepted=ok==true end)
+  op.nativeAccepted=accepted;state:set(root)
+  return reconcile(op)
+ end
+
  uiBuild.engine=function(state,param)
   -- Native get() may expose an event-start snapshot. Preserve all nested writes.
   local native,current=state,state:get() or {}
@@ -8119,7 +8380,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     ledger.requests={};ledger.count=0
     -- No preview from an earlier round may be committed after resetting.
     ledger.tokens={};ledger.linePreviews={};ledger.edgePreviews={};ledger.workflowTokens={}
-    ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
+    ledger.stationRemovalPreviews={};ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
     quota.round=quota.round+1;quota.used=0
     return {reset=true,previous=previous,round=quota.round,used=0,limit=QUOTA_LIMIT,
      remaining=QUOTA_LIMIT,retiredRequestCount=ledger.retiredCount,session=req.facilityEpoch,
@@ -8240,6 +8501,11 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
    state:set(root);emit(req,ok,value);return
   end
+  if req.cmd=="preview_station_removal" or req.cmd=="commit_station_removal" or req.cmd=="get_station_removal_operation" then
+   local ok,value=pcall(uiBuild.stationRemoval,state,root,ledger,req)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
+   state:set(root);emit(req,ok,value);return
+  end
   if req.cmd=="preview_test_removal" or req.cmd=="commit_test_removal" then
    local ok,value=pcall(function()
     assert(not ledger.pending,"Previous mutation unresolved")
@@ -8268,7 +8534,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
+   emit(req,true,{townOverviewVersion=1,townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,stationRemovalFingerprintVersion=2,stationRemovalVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
     roadGraph={command="preview_road_graph",isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1",
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
@@ -8934,6 +9200,9 @@ local function headlessTick()
 		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
 		row.saveRequestCount=headless.saveCount;row.saveRequestLimit=256
 		row.operationQuotaVersion=1
+		row.townOverviewVersion=1
+		row.stationRemovalFingerprintVersion=2
+		row.stationRemovalVersion=1
 		row.depotRemovalVersion=1
 		row.waterFacilityVersion=1
 		row.waterHarborLayoutVersion=1

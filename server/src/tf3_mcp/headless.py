@@ -412,6 +412,8 @@ class HeadlessRequests:
             if (command == 'get_town_cargo_supply' and arguments.get('include_passengers')
                     and row.get('townPassengerSupplyVersion') != 1):
                 raise ValueError('Loaded receiver lacks town passenger supply v1; nothing dispatched')
+            if command == 'get_town_overview' and row.get('townOverviewVersion') != 1:
+                raise ValueError('Loaded receiver lacks town overview v1; nothing submitted')
             if command == 'get_industry_bonuses' and row.get('industryBonusesVersion') != 1:
                 raise ValueError('Loaded receiver lacks industry bonuses v1; nothing submitted')
             if command == 'reconcile_assignment_rejection' and row.get('assignmentReconciliationVersion') != 1:
@@ -421,10 +423,12 @@ class HeadlessRequests:
             if (command == 'build_water_facility' and arguments.get('kind') == 'harbor'
                     and row.get('waterHarborLayoutVersion') != 1):
                 raise ValueError('Loaded receiver lacks small/large harbor layouts; nothing submitted')
-            if command in {'preview_depot_removal', 'commit_depot_removal', 'get_depot_removal_operation'}:
-                if row.get('depotRemovalVersion') != 1:
-                    raise ValueError('Loaded receiver lacks depot removal v1; nothing submitted')
-                if command == 'commit_depot_removal':
+            if command in {'preview_depot_removal', 'commit_depot_removal', 'get_depot_removal_operation',
+                           'preview_station_removal', 'commit_station_removal', 'get_station_removal_operation'}:
+                capability = 'stationRemovalVersion' if 'station_removal' in command else 'depotRemovalVersion'
+                if row.get(capability) != 1:
+                    raise ValueError(f"Loaded receiver lacks {'station' if 'station_removal' in command else 'depot'} removal v1; nothing submitted")
+                if command in {'commit_depot_removal', 'commit_station_removal'}:
                     # Require fresh, unchanged save evidence from this host/session;
                     # a user-supplied filename is not proof of a completed backup.
                     saved = [r for r in ledger['requests'].values()

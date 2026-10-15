@@ -11,6 +11,7 @@ This project includes an in-game mod and a local Python MCP server. Bring your o
 ## Features
 
 - Inspect towns, industries, supply and demand, inventories, lines, vehicles, and finances.
+- Read town-panel reputation, delivery, noise, bonuses, happiness, traffic, and pollution through [get_town_overview](docs/reference/TOWN_OVERVIEW.md), with per-field availability and documented limits.
 - Capture map and terrain snapshots, identify facility sites, and plan transport connections.
 - Export planning reports as HTML, PNG, SVG, and JSON.
 - Preview, submit, and read back facility, road, line, and vehicle operations through their respective interfaces.
