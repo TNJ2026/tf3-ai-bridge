@@ -9,7 +9,7 @@
 -- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
 -- how the game escapes strings. One request is in flight at a time.
 
-local BRIDGE_VERSION = "0.12.10"
+local BRIDGE_VERSION = "0.12.20"
 local USERDATA_DIR = "tf3_mcp"
 local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
 local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
@@ -7056,7 +7056,7 @@ do
  local SAVED_MUTATION_LIMIT=1024 -- active receipts; reset retires terminal IDs without forgetting them
  local QUOTA_LIMIT=256
  local REPLAY_ID_LIMIT=65536 -- finite storage guard, never reset or silently evict
- local schemas={get_town_cargo_supply={town="entity"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+ local schemas={get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
   get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
   begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
   read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
@@ -7669,7 +7669,28 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   local items={}
   for _,t in pairs(totals) do t.rateKnown=t.demand>0;t.supplyRate=t.demand>0 and t.supply/t.demand or nil;items[#items+1]=t end
   table.sort(items,function(a,b)return a.cargo<b.cargo end)
-  return {town=town,gameTime=cargoReadTime(),districts=districts,items=items,readOnly=true,townCargoSupplyVersion=2,
+  local passengers=nil
+  if args.include_passengers then
+   assert(system.getLandUsePersonCapacities~=nil,"Native residential capacity API unavailable")
+   local capacities=assert(system.getLandUsePersonCapacities(town),"Native residential capacities unavailable")
+   local demand=capacities[api.type.enum.LandUseType.RESIDENTIAL+1]
+   assert(finite(demand),"Invalid native passenger demand")
+   passengers={demand=demand,panelRowPresent=demand>0,rateKnown=false,
+    source="town_util.getCargoSupplyDemandsLandUseWithResidentialLineUsage",
+    scope="Residential passenger panel; line-usage-derived supply, all public transport, not bus-only or a transported-person counter",
+    periodKnown=false,lineUsageRatingMultiplier=2}
+   if demand>0 then
+    local townApi=assert(api.engine.util.town,"Native town utility unavailable")
+    assert(townApi.getTownLineUsage~=nil,"Native town line usage API unavailable")
+    local usage=townApi.getTownLineUsage(town)
+    assert(finite(usage),"Invalid native town line usage")
+    local rating=math.max(0,math.min(usage*2,1))
+    local supply=math.floor(demand*rating+0.5)
+    passengers.rawLineUsage=usage;passengers.supply=supply
+    passengers.rateKnown=true;passengers.supplyRate=supply/demand
+   end
+  end
+  return {town=town,gameTime=cargoReadTime(),passengers=passengers,townPassengerSupplyVersion=1,districts=districts,items=items,readOnly=true,townCargoSupplyVersion=2,
    source="api.engine.system.townBuildingSystem.getCargoSupplyAndLimit",
    scope="Native city-panel cargo supply/demand; district rounding matches town_util.getCargoSupplyDemandsLandUse; totals sum district display values",
    periodKnown=false,period="Native panel metric; temporal window not exposed by this API; not annual or half-year delivery counters"}
@@ -8247,7 +8268,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
+   emit(req,true,{townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
     roadGraph={command="preview_road_graph",isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1",
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
@@ -8819,6 +8840,7 @@ end
 -- cached filenames or automatically dispatch after a session reload.
 local HEADLESS_GENERATION = "disabled"
 local HEADLESS_ON_DEMAND = false
+local HEADLESS_USERDATA = false
 -- Same command-specific limit in the ingress and the construction dispatcher.
 function uiBuild.inputLimit(text)
 	return type(text)=="string" and (text:match("^[0-9a-f]+ preview_line_edit ") or text:match("^[0-9a-f]+ preview_road_graph ")) and 8192 or 512
@@ -8902,7 +8924,11 @@ local function headlessTick()
 	local function emit(status,extra)
 		local row=extra or {};row.status=status;row.session=terrainEpoch
 		row.generation=HEADLESS_GENERATION;row.slot=headless.slot
-		row.mode=HEADLESS_ON_DEMAND and "demand" or "bounded"
+		row.mode=HEADLESS_USERDATA and "userdata" or (HEADLESS_ON_DEMAND and "demand" or "bounded")
+		if HEADLESS_USERDATA then
+			row.userdataVersion=1;row.userdataDirectory="mod_presets"
+			row.filename="tnj_mcp_"..HEADLESS_GENERATION.."_request.preset.lua"
+		end
 		row.saveGameAvailable=headless.canSave()
 		row.loadGameVersion=1;row.loadGameAvailable=headless.canLoad()
 		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
@@ -8913,16 +8939,17 @@ local function headlessTick()
 		row.waterHarborLayoutVersion=1
 		row.industryBonusesVersion=1
 		row.townCargoSupplyVersion=2
+		row.townPassengerSupplyVersion=1
 		row.assignmentReconciliationVersion=1
 		row.notificationsVersion=1
 		row.waterFacilityFingerprintVersion=2
 		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192};row.roadGraphVersion=40
-		if HEADLESS_ON_DEMAND then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua" end
+		if HEADLESS_ON_DEMAND and not HEADLESS_USERDATA then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua" end
 		row.utc=os.time();row.clock=wallClock()
 		log("[TNJ_HEADLESS_V1]",json.encode(row))
 	end
 	local now=wallClock()
-	if not now or type(resolveutil)~="table" or type(resolveutil.loadfile)~="function" then
+	if not now or (not HEADLESS_USERDATA and (type(resolveutil)~="table" or type(resolveutil.loadfile)~="function")) then
 		headless.stopped=true;emit("stopped",{error="loader or clock unavailable"});return
 	end
 	if not headless.due then headless.due=now+2;emit("ready",{due=headless.due});return end
@@ -8930,14 +8957,31 @@ local function headlessTick()
 	if not HEADLESS_ON_DEMAND and now>headless.due+5 then headless.stopped=true;emit("stopped",{error="late update; no replay"});return end
 	local consumed=false
 	local ok,err=pcall(function()
+		local value
+		local mailbox="tnj_mcp_"..HEADLESS_GENERATION.."_request.preset"
+		if HEADLESS_USERDATA then
+			local found=false
+			local names=app.getAllUserdata("mod_presets")
+			assert(type(names)=="table","Userdata directory enumeration failed")
+			for _,name in pairs(names) do if name==mailbox or name==mailbox..".lua" then found=true end end
+			if not found then return end
+			local data=app.loadUserdata("mod_presets",mailbox)
+			assert(type(data)=="table" and type(data.hex)=="string" and #data.hex<=32768,"Invalid userdata envelope")
+			value=hexDecode(data.hex)
+		else
 		local filename=HEADLESS_ON_DEMAND and ("s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua") or (headless.slot..".lua")
 		local chunk,why=resolveutil.loadfile("tnj_tf3_ai_bridge::/tf3_mcp_bridge/headless/"..HEADLESS_GENERATION.."/"..filename)
 		if HEADLESS_ON_DEMAND and chunk==nil and type(why)=="string" and why:find("Could not find file",1,true) then return end
 		assert(type(chunk)=="function",tostring(why))
-		local value=chunk()
+		value=chunk()
+		end
 		if not HEADLESS_ON_DEMAND and value=="" then return end
 		assert(type(value)=="string" and #value<=16384,"Invalid headless payload")
 		local req=json.decode(value)
+		-- Stale persisted mail must never execute in a new session or twice.
+		-- The host keeps the original durable intent; no automatic replay occurs.
+		if HEADLESS_USERDATA and type(req)=="table" and req.generation==HEADLESS_GENERATION
+			and (req.session~=terrainEpoch or (type(req.slot)=="number" and req.slot<headless.slot)) then return end
 		assert(type(req)=="table" and req.session==terrainEpoch and req.generation==HEADLESS_GENERATION and req.slot==headless.slot,"Headless session/slot mismatch")
 		assert(type(req.expires)=="number" and now<=req.expires and req.expires<=headless.due+(HEADLESS_ON_DEMAND and 60 or 5),"Expired headless request")
 		assert(type(req.input)=="string","Invalid request input")
@@ -8954,6 +8998,7 @@ local function headlessTick()
 			return
 		end
 		emit("consumed",{id=id})
+		if HEADLESS_USERDATA then app.removeUserdata("mod_presets",mailbox) end
 		local status
 		if req.kind=="build" then
 			assert(uiBuild.recognizes(req.input),"Unsupported construction command")
@@ -9001,7 +9046,7 @@ local bridgeScript = {
 	end,
 
 	guiUpdate = function(_userParams, state, _guiState)
-		bridgeTick(nil, "gui", state)
+		if not HEADLESS_USERDATA then bridgeTick(nil, "gui", state) end
 		if ENABLE_RESOURCE_INGRESS_PROBE then probeResourceIngress() end
 		if ENABLE_FIRST_READ_PROBE then probeFirstReadIngress() end
 		headlessTick()

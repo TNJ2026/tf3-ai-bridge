@@ -1045,14 +1045,20 @@ async def set_game_speed(speed: int) -> dict:
 
 
 @mcp.tool()
-async def get_town_cargo_supply(town: int) -> dict:
+async def get_town_cargo_supply(town: int, include_passengers: bool = False) -> dict:
     """Read native city-panel cargo supply, demand and ratios without building scans.
 
     Requires loaded townCargoSupplyVersion=2. Includes per-land-use display
     rounding, raw values and cargo-ID totals. Zero demand has no ratio.
     Native temporal window is unspecified; these are not annual delivery counts.
+    include_passengers requires townPassengerSupplyVersion=1 and adds the native
+    residential passenger panel metric separately: line-usage-derived supply,
+    residential demand, and raw line usage. It is not a boarding counter or bus-only.
     """
-    return await _call("get_town_cargo_supply", _engine=True, town=town)
+    args = {"town": town}
+    if include_passengers:
+        args["include_passengers"] = True
+    return await _call("get_town_cargo_supply", _engine=True, **args)
 
 
 @mcp.tool()

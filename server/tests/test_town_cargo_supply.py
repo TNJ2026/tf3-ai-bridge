@@ -35,6 +35,10 @@ def test_missing_and_invalid_are_not_zero(game,value):
 def test_validation(args):
  with pytest.raises(ValueError):validate_build_arguments('get_town_cargo_supply',args)
 
+@pytest.mark.parametrize('args',[{'town':100},{'town':100,'include_passengers':False},{'town':100,'include_passengers':True}])
+def test_optional_passenger_flag_host_validation(args):
+ assert validate_build_arguments('get_town_cargo_supply',args)==args
+
 def test_old_receiver_rejected_before_send():
  from unittest.mock import AsyncMock,Mock
  from tf3_mcp.headless_client import HeadlessClient
@@ -56,3 +60,55 @@ def test_native_callable_table_binding(game):
  r=call('get_town_cargo_supply',town=100)
  assert r['townCargoSupplyVersion']==2 and r['items'][0]['supplyRate']==.6
  assert lua.globals().SUBMISSIONS is None
+
+
+PASSENGERS = """
+api.engine.system.townBuildingSystem.getLandUsePersonCapacities=function()return {101,800,900}end
+api.engine.util.town={getTownLineUsage=function()return .123 end}
+"""
+
+@pytest.mark.parametrize('usage,supply',[(0,0),(.123,25),(.25,51),(.9,101)])
+def test_passenger_panel_rounding_clamping_and_scope(game,usage,supply):
+ lua,call=game;lua.execute(SETUP+PASSENGERS)
+ lua.execute('api.engine.util.town.getTownLineUsage=function()return '+str(usage)+' end')
+ r=call('get_town_cargo_supply',town=100,include_passengers=True)
+ p=r['passengers']
+ assert p['demand']==101 and p['supply']==supply
+ assert p['rawLineUsage']==usage and p['supplyRate']==pytest.approx(supply/101)
+ assert p['panelRowPresent'] and not p['periodKnown']
+ assert 'not bus-only' in p['scope']
+ assert r['items'][0]['supply']==9  # Cargo totals stay separate.
+ assert lua.globals().SUBMISSIONS is None
+
+def test_zero_passenger_demand_has_no_panel_row_or_ratio(game):
+ lua,call=game;lua.execute(SETUP+PASSENGERS)
+ lua.execute('api.engine.system.townBuildingSystem.getLandUsePersonCapacities=function()return {0}end; api.engine.util.town=nil')
+ p=call('get_town_cargo_supply',town=100,include_passengers=True)['passengers']
+ assert not p['panelRowPresent'] and not p['rateKnown']
+ assert 'supply' not in p and 'supplyRate' not in p
+
+@pytest.mark.parametrize('code',[
+ 'api.engine.system.townBuildingSystem.getLandUsePersonCapacities=nil',
+ 'api.engine.system.townBuildingSystem.getLandUsePersonCapacities=function()return {}end',
+ 'api.engine.util.town.getTownLineUsage=function()return 0/0 end',
+ 'api.engine.util.town.getTownLineUsage=function()return -1 end',
+])
+def test_passenger_unknown_rejected(game,code):
+ lua,call=game;lua.execute(SETUP+PASSENGERS+code)
+ with pytest.raises(Exception):call('get_town_cargo_supply',town=100,include_passengers=True)
+
+def test_passenger_capability_rejected_before_dispatch():
+ from unittest.mock import AsyncMock,Mock
+ from tf3_mcp.headless_client import HeadlessClient
+ c=HeadlessClient(Mock())
+ c.status=AsyncMock(return_value={'receiver':{'session':'s','townCargoSupplyVersion':2},'pending':None})
+ with pytest.raises(ValueError,match='lacks town passenger supply'):
+  asyncio.run(c.call('get_town_cargo_supply',{'town':100,'include_passengers':True}))
+ c.requests.send.assert_not_called()
+
+def test_public_passenger_tool(monkeypatch):
+ from tf3_mcp import server
+ from unittest.mock import AsyncMock
+ f=AsyncMock(return_value={'readOnly':True});monkeypatch.setattr(server,'_call',f)
+ asyncio.run(server.get_town_cargo_supply(100,include_passengers=True))
+ f.assert_awaited_once_with('get_town_cargo_supply',_engine=True,town=100,include_passengers=True)

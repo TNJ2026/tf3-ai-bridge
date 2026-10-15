@@ -87,3 +87,24 @@ Read-only disassembly of installed 40420 identified the exact error's directory 
 ## API call-chain confirmation (2026-10-09)
 
 Static registration and direct-call analysis now connects both loadUserdata and saveUserdata to shared path builder RVA db65c0, then directory validator dd0f90. The input directory is checked before path assembly or file I/O. Both APIs remain registered. The separate runtime restriction reports a different message (API is currently restricted). Common RIP-relative references to the allowlist container identify initialization/comparison and destruction, with no registration mutator found; indirect aliases are not exhaustively excluded. Detailed evidence and RVA chains: `output/live-validation-20261009/native_userdata_analysis/CALL_CHAIN.md`. This narrows the immediate failure to the native directory allowlist, but does not establish when or why it changed.
+## 2026-10-15 supplementary explicit user-authorized test
+
+Follow-up external-first duplex test also passed on the actual mod.io copy:
+100 unique requests on the same two userdata files, 1 duplicate without repeat
+processing, and 3 rejected altered/out-of-session/out-of-order messages. All
+104 replies matched independently; UTF-8 and roughly 8 KB payloads round-tripped.
+A 10-second idle interval did not reprocess the unchanged request. Native cleanup,
+host file absence, and installed-script restoration were verified. Evidence:
+`output/userdata_duplex_20261015/RESULT.md`. No world commands were sent; formal
+MCP integration, crash recovery and long-duration stability remain unverified.
+
+An independent test in the existing `mod_presets` directory passed: native
+`saveUserdata` wrote A, the host atomically replaced A with B in the same file,
+and native `loadUserdata` read B twice without reload. Native removal and
+independent filesystem absence were verified. The test file was returned by
+`getAllUserdata`, so this directory is not a hidden private namespace. The
+installed script was restored; no world operations or pending changes occurred.
+Evidence: `output/userdata_roundtrip_20261015/RESULT.md` and `result.json`.
+This supersedes any inference that the custom-directory restriction rules out
+all mutable userdata communication. It does not establish a production protocol
+or authorize unrelated changes to native preset files.

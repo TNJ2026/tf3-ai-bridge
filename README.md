@@ -34,7 +34,7 @@ Request resources reside in the installed mod's `content/tf3_mcp_bridge/headless
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
 
-This transport requires explicit setup: install and load a matching receiver, set `TF3_MCP_TRANSPORT=headless` for the MCP server, and point `TF3_MCP_HEADLESS_MOD` to the installed mod's `content/tf3_mcp_bridge` directory. Downloading and activating the mod alone does not complete this configuration. See the [headless transport guide](docs/HEADLESS_TRANSPORT_20261009.md).
+New release packages include an enabled receiver. Load the mod, set `TF3_MCP_TRANSPORT=headless` for the MCP server, and point `TF3_MCP_HEADLESS_MOD` to the installed mod's `content/tf3_mcp_bridge` directory. The local MCP server still requires separate configuration. The observed mod.io mount does not discover new request files at runtime: installer `--mode auto` selects a reusable native userdata mailbox in the existing `mod_presets` directory. Live MCP reads, native save/reload, and reads after restarting the external MCP server have passed. A fresh game load is required after installing the receiver. See [downloaded-mod compatibility](docs/reference/MODIO_CONNECTION.md) and the [headless transport guide](docs/HEADLESS_TRANSPORT_20261009.md).
 
 ## Requirements
 
@@ -126,11 +126,13 @@ See the [current validation record](docs/TEST_VALIDATION_20261010.md) for the la
 
 ## Publishing and documentation
 
-Publishing sources live in `mod/tf3_mcp_bridge/`; its directory name is retained for tool compatibility. Copy the complete directory to `staging_area/tnj_tf3_ai_bridge/` under the game's userdata directory, then validate and upload through **Mod Hub → My Mods** in the main menu.
+Publishing sources live in `mod/tf3_mcp_bridge/`; the local publishing copy lives under the game's userdata `staging_area/tnj_tf3_ai_bridge/`. Validate and upload through **Mod Hub → My Mods**. The current publishing workflow does not generate or upload ZIP files.
 
-`_metadata/0.png` is the cover image, and `_metadata/modinfo.json` contains the author and description. The staging copy stays outside Git. Users still need to install the local MCP server separately.
+**Every upgrade must increase both the integer `revision` in `mod.json` and `BRIDGE_VERSION` in the bridge script.** The description and changelog heading must use the bridge version rather than a date. Synchronize source and local publishing copies; the two version numbers need not have the same value. The current baseline is revision `3`, bridge version `0.12.20`.
 
-Before uploading, run `python scripts/check_mod_package.py "<staging mod directory>"`. Live tests can generate request files under `content/tf3_mcp_bridge/headless/`; these are runtime data, not release files. With the game and bridge clients stopped and no pending request, archive that directory outside the mod before publishing. Keep the request ledger and backups. This offline check does not replace the game's native validation.
+See the [publishing workflow](docs/guides/PUBLISHING.md) for version synchronization and upload checks. Keep bilingual release notes concise, describing fixes and features.
+
+`_metadata/0.png` is the cover; `_metadata/modinfo.json` contains the author and description. Keep the production userdata receiver enabled in the publishing copy; do not overwrite it with unconfigured development defaults. Run `python scripts/check_mod_package.py "<local publishing directory>" --require-receiver` before native game validation. Users still need a separately configured local MCP server.
 
 `exports/`, live-game survey records, logs, and test temporary directories are not distributed with the source. References to those files in historical documents may not resolve in a public checkout.
 
