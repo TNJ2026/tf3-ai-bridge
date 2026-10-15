@@ -34,7 +34,7 @@ AI 客户端 → MCP（标准输入输出）→ Python 服务 → 一次性请�
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
 
-此通道需要配置启用：安装并加载匹配的接收器，在 MCP 服务中设置 `TF3_MCP_TRANSPORT=headless`，并将 `TF3_MCP_HEADLESS_MOD` 指向已安装模组的 `content/tf3_mcp_bridge` 目录。仅下载并激活模组不会自动完成这项配置。配置流程见[headless 通道说明](docs/HEADLESS_TRANSPORT_20261009.md)。
+新版发布包已内置默认启用的接收器。加载模组后，在 MCP 服务中设置 `TF3_MCP_TRANSPORT=headless`，并将 `TF3_MCP_HEADLESS_MOD` 指向已安装模组的 `content/tf3_mcp_bridge` 目录。本地 MCP 服务仍需另行配置；旧下载版接收器修复见下文。mod.io 下载版无法发现运行中新增的请求文件，请先阅读[下载版 userdata 配置与验收状态](docs/reference/MODIO_CONNECTION.md)。配置流程见[headless 通道说明](docs/HEADLESS_TRANSPORT_20261009.md)。
 
 ## 环境要求
 
@@ -126,11 +126,13 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 
 ## 发布与文档
 
-发布源文件位于 `mod/tf3_mcp_bridge/`，源目录名称保留以兼容工具。将完整目录复制到游戏用户目录的 `staging_area/tnj_tf3_ai_bridge/`，再通过主菜单 **Mod Hub → My Mods** 校验和上传。
+发布源文件位于 `mod/tf3_mcp_bridge/`，游戏本地发布副本位于用户目录的 `staging_area/tnj_tf3_ai_bridge/`。通过游戏主菜单 **Mod Hub → My Mods** 校验和上传；按当前发布约定，不生成或上传 ZIP。
 
-`_metadata/0.png` 为封面，`_metadata/modinfo.json` 保存作者与介绍。发布副本不进入 Git；本地 MCP 服务仍需另行安装。
+**每次升级同时递增 `mod.json` 的整数修订号 `revision` 和脚本中的桥接版本 `BRIDGE_VERSION`。** 模组介绍显示桥接版本号，更新说明标题也按桥接版本号组织，不按日期。同步源码和本地发布副本；两种版本号不要求数值相同。当前基线为修订号 `3`、桥接版本 `0.12.20`。
 
-上传前运行 `python scripts/check_mod_package.py "<发布模组目录>"`。实机测试会在 `content/tf3_mcp_bridge/headless/` 生成请求文件，这些是运行数据，不属于发布文件。停止游戏和桥接客户端、确认无 pending 后，将该目录备份移出模组目录；保留请求账本和备份。此离线检查不能代替游戏原生校验。
+完整版本同步、更新说明和上传检查规则见[模组发布流程](docs/guides/PUBLISHING.md)。更新说明简洁描述修复的问题或新增功能。
+
+`_metadata/0.png` 为封面，`_metadata/modinfo.json` 保存作者与介绍。发布副本保持正式 userdata 接收器启用，不直接用默认关闭接收器的开发源码覆盖。上传前运行 `python scripts/check_mod_package.py "<本地发布目录>" --require-receiver`，再进行游戏原生校验。本地 MCP 服务仍需另行安装和配置。
 
 `exports/`、现场调查记录、日志和测试临时目录不随源码发布。历史文档对这些文件的引用可能在公共仓库中不可用。
 

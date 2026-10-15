@@ -185,6 +185,9 @@ class HeadlessClient:
             raise ValueError('Loaded receiver lacks small/large harbor layouts; nothing dispatched')
         if command == 'get_town_cargo_supply' and status['receiver'].get('townCargoSupplyVersion') != 2:
             raise ValueError('Loaded receiver lacks town cargo supply v2; nothing dispatched')
+        if (command == 'get_town_cargo_supply' and args.get('include_passengers')
+                and status['receiver'].get('townPassengerSupplyVersion') != 1):
+            raise ValueError('Loaded receiver lacks town passenger supply v1; nothing dispatched')
         if command == 'get_industry_bonuses' and status['receiver'].get('industryBonusesVersion') != 1:
             raise ValueError('Loaded receiver lacks industry bonuses v1; nothing dispatched')
         if command == 'reconcile_assignment_rejection' and status['receiver'].get('assignmentReconciliationVersion') != 1:

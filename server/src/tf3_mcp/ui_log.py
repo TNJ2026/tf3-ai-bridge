@@ -64,7 +64,7 @@ BUILD_SCHEMAS = {
     "preview_depot_removal": {"entity":"entity"},
     "commit_depot_removal": {"preview_token":"token", "backup_save":"save_slot"},
     "get_depot_removal_operation": {"operation_id":"token"},
-    "get_town_cargo_supply": {"town":"entity"},
+    "get_town_cargo_supply": {"town":"entity", "include_passengers":"bool"},
     "get_town_population": {"town":"entity"},
     "get_town_building_stats": {"ids":"entity_ids"},
     "get_component_collection": {"id":"entity", "component":"text", "field":"text", "offset":"offset", "limit":"page_limit"},
@@ -199,6 +199,8 @@ def validate_build_arguments(command, arguments):
     optional_required = {'get_entity':{'id'}, 'begin_snapshot':{'snapshot_kind'}, 'get_facility_config':{'entity'}, 'get_facility_access':{'entity'}, 'get_stock_cargo':{'stock_list','cargo'}, 'preview_headquarters_access':{'town','road','x','y','z'}, 'get_facility_layout':{'entity'}, 'preview_flatten_terrain':{'bounds','target_height'}, 'preview_industry':{'resource','x','y'}, 'preview_town_cargo_needs':{'town'}, 'preview_loan':{'action'}, 'list_network_templates':set(), 'list_multiple_units':set(), 'list_facility_resources':set(), 'list_map_entities':set(),
                          'get_terrain_grid':set(), 'get_map_data':set(), 'get_subventions':set(), 'get_notifications':set()}
     required = optional_required.get(command, required)
+    if command == 'get_town_cargo_supply':
+        required = {'town'}
     if command in ('preview_depot', 'preview_station'):
         required.discard('frontage_node')
         required.discard('z')

@@ -1,7 +1,8 @@
-"""Opt-in one-use resource ingress; existing UI/log validators and replies.
+"""Opt-in resource or native userdata ingress; existing UI/log validators and replies.
 
-Bounded mode preindexes files; demand mode creates them after startup. No GUI automation, native
-userdata fallback, slot recycling, automatic reload or unknown-outcome retry.
+Bounded mode preindexes files; demand mode creates them after startup. Explicit userdata mode
+reuses a generation-specific mailbox. No GUI automation, automatic fallback, automatic reload
+or unknown-outcome retry.
 """
 from __future__ import annotations
 
@@ -202,12 +203,16 @@ class HeadlessRequests:
         generation = latest.get("generation", "")
         if not re.fullmatch(r"[0-9a-f]{32}", generation):
             raise ValueError("Invalid receiver generation")
-        demand = latest.get("mode") == "demand"
-        if latest.get("mode", "bounded") not in ("bounded", "demand"):
+        userdata = latest.get('mode') == 'userdata'
+        demand = latest.get("mode") in ("demand", "userdata")
+        if latest.get("mode", "bounded") not in ("bounded", "demand", "userdata"):
             raise ValueError("Unknown receiver mode")
         if type(latest.get("slot")) is not int or not 1 <= latest["slot"] <= (2**53-1 if demand else 1024):
             raise ValueError("Invalid receiver slot")
-        if demand and not re.fullmatch(r"s[a-zA-Z0-9_]+_[0-9]+\.lua", latest.get("filename", "")):
+        if userdata and (latest.get('userdataVersion') != 1 or latest.get('userdataDirectory') != 'mod_presets'
+                or latest.get('filename') != 'tnj_mcp_' + generation + '_request.preset.lua'):
+            raise ValueError('Invalid userdata mailbox identity')
+        if demand and not userdata and not re.fullmatch(r"s[a-zA-Z0-9_]+_[0-9]+\.lua", latest.get("filename", "")):
             raise ValueError("Invalid demand resource filename")
         age = time.time() - latest["utc"]
         if not 0 <= age <= 5:
@@ -243,6 +248,77 @@ class HeadlessRequests:
             ledger.setdefault('quarantinedSaveSlots', {})[row['saveSlot']] = request_id
             ledger['sessionTransition'] = transition
             ledger['pending'] = None
+            self._save(ledger)
+            return transition
+
+    def isolate_previous_state_read(self, request_id, expected_session):
+        """Explicit isolation of an old, argument-free state read, never a retry.
+
+        Keep its unknown outcome and exact publication. World writes remain gated
+        by the existing three-read session transition verification.
+        """
+        with public_lock(self.directory):
+            ledger = self._load()
+            live = self.status()['receiver']
+            row = ledger['requests'].get(request_id, {})
+            if (not re.fullmatch(r'[0-9a-f]{32}', request_id)
+                    or ledger.get('sessionTransition') or ledger.get('loadVerification')
+                    or ledger.get('pending') != request_id
+                    or row.get('id') != request_id or row.get('kind') != 'read'
+                    or row.get('command') != 'get_game_state'
+                    or row.get('input') != request_id + ' get_game_state'
+                    or row.get('status') != 'published' or not row.get('session')
+                    or row['session'] == expected_session or live['session'] != expected_session
+                    or live['status'] != 'ready' or live.get('mode') != 'demand'
+                    or any(k in row for k in ('response', 'reconciliation', 'sessionIsolation'))):
+                raise ValueError('Only an unresolved argument-free state read from a previous session can be isolated')
+            filename = 's' + re.sub('[^a-zA-Z0-9]', '_', row['session']) + '_' + str(row['slot']) + '.lua'
+            payload = (self.mod / 'headless' / row['generation'] / filename).read_bytes()
+            if not re.fullmatch(rb'return "(?:\\[0-9]{3})+"\n', payload):
+                raise ValueError('Unrecognized original publication')
+            envelope = json.loads(bytes(int(n) for n in re.findall(rb'\\([0-9]{3})', payload)))
+            if envelope != {k: row[k] for k in ('session', 'generation', 'slot', 'expires', 'kind', 'input')}:
+                raise ValueError('Original publication differs from durable state read')
+            transition = dict(requestId=request_id, previousSession=row['session'],
+                              session=expected_session, generation=live['generation'],
+                              started=time.time(), outcome='unknown', retryAllowed=False,
+                              kind='previous_session_state_read',
+                              publishedPayloadSha256=hashlib.sha256(payload).hexdigest())
+            row['sessionIsolation'] = transition.copy()
+            row['status'] = 'previous_session_state_read_unknown'
+            ledger['sessionTransition'] = transition
+            ledger['pending'] = None
+            self._save(ledger)
+            return transition
+
+    def rebind_state_read_transition(self, expected_previous_session, expected_session):
+        """Move an unfinished read-isolation gate to a freshly loaded receiver.
+
+        No writes are unlocked; every intervening request must be terminal.
+        """
+        with public_lock(self.directory):
+            ledger = self._load()
+            transition = ledger.get('sessionTransition')
+            live = self.status()['receiver']
+            if (not transition or transition.get('kind') != 'previous_session_state_read'
+                    or ledger.get('pending') or ledger.get('loadVerification')
+                    or transition['session'] != expected_previous_session
+                    or expected_previous_session == expected_session
+                    or live['session'] != expected_session or live['status'] != 'ready'):
+                raise ValueError('Fresh receiver and resolved state-read transition required')
+            origin = ledger['requests'].get(transition['requestId'], {})
+            if origin.get('status') != 'previous_session_state_read_unknown':
+                raise ValueError('Original unknown state read must remain isolated')
+            for row in ledger['requests'].values():
+                if (row.get('session') == expected_previous_session
+                        and row.get('created', 0) >= transition['started']
+                        and 'response' not in row and 'reconciliation' not in row):
+                    raise ValueError('Intervening request outcome remains unresolved')
+            ledger.setdefault('sessionTransitionHistory', []).append(transition.copy())
+            transition = dict(transition, session=expected_session,
+                              generation=live['generation'], started=time.time())
+            ledger['sessionTransition'] = transition
+            origin['sessionIsolation'] = transition.copy()
             self._save(ledger)
             return transition
 
@@ -333,6 +409,9 @@ class HeadlessRequests:
             # Check before intent/slot publication, even if the host allows more.
             if command == 'get_town_cargo_supply' and row.get('townCargoSupplyVersion') != 2:
                 raise ValueError('Loaded receiver lacks town cargo supply v2; nothing dispatched')
+            if (command == 'get_town_cargo_supply' and arguments.get('include_passengers')
+                    and row.get('townPassengerSupplyVersion') != 1):
+                raise ValueError('Loaded receiver lacks town passenger supply v1; nothing dispatched')
             if command == 'get_industry_bonuses' and row.get('industryBonusesVersion') != 1:
                 raise ValueError('Loaded receiver lacks industry bonuses v1; nothing submitted')
             if command == 'reconcile_assignment_rejection' and row.get('assignmentReconciliationVersion') != 1:
@@ -400,13 +479,28 @@ class HeadlessRequests:
                 save_before = self._signature(self._save_path(arguments['slot']))
                 if save_before is not None and not arguments.get('overwrite', False):
                     raise ValueError('Save already exists; explicit overwrite=true required')
-            demand = row.get("mode") == "demand"
+            userdata = row.get('mode') == 'userdata'
+            demand = row.get("mode") in ("demand", "userdata")
             if not demand and any(x["generation"] == row["generation"] and x["session"] != row["session"]
                    for x in ledger["requests"].values()):
                 raise ValueError("Generation already used by another session; install fresh slots, never recycle")
             reader.read(ticket["id"])  # rejects reload/log replacement during window selection
-            path = self.mod / "headless" / row["generation"] / (row['filename'] if demand else f'{row["slot"]}.lua')
-            if (demand and path.exists()) or (not demand and path.read_bytes() != b'return ""\n'):
+            path = (self.directory.parent / 'mod_presets' / row['filename'] if userdata else
+                    self.mod / "headless" / row["generation"] / (row['filename'] if demand else f'{row["slot"]}.lua'))
+            if userdata:
+                from .bridge import decode_message
+                if path.parent.is_symlink() or path.is_symlink():
+                    raise ValueError('Userdata mailbox symlinks are not supported')
+                if path.exists():
+                    previous = decode_message(path.read_text(encoding='utf-8'))
+                    previous_id = previous.get('input', '').split(' ', 1)[0] if isinstance(previous, dict) else ''
+                    terminal = ledger['requests'].get(previous_id, {})
+                    if (not isinstance(previous, dict) or previous.get('generation') != row['generation']
+                            or not ('response' in terminal or 'reconciliation' in terminal)
+                            or any(previous.get(k) != terminal.get(k) for k in
+                                   ('generation','session','slot','input','expires','kind'))):
+                        raise ValueError('Existing userdata mailbox has no matching terminal receipt')
+            elif (demand and path.exists()) or (not demand and path.read_bytes() != b'return ""\n'):
                 raise ValueError("Slot is not empty; never overwrite a request")
             if any(x["generation"] == row["generation"] and x["session"] == row["session"] and x["slot"] == row["slot"]
                    for x in ledger["requests"].values()):
@@ -423,9 +517,15 @@ class HeadlessRequests:
                 raise ValueError('Headless envelope exceeds receiver limit; nothing submitted')
             # Lua decimal byte escapes avoid executing interpolation/long-bracket data.
             payload = ('return "' + ''.join('\\%03d' % c for c in encoded.encode('utf-8')) + '"\n').encode('ascii')
+            if userdata:
+                from .bridge import encode_message
+                payload = encode_message(envelope).encode('utf-8')
             _, inode, offset, cmd, anchor, _ = reader.pending[ticket["id"]]
             record = dict(envelope, id=ticket["id"], command=cmd, inode=inode,
                           offset=offset, anchor=anchor.hex(), created=time.time(), status="intent")
+            if userdata:
+                record['transport'] = 'userdata'
+                record['publicationSha256'] = hashlib.sha256(payload).hexdigest()
             if kind == 'save':
                 record.update(saveSlot=arguments['slot'], saveBefore=save_before)
             if kind == 'load':
@@ -457,7 +557,8 @@ class HeadlessRequests:
                 return {"status": "received", "response": row["response"]}
             if 'sessionIsolation' in row:
                 return dict(status='timeout_unknown', id=request_id, retryAllowed=False,
-                            phase='previous_session_save_isolated', isolation=row['sessionIsolation'])
+                            phase=('previous_session_state_read_isolated' if row.get('kind') == 'read'
+                                   else 'previous_session_save_isolated'), isolation=row['sessionIsolation'])
             if 'reconciliation' in row:
                 return dict(status='rejected', id=request_id, retryAllowed=False,
                             reconciliation=row['reconciliation'])
