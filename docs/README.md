@@ -6,6 +6,8 @@
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 在既有道路上增加电车轨道或公交车道 | [道路升级](reference/ROAD_UPGRADE.md) | 结构预览边界、车道权限及限定实测 |
+| 读取城市声誉、运送、噪音、加成、幸福感、交通和污染 | [城市面板概览](reference/TOWN_OVERVIEW.md) | 字段可用性、原生统计口径与实测限制 |
 | 货运规划收尾、维护分流、交付时效与批量执行 | [运营预测与执行契约](guides/CARGO_PLAN_FINALIZATION.md) | [统一规划流程](guides/PLANNING_WORKFLOW.md) |
 | 建造或复用总部 | [总部建设指南](guides/HQ_ACCESS_DIAGNOSTIC.md) | [设施接口](reference/FACILITY_SUPPORT.md#总部专用接口) |
 | 规划与验收集合共用仓库 | [主仓库共库检查](strategy/TRANSPORT_CARGO_CONNECTIONS.md#主仓库共库检查) | [集合批量流程](guides/GROUPED_CONSTRUCTION_WORKFLOW.md#主仓库共库验收) |
