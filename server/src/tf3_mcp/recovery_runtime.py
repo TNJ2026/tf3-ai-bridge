@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 import uuid
 
-from .headless import atomic, workflow_lock
+from .no_gui import atomic, workflow_lock
 
 
 class RecoveryBlocked(RuntimeError):

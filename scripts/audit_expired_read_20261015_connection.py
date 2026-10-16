@@ -6,8 +6,8 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server/src'))
-from tf3_mcp.headless import HeadlessRequests, workflow_lock
-from tf3_mcp.headless_recovery import request_window, matching_rows, check_no_dispatch
+from tf3_mcp.no_gui import NoGuiRequests, workflow_lock
+from tf3_mcp.no_gui_recovery import request_window, matching_rows, check_no_dispatch
 
 REQUEST = '0158b41b0eb547b783d01913645afc45'
 SOURCE = 'c7408af676f2cd131b1a95afb4205c8dec5d2be271d8a30495b911235738073b'
@@ -20,7 +20,7 @@ def audit(host, row):
     assert hashlib.sha256(source).hexdigest() == SOURCE
     # Audited image checks expiry before ID reservation, consumption and dispatch.
     filename = 's' + re.sub('[^a-zA-Z0-9]', '_', row['session']) + '_' + str(row['slot']) + '.lua'
-    payload = (host.mod / 'headless' / row['generation'] / filename).read_bytes()
+    payload = (host.mod / 'no_gui' / row['generation'] / filename).read_bytes()
     assert re.fullmatch(rb'return "(?:\\[0-9]{3})+"\n', payload)
     envelope = json.loads(bytes(int(n) for n in re.findall(rb'\\([0-9]{3})', payload)))
     assert envelope == {k: row[k] for k in ('session','generation','slot','expires','kind','input')}
@@ -40,7 +40,7 @@ def audit(host, row):
                 scope='Only this get_game_state request; not a generic pending reset')
 
 if __name__ == '__main__':
-    host = HeadlessRequests(Path('D:/Program Files/Steam/userdata/1112836998/3493540/local/tf3_mcp'),
+    host = NoGuiRequests(Path('D:/Program Files/Steam/userdata/1112836998/3493540/local/tf3_mcp'),
                            Path('C:/Users/Public/mod.io/10640/mods/6449979/content/tf3_mcp_bridge'))
     with workflow_lock(host.directory):
         ledger = host._load()

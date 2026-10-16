@@ -108,7 +108,7 @@ def test_backup_proof_required_before_publication(host, fault):
     if fault:
         with pytest.raises(ValueError):host.send('commit_station_removal',args,kind='build',expected_session='session')
         assert host._load().get('pending') is None
-        assert (host.mod/'headless'/GEN/'1.lua').read_bytes()==b'return ""\n'
+        assert (host.mod/'no_gui'/GEN/'1.lua').read_bytes()==b'return ""\n'
     else:
         assert host.send('commit_station_removal',args,kind='build',expected_session='session')['status']=='published'
 
@@ -117,8 +117,8 @@ def test_backup_proof_required_before_publication(host, fault):
 def test_public_tool_backup_then_single_commit(monkeypatch,fault):
     from tf3_mcp import server
     client=Mock();client.status=AsyncMock(return_value={'receiver':{'stationRemovalVersion':0 if fault=='old_receiver' else 1},'pending':'x' if fault=='pending' else None})
-    monkeypatch.setattr(server,'transport_mode',lambda:'headless')
-    monkeypatch.setattr(server,'headless_client',lambda:client)
+    monkeypatch.setattr(server,'transport_mode',lambda:'no_gui')
+    monkeypatch.setattr(server,'no_gui_client',lambda:client)
     calls=[]
     async def call(cmd,**kwargs):
         calls.append((cmd,kwargs))

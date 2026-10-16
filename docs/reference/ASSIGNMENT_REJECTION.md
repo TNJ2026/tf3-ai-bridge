@@ -1,6 +1,6 @@
 # 车辆分配拒绝对账
 
-2026-10-13：新增 `reconcile_assignment_rejection(request_id, vehicle, line)`，通过 HeadlessClient 的命名请求入口使用。需要接收器与原生能力 `assignmentReconciliationVersion=1`。已通过169项相关离线测试，并在用户重载后完成临汾原拒绝请求的单次原生对账与独立pending为空读回。该验收仅证明本次明确拒绝场景；不证明分配故障已修复。详见 [实机记录](../../output/assignment_pending_repair_20261013/RESULT.md)。
+2026-10-13：新增 `reconcile_assignment_rejection(request_id, vehicle, line)`，通过 NoGuiClient 的命名请求入口使用。需要接收器与原生能力 `assignmentReconciliationVersion=1`。已通过169项相关离线测试，并在用户重载后完成临汾原拒绝请求的单次原生对账与独立pending为空读回。该验收仅证明本次明确拒绝场景；不证明分配故障已修复。详见 [实机记录](../../output/assignment_pending_repair_20261013/RESULT.md)。
 
 仅允许原生持久账本的 pending 精确匹配、原请求为 assign_vehicles/error/ok=false、assigned 为空、唯一失败内容精确为对应车辆 rejected。必须暂停、车辆与线路属于当前玩家、车辆 line=-1 且在库，并由车库清单和线路车辆清单交叉核实。超时、部分成功、异常字符串、冲突状态和其他请求均保留 pending。
 

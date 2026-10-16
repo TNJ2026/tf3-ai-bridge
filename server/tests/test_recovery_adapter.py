@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tf3_mcp.recovery_adapter import HeadlessRecoveryAdapter
+from tf3_mcp.recovery_adapter import NoGuiRecoveryAdapter
 from tf3_mcp.recovery_runtime import RecoveryBlocked, digest, file_digest
 
 
@@ -39,7 +39,7 @@ def adapter(tmp_path):
     config = dict(gameExecutable=str(tmp_path / 'tf3.exe'), audit=[dict(name='line', command='get_entity',
                     arguments={'id': 1, 'components': ['LINE']}, fields=['components.LINE.stops'])])
     rows = [dict(pid=123, created='creation-1', executable=config['gameExecutable'])]
-    obj = HeadlessRecoveryAdapter(Requests(tmp_path), tmp_path / 'recovery', config,
+    obj = NoGuiRecoveryAdapter(Requests(tmp_path), tmp_path / 'recovery', config,
                                   process_query=lambda _: rows.copy())
     obj.client = Client()
     return obj, rows
@@ -119,13 +119,13 @@ def test_audit_cannot_execute_game_mutations(adapter):
     obj, _ = adapter
     obj.config['audit'][0]['command'] = 'eval'
     with pytest.raises(ValueError, match='audit'):
-        HeadlessRecoveryAdapter(obj.requests, obj.directory, obj.config)
+        NoGuiRecoveryAdapter(obj.requests, obj.directory, obj.config)
 
 
 def test_diagnostics_preserve_raw_bytes_and_never_overwrite_originals(adapter):
     obj, _ = adapter
     run(obj.snapshot())
-    original = obj.requests.directory / 'headless_requests.json'
+    original = obj.requests.directory / 'no_gui_requests.json'
     original.write_bytes(b'unknown request, non-UTF8 log: \xff')
     result = run(obj.capture_evidence('../not-a-path'))
     item = next(f for f in result['files'] if f['source'] == str(original))

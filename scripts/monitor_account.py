@@ -5,9 +5,9 @@ import json
 import os
 from pathlib import Path
 from batch_warehouses import write_json
-from tf3_mcp.headless import HeadlessRequests, workflow_lock
-from tf3_mcp.headless_client import HeadlessClient
-from tf3_mcp.headless_workflows import OperationsMonitor
+from tf3_mcp.no_gui import NoGuiRequests, workflow_lock
+from tf3_mcp.no_gui_client import NoGuiClient
+from tf3_mcp.no_gui_workflows import OperationsMonitor
 
 
 async def main():
@@ -18,7 +18,7 @@ async def main():
     plan=json.loads(args.plan.read_text('utf-8'))
     directory=Path(os.environ['TF3_MCP_DIR'])
     mod=Path(os.environ.get('TF3_MCP_MOD_DIR', str(directory.parent/'staging_area/tnj_tf3_ai_bridge/content/tf3_mcp_bridge')))
-    client=HeadlessClient(HeadlessRequests(directory,mod))
+    client=NoGuiClient(NoGuiRequests(directory,mod))
     monitor=OperationsMonitor(client,args.output)
     with workflow_lock(directory):
         result=await monitor.once()

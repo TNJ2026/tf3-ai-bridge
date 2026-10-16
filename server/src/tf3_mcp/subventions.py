@@ -125,7 +125,7 @@ class SubventionAutoAccept:
         async with self.run_lock:
             path = self.log_path() if callable(self.log_path) else self.log_path
             if path:
-                from .headless import public_lock
+                from .no_gui import public_lock
                 with public_lock(Path(path).parent / 'subvention_policy_lock'):
                     self._load_attempts()
                     return await self._run_once()

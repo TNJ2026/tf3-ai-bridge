@@ -1,3 +1,4 @@
+from legacy_file_transport_fixture import legacy_engine_source
 """Preview/operation state must survive engine module recreation and JSON storage."""
 import json
 import pytest
@@ -30,7 +31,7 @@ def test_preview_and_operation_survive_recreation(kind,fixture,preview,args,comm
     def event(cmd, epoch="one", **kw):
         nonlocal counter
         counter+=1
-        script=lua.execute(SCRIPT.read_text("utf8"))
+        script=lua.execute(legacy_engine_source(SCRIPT.read_text("utf8")))
         script["handleEvent"](None,state,None,"tf3_mcp","tf3_mcp_request",json.dumps(dict(id=str(counter),cmd=cmd,args=kw,facilityEpoch=epoch)))
         if deferred_state: state["flush"]()
         responses=state["get"](state)["responses"];r=json.loads(responses[len(responses)]["text"])

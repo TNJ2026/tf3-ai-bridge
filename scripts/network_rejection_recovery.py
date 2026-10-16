@@ -33,7 +33,7 @@ def prepare_recovery(receipt_path, survey_path, source_path=None, *, allow_indus
         match=re.match(r'\[string "[^"\r\n]*bridge\.script\.lua"\]:([0-9]+): Cannot loop over this component type\nstack traceback:\n    =\[C\]\(-1\): forEachEntityWithComponent\n',error)
         assert match and int(match[1])==line, 'Not the reviewed pre-dispatch enumeration error'
         text=image.decode('utf-8')
-        assert 'local HEADLESS_GENERATION = "'+r['generation']+'"' in text
+        assert 'local NO_GUI_GENERATION = "'+r['generation']+'"' in text
         assert 'componentTypes().BASE_EDGE)' in text.splitlines()[line-1]
         rejection_kind='network_edge_enumeration_before_dispatch'
 

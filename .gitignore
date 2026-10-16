@@ -6,6 +6,7 @@ server/uv.lock.bak
 
 # Local MCP configuration and credentials
 /.mcp.json
+/.codex/config.toml
 .env
 .env.*
 !.env.example

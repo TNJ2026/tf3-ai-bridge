@@ -65,19 +65,53 @@ def test_actual_mcp_card_resource_and_result(tmp_path,apps_enabled):
                 assert r.structured_content['scope']=='local'
                 assert not (r.meta or {}).get('planningCard')
                 assert not list(tmp_path.glob('report-*'))
-                r=await session.call_tool('export_planning_report',dict(plan_path=r.structured_content['plan_path'],output_dir=str(tmp_path)))
+                svg = tmp_path/'existing.svg'
+                original = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 950"><text x="10" y="30">原图</text></svg>'.encode('utf-8')
+                svg.write_bytes(original)
+                r=await session.call_tool('export_planning_report',dict(svg_path=str(svg),output_dir=str(tmp_path)))
                 assert not r.is_error
                 card=r.meta['planningCard']
                 assert card['language'] in ('en', 'zh-CN')
                 image_data=base64.b64decode(card['image'].split(',',1)[1])
-                assert image_data.startswith(b'\x89PNG')
-                decoded=Image.open(io.BytesIO(image_data))
-                assert decoded.width < 1600 and decoded.height <= 920
-                assert decoded.mode=='RGBA'
-                assert decoded.getchannel('A').getbbox()==(0,0,*decoded.size)
-                assert (card['width'],card['height'])==decoded.size
+                assert card['image'].startswith('data:image/svg+xml;base64,')
+                assert image_data == original
+                assert Path(r.structured_content['files']['svg']).read_bytes() == original
+                assert (card['width'],card['height'])==(1000,950)
+                assert card['imageFit']=='contain'
+                assert r.structured_content['redrawn'] is False
+                assert 'png' not in r.structured_content['files']
                 assert 'base64' not in r.content[0].text
                 assert 'do not automatically open' in r.structured_content['display']
                 body=await asyncio.to_thread(lambda:urlopen(card['htmlUrl']).read())
-                assert b'<svg' in body
+                assert b'data:image/svg+xml;base64,' in body
     asyncio.run(run())
+
+
+def test_export_svg_never_invokes_renderer(tmp_path, monkeypatch):
+    from tf3_mcp import server, planning_report
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Existing SVG must never be redrawn')
+    monkeypatch.setattr(planning_report, 'export_report', forbidden)
+    svg = tmp_path/'original.svg'
+    raw = b'\xef\xbb\xbf<svg xmlns="http://www.w3.org/2000/svg" width="300px" height="200"><!-- preserve --></svg>'
+    svg.write_bytes(raw)
+    result = asyncio.run(server.export_planning_report(str(svg), str(tmp_path), title='<original>'))
+    assert base64.b64decode(result.meta['planningCard']['image'].split(',',1)[1]) == raw
+    assert '&lt;original&gt;' in Path(result.structured_content['files']['html']).read_text()
+    assert (result.meta['planningCard']['width'],result.meta['planningCard']['height']) == (300,200)
+
+
+@pytest.mark.parametrize('name,contents',[
+    ('plan.json','{}'),
+    ('bad.svg','<svg>'),
+    ('bad.svg','<html/>'),
+    ('bad.svg','<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg"/>'),
+    ('bad.svg','<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 -1 0"/>'),
+])
+def test_invalid_svg_is_not_exported(tmp_path, name, contents):
+    from tf3_mcp.planning_app import export_svg_card
+    import xml.etree.ElementTree as ET
+    source=tmp_path/name;source.write_text(contents)
+    with pytest.raises((ValueError, ET.ParseError)):
+        export_svg_card(source,tmp_path)
+    assert not list(tmp_path.glob('report-*'))

@@ -7,6 +7,7 @@ it does not split another road or silently replay the first operation.
 from __future__ import annotations
 
 import math
+from .planning_reads import read_planning
 from .frontage_planning import (RESOURCES, candidates, curve, project, external_port,
     native_collider, footprint_contains, safe_preview, finite)
 
@@ -27,6 +28,23 @@ class RoadsidePlacement:
             if components == []: components = {}
             self.cache[key] = components.get(name)
         return self.cache[key]
+
+    async def components(self, entities, name):
+        missing = list(dict.fromkeys(e for e in entities if (e, name) not in self.cache))
+        if len(missing) == 1:
+            await self.component(missing[0], name)
+        elif missing:
+            result = await read_planning(self.call, [
+                {'command': 'get_entity', 'arguments': {'id': e, 'components': [name]}}
+                for e in missing])
+            self.record.setdefault('planningReads', []).append(result)
+            self.checkpoint()
+            if not result['complete']:
+                raise ValueError('Incomplete planning component batch; inspect planningReads')
+            for entity, row in zip(missing, result['results']):
+                components = row['result']['components']
+                self.cache[(entity, name)] = (components or {}).get(name)
+        return [self.cache[(e, name)] for e in entities]
 
     async def profile(self, kind, size):
         if kind not in RESOURCES or type(size) is not int or size not in (1,2,3):
@@ -51,7 +69,7 @@ class RoadsidePlacement:
                 expected = {1:2,2:4,3:8}[size]
                 if len(platforms) != expected or len(modules) != expected+1: continue
             elif modules: continue
-            edges = [await self.component(e,'BASE_EDGE') for e in con['frozenEdges']]
+            edges = await self.components(con['frozenEdges'], 'BASE_EDGE')
             profile.update(port=external_port(con,edges),sourceEntity=item['entity'],
                            portBasis='fresh native external port in matching facility local coordinates')
             return profile
@@ -71,7 +89,9 @@ class RoadsidePlacement:
             nearby = await self.call('find_nearby',{'x':x,'y':y,'radius':150,'limit':100})
             if len(nearby['edges'])>=100: raise ValueError('Road selection survey truncated')
             choices=[]
-            for item in nearby['edges']:
+            for index, item in enumerate(nearby['edges']):
+                if index % 8 == 0:
+                    await self.components([e['id'] for e in nearby['edges'][index:index+8]], 'BASE_EDGE')
                 e=await self.component(item['id'],'BASE_EDGE')
                 if int(e['roadType'])!=1 or int(e['type'])!=0 or e['objects'] or '/constructions/' in e['roadTemplate']:continue
                 t=project(e,x,y);p,_=curve(e,t)
@@ -83,8 +103,7 @@ class RoadsidePlacement:
             raise ValueError('Select an ordinary ground street without edge objects')
         if '/constructions/' in road['roadTemplate']:
             raise ValueError('Construction-owned roads require a separate design')
-        for node in (road['node0'],road['node1']):
-            cfg = await self.component(node,'BASE_NODE_CONFIG')
+        for cfg in await self.components([road['node0'],road['node1']], 'BASE_NODE_CONFIG'):
             if cfg and (cfg.get('userModifiedLaneConnections') or cfg.get('userModifiedTrafficLightStates')
                         or cfg.get('trafficLightConfig',{}).get('states')):
                 raise ValueError('Custom endpoint configuration cannot be replaced by direct frontage')
@@ -119,7 +138,9 @@ class RoadsidePlacement:
                    for c in near['constructions']):
                 candidate['rejected']='nearby_construction';continue
             obstruction = False
-            for item in near['edges']:
+            for index, item in enumerate(near['edges']):
+                if index % 8 == 0:
+                    await self.components([e['id'] for e in near['edges'][index:index+8]], 'BASE_EDGE')
                 other = await self.component(item['id'],'BASE_EDGE')
                 # Include the target curve too: a sharp bend may enter the
                 # footprint even though its tangent at the chosen point does not.

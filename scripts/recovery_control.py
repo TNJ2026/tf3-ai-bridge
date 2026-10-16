@@ -6,8 +6,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server/src'))
-from tf3_mcp.headless import HeadlessRequests
-from tf3_mcp.recovery_adapter import HeadlessRecoveryAdapter
+from tf3_mcp.no_gui import NoGuiRequests
+from tf3_mcp.recovery_adapter import NoGuiRecoveryAdapter
 from tf3_mcp.recovery_runtime import RecoveryRuntime
 
 
@@ -32,7 +32,7 @@ def main():
         if not all((args.config, args.bridge_dir, args.mod_content)):
             parser.error('Live actions require config, bridge-dir and mod-content')
         config = json.loads(args.config.read_text(encoding='utf-8'))
-        adapter = HeadlessRecoveryAdapter(HeadlessRequests(args.bridge_dir, args.mod_content),
+        adapter = NoGuiRecoveryAdapter(NoGuiRequests(args.bridge_dir, args.mod_content),
                                           args.directory, config)
         runtime = RecoveryRuntime(adapter, args.directory, args.bridge_dir)
         if args.action == 'checkpoint':

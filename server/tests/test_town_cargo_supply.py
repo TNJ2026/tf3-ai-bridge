@@ -41,8 +41,8 @@ def test_optional_passenger_flag_host_validation(args):
 
 def test_old_receiver_rejected_before_send():
  from unittest.mock import AsyncMock,Mock
- from tf3_mcp.headless_client import HeadlessClient
- c=HeadlessClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
+ from tf3_mcp.no_gui_client import NoGuiClient
+ c=NoGuiClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
  with pytest.raises(ValueError,match='lacks town cargo supply'):asyncio.run(c.call('get_town_cargo_supply',{'town':100}))
  c.requests.send.assert_not_called()
 
@@ -99,8 +99,8 @@ def test_passenger_unknown_rejected(game,code):
 
 def test_passenger_capability_rejected_before_dispatch():
  from unittest.mock import AsyncMock,Mock
- from tf3_mcp.headless_client import HeadlessClient
- c=HeadlessClient(Mock())
+ from tf3_mcp.no_gui_client import NoGuiClient
+ c=NoGuiClient(Mock())
  c.status=AsyncMock(return_value={'receiver':{'session':'s','townCargoSupplyVersion':2},'pending':None})
  with pytest.raises(ValueError,match='lacks town passenger supply'):
   asyncio.run(c.call('get_town_cargo_supply',{'town':100,'include_passengers':True}))

@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from test_headless import host, GEN
-from tf3_mcp.headless import TAG
-from tf3_mcp import headless_recovery
+from test_no_gui import host, GEN
+from tf3_mcp.no_gui import TAG
+from tf3_mcp import no_gui_recovery
 
 
 @pytest.mark.parametrize('fault', [None, 'source', 'payload', 'reply', 'reason', 'duplicate', 'id', 'old_session'])
@@ -15,9 +15,9 @@ def test_quota_recovery_requires_complete_pinned_evidence(host, monkeypatch, tmp
     host.log.write_text(TAG+json.dumps(ready)+'\n')
     ticket = host.send('buy_vehicles', dict(depot=42, model='bus.mdl', count=1), kind='build', expected_session='session')
     source = tmp_path/'old.lua';source.write_text('test audited fixture')
-    monkeypatch.setattr(headless_recovery, 'QUOTA_SOURCE_SHA256', hashlib.sha256(source.read_bytes()).hexdigest())
+    monkeypatch.setattr(no_gui_recovery, 'QUOTA_SOURCE_SHA256', hashlib.sha256(source.read_bytes()).hexdigest())
     if fault=='source':source.write_text('different source')
-    if fault=='payload':(host.mod/'headless'/GEN/'ssession_1.lua').write_text('return "different"\n')
+    if fault=='payload':(host.mod/'no_gui'/GEN/'ssession_1.lua').write_text('return "different"\n')
     common = dict(session='session', generation=GEN, slot=1)
     events = [dict(common,status='consumed',id=ticket['id']),
               dict(common,status='dispatched',id=ticket['id'],detail='Session request limit reached'),

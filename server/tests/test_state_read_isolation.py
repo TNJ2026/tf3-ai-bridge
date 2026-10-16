@@ -1,7 +1,7 @@
 import json
 import pytest
-from test_headless import host, GEN
-from tf3_mcp.headless import TAG
+from test_no_gui import host, GEN
+from tf3_mcp.no_gui import TAG
 
 
 def seed_read(host):
@@ -47,7 +47,7 @@ def test_nonmatching_requests_rejected_without_ledger_change(host, change):
 
 def test_changed_payload_is_not_isolated(host):
     key = seed_read(host)
-    (host.mod / 'headless' / GEN / 'sold_1.lua').write_text('return "changed"\n')
+    (host.mod / 'no_gui' / GEN / 'sold_1.lua').write_text('return "changed"\n')
     before = host.ledger.read_bytes()
     with pytest.raises(ValueError):
         host.isolate_previous_state_read(key, 'new')

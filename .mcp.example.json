@@ -4,8 +4,8 @@
       "command": "uv",
       "args": ["--directory", "C:/path/to/tf3-ai-bridge/server", "run", "tf3-mcp"],
       "env": {
-        "TF3_MCP_TRANSPORT": "headless",
-        "TF3_MCP_HEADLESS_MOD": "C:/path/to/installed-mod/content/tf3_mcp_bridge"
+        "TF3_MCP_TRANSPORT": "no_gui",
+        "TF3_MCP_NO_GUI_MOD": "C:/path/to/installed-mod/content/tf3_mcp_bridge"
       }
     }
   }

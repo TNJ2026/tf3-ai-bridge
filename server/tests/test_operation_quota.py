@@ -7,10 +7,10 @@ import pytest
 
 from test_e2e import SCRIPT
 from test_warehouses import warehouse_game
-from test_headless import GEN, host
+from test_no_gui import GEN, host
 from test_channel_migration import Requests
-from tf3_mcp.headless import TAG
-from tf3_mcp.headless_client import HeadlessClient, HeadlessOutcomeUnknown, HeadlessRequestRejected
+from tf3_mcp.no_gui import TAG
+from tf3_mcp.no_gui_client import NoGuiClient, NoGuiOutcomeUnknown, NoGuiRequestRejected
 from tf3_mcp.ui_log import validate_build_arguments
 
 
@@ -29,8 +29,8 @@ class QuotaChannel:
             end
         ''')
         source = SCRIPT.read_text(encoding='utf-8').replace(
-            'local HEADLESS_GENERATION = "disabled"', f'local HEADLESS_GENERATION = "{GEN}"').replace(
-            'local HEADLESS_ON_DEMAND = false', 'local HEADLESS_ON_DEMAND = true')
+            'local NO_GUI_GENERATION = "disabled"', f'local NO_GUI_GENERATION = "{GEN}"').replace(
+            'local NO_GUI_ON_DEMAND = false', 'local NO_GUI_ON_DEMAND = true')
         self.script = lua.execute(source)
         self.state = lua.execute('local s={v={}};function s:get()return self.v end;function s:set(v)self.v=v end;return s')
         lua.globals().quotaTestState = self.state
@@ -178,7 +178,7 @@ def test_host_reset_guards_prevent_dispatch(obstacle):
     r.responses['get_validation_state'] = dict(session='current', pending='unknown' if obstacle=='engine_pending' else None,
         operationQuota=dict(version=1, round=1 if obstacle=='round' else 0,
                             used=1 if obstacle=='used' else 256, activeRequestCount=256))
-    c = HeadlessClient(r, 0)
+    c = NoGuiClient(r, 0)
     with pytest.raises(ValueError):
         asyncio.run(c.reset_operation_quota('wrong' if obstacle=='session' else 'current', 0, 256))
     assert not any(cmd == 'reset_operation_quota' for cmd, _ in r.calls)
@@ -198,7 +198,7 @@ def test_host_reset_independent_verification_and_no_retry():
         round_number += 1
         return dict(reset=True, round=round_number)
     r.responses.update(get_validation_state=validation, reset_operation_quota=reset)
-    c = HeadlessClient(r, 0)
+    c = NoGuiClient(r, 0)
     assert asyncio.run(c.reset_operation_quota('current', 0, 256))['verified']
     with pytest.raises(ValueError):
         asyncio.run(c.reset_operation_quota('current', 0, 256))
@@ -218,8 +218,8 @@ def test_lost_reset_reply_is_never_retried():
             return {'status':'timeout_unknown'}
         return read(ident)
     r.read = lost
-    c = HeadlessClient(r, 0)
-    with pytest.raises(HeadlessOutcomeUnknown):
+    c = NoGuiClient(r, 0)
+    with pytest.raises(NoGuiOutcomeUnknown):
         asyncio.run(c.reset_operation_quota('current', 0, 256))
     with pytest.raises(ValueError, match='unresolved host'):
         asyncio.run(c.reset_operation_quota('current', 0, 256))
@@ -230,6 +230,6 @@ def test_confirmed_quota_rejection_is_not_an_unknown_outcome():
     r = Requests()
     r.read = lambda ident: dict(status='received', response=dict(ok=False,
         error='quota exhausted', code='operation_quota_rejected', rejectedBeforeDispatch=True))
-    with pytest.raises(HeadlessRequestRejected, match='rejected before dispatch'):
-        asyncio.run(HeadlessClient(r, 0).request('buy_vehicles', dict(depot=1, model='bus.mdl', count=1)))
+    with pytest.raises(NoGuiRequestRejected, match='rejected before dispatch'):
+        asyncio.run(NoGuiClient(r, 0).request('buy_vehicles', dict(depot=1, model='bus.mdl', count=1)))
     assert len(r.calls) == 1

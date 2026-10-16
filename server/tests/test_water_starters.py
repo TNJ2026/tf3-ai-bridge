@@ -78,9 +78,9 @@ def test_invalid_size_cannot_preview_or_submit(water_game,kind,size):
 
 
 def test_old_water_receiver_never_silently_builds_large():
-    from tf3_mcp.headless_client import HeadlessClient
+    from tf3_mcp.no_gui_client import NoGuiClient
     from unittest.mock import AsyncMock,Mock
-    requests=Mock();client=HeadlessClient(requests)
+    requests=Mock();client=NoGuiClient(requests)
     client.status=AsyncMock(return_value={'receiver':{'session':'s','waterFacilityVersion':1},'pending':None})
     with pytest.raises(ValueError,match='small/large'):
         asyncio.run(client.call('build_water_facility',dict(kind='harbor',x=1,y=2,z=2)))
@@ -117,9 +117,9 @@ def test_mcp_and_schema(monkeypatch):
 
 
 def test_old_receiver_rejected_before_dispatch():
-    from tf3_mcp.headless_client import HeadlessClient
+    from tf3_mcp.no_gui_client import NoGuiClient
     from unittest.mock import AsyncMock,Mock
-    requests=Mock();client=HeadlessClient(requests)
+    requests=Mock();client=NoGuiClient(requests)
     client.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
     with pytest.raises(ValueError,match='lacks water'):
         asyncio.run(client.call('build_water_facility',dict(kind='harbor',x=1,y=2,z=0)))

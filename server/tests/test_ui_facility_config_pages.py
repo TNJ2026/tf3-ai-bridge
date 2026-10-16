@@ -1,4 +1,4 @@
-"""Large native facility records must fit the headless reply and paginate losslessly."""
+"""Large native facility records must fit the no_gui reply and paginate losslessly."""
 import json
 import pytest
 from test_ui_consolidated import Channel, FACILITY

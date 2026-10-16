@@ -6,7 +6,7 @@ The input field, Send button and remaining status indicator have all been remove
 at the user's request. The game-bar plugin resource, script and stylesheet are
 removed from the source and local installation, so AI Bridge no longer adds a
 widget or uses space in the bottom information bar after a fresh game load.
-The headless transport and existing event handlers are unchanged. Historical
+The no_gui transport and existing event handlers are unchanged. Historical
 manual-panel instructions below no longer describe the current UI. Removal has
 been checked on disk; visual verification still requires a fresh game load.
 

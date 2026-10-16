@@ -1,3 +1,4 @@
+from legacy_file_transport_fixture import legacy_engine_source
 """Native prospecting adapter: mock mutations only; real read-only checks recorded separately."""
 import json
 import pytest
@@ -139,7 +140,7 @@ def test_prospection_state_survives_engine_recreation(game):
     def event(cmd, epoch="one", **args):
         nonlocal counter
         counter += 1
-        script = lua.execute(SCRIPT.read_text("utf8"))
+        script = lua.execute(legacy_engine_source(SCRIPT.read_text("utf8")))
         script["handleEvent"](None, state, None, "tf3_mcp", "tf3_mcp_request",
             json.dumps(dict(id=str(counter), cmd=cmd, args=args, facilityEpoch=epoch)))
         responses = state["get"](state)["responses"]

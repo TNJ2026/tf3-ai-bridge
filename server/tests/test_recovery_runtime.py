@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tf3_mcp.headless import public_lock, workflow_lock
+from tf3_mcp.no_gui import public_lock, workflow_lock
 from tf3_mcp.recovery_runtime import (RecoveryBlocked, RecoveryRuntime, classify,
                                      equivalent, file_digest, map_key)
 
@@ -262,7 +262,7 @@ def test_independent_process_cannot_enter_workflow_lock(tmp_path):
     import subprocess
     import sys
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / 'src'))
-    code = 'from tf3_mcp.headless import public_lock\nimport sys\nwith public_lock(sys.argv[1]): pass\n'
+    code = 'from tf3_mcp.no_gui import public_lock\nimport sys\nwith public_lock(sys.argv[1]): pass\n'
     with workflow_lock(tmp_path):
         result = subprocess.run([sys.executable, '-c', code, str(tmp_path)], env=env,
                                 capture_output=True, timeout=10)

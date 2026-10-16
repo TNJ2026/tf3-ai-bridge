@@ -5,7 +5,7 @@
 符合执行条件后读取 AGENTS.md、docs/guides/AGENT_PLAYBOOK.md、MONITORING_WORKFLOW.md、OPERATION_COORDINATION.md 的适用安全规则，以及 latest.json、opportunities_latest.json、RESULT.md 的最近有效记录。只取本轮需要的章节和最近记录，不反复加载整段历史。旧全图检查和旧工程授权不适用；文件缺失或冲突时标记未知，不据此扩大权限。
 
 二、先检查连接与现场
-先 bridge_status/headless_status，再 get_game_state；核对连接、当前会话/加载版本、地图、player、gameTime、速度、现金、债务、host/engine pending。盘锦历史定位为名称盘锦、中心(-2556,-2400)、历史ID29308；以当前名称、位置及持久地图身份共同确认，不能只凭world或旧ID。
+先 bridge_status/no_gui_status，再 get_game_state；核对连接、当前会话/加载版本、地图、player、gameTime、速度、现金、债务、host/engine pending。盘锦历史定位为名称盘锦、中心(-2556,-2400)、历史ID29308；以当前名称、位置及持久地图身份共同确认，不能只凭world或旧ID。
 断连、地图不符或无法确认的未决写请求：保留历史有效值，记本轮未更新及原因，停止依赖检查和修改。不得把断连判断为引擎崩溃，不清pending、不重载、不重置额度、不切换旧通道绕过。
 换图、重载、时间回退或人工更改对象后，失效相关旧ID、预览和趋势基线，按位置、类型及当前配置重新解析。不恢复其他地图的tf3、tf3-2、tf3-3任务。历史现金、数量、维护和已消耗预算不作为当前事实。
 

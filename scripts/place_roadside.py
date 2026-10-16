@@ -8,8 +8,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from tf3_mcp.headless import HeadlessRequests, atomic, workflow_lock
-from tf3_mcp.headless_client import HeadlessClient
+from tf3_mcp.no_gui import NoGuiRequests, atomic, workflow_lock
+from tf3_mcp.no_gui_client import NoGuiClient
 from tf3_mcp.frontage_planning import RESOURCES
 from tf3_mcp.frontage_workflow import RoadsidePlacement
 
@@ -19,7 +19,7 @@ async def run(args):
     args.output.parent.mkdir(parents=True,exist_ok=True)
     log={'stage':'started','requests':[],'buildRequested':args.build}
     def save(): atomic(args.output,json.dumps(log,ensure_ascii=False,indent=2).encode('utf-8'))
-    client=HeadlessClient(HeadlessRequests(args.bridge_dir,args.mod_content))
+    client=NoGuiClient(NoGuiRequests(args.bridge_dir,args.mod_content))
     async def call(cmd,arguments):
         row={'command':cmd,'arguments':arguments};log['requests'].append(row);save()
         def ticket(t):row['ticket']=t;save()

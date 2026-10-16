@@ -1,3 +1,4 @@
+from legacy_file_transport_fixture import legacy_engine_source
 """Real Lua adapter with mocked native constructor/readback; no live mutations."""
 import json
 from pathlib import Path
@@ -40,7 +41,7 @@ api.cmd.sendCommand=function(p,cb)
  REV=REV+1;cb({},true)
 end
 ''')
-    script = lua.execute(SCRIPT.read_text('utf8'))
+    script = lua.execute(legacy_engine_source(SCRIPT.read_text('utf8')))
 
     def call(name, **args):
         result = script['_internal']['commands'][name](lua.table_from(args, recursive=True))
@@ -101,7 +102,7 @@ def test_unknown_outcome_blocks_followup(terrain_game,flag):
 
 def test_fragment_matches_embedded_bridge():
     fragment=Path(__file__).resolve().parents[2]/'scripts/terrain_flatten_fragment.lua'
-    assert fragment.read_text('utf8').strip() in SCRIPT.read_text('utf8')
+    assert fragment.read_text('utf8').strip() in legacy_engine_source(SCRIPT.read_text('utf8'))
 
 
 def test_commit_wrapper_saves_stable_backup_before_dispatch(tmp_path,monkeypatch):
@@ -114,11 +115,11 @@ def test_commit_wrapper_saves_stable_backup_before_dispatch(tmp_path,monkeypatch
     calls=[]
     async def call(command,**kwargs):
         calls.append((command,kwargs))
-        if command=='eval':
-            slot=re.search(r'app.saveGame\("([^"]+)"',kwargs['code'])[1]
-            (tmp_path/'save'/(slot+'.sav')).write_bytes(b'new save')
-            return {'requested':True}
-        assert len(calls)==2 and calls[0][0]=='eval'
+        if command=='save_game':
+            slot=kwargs['slot']
+            path=tmp_path/'save'/(slot+'.sav');path.write_bytes(b'new save')
+            return {'verified':True,'file':{'path':str(path)}}
+        assert len(calls)==2 and calls[0][0]=='save_game'
         return {'verified':True}
     monkeypatch.setattr(server,'_call',call)
     async def sleep(_):pass
@@ -140,9 +141,9 @@ def test_missing_backup_never_dispatches(tmp_path,monkeypatch):
     async def call(command,**kwargs):calls.append(command);return {'requested':True}
     async def sleep(_):pass
     monkeypatch.setattr(server,'_call',call);monkeypatch.setattr(asyncio,'sleep',sleep)
-    with pytest.raises(Exception,match='Backup write not confirmed'):
+    with pytest.raises(Exception,match='Backup not verified'):
         asyncio.run(server.commit_flatten_terrain('test-token'))
-    assert calls==['eval']
+    assert calls==['save_game']
 
 
 def test_terrain_timeout_invalidates_map_cache(monkeypatch):
@@ -151,7 +152,7 @@ def test_terrain_timeout_invalidates_map_cache(monkeypatch):
     from tf3_mcp import server
     from tf3_mcp.bridge import BridgeError
     async def call(*args,**kwargs):raise BridgeError('timeout')
-    monkeypatch.setattr(server,'bridge',lambda:SimpleNamespace(call=call))
+    monkeypatch.setattr(server,'no_gui_client',lambda:SimpleNamespace(call=call))
     invalidations=[]
     monkeypatch.setattr(server._map_cache,'invalidate',lambda:invalidations.append(True))
     with pytest.raises(Exception,match='timeout'):
@@ -166,7 +167,7 @@ def test_engine_events_preserve_tokens_and_operations_across_module_recreation(t
     def event(name, epoch="session-a", **args):
         nonlocal serial
         serial += 1
-        script = lua.execute(SCRIPT.read_text("utf8"))
+        script = lua.execute(legacy_engine_source(SCRIPT.read_text("utf8")))
         payload = json.dumps(dict(id=str(serial),cmd=name,args=args,terrainEpoch=epoch))
         script["handleEvent"](None,state,None,"tf3_mcp","tf3_mcp_request",payload)
         responses = state["get"](state)["responses"]

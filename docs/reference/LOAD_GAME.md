@@ -6,16 +6,16 @@
 
 - MCP `load_game(slot, expected_session)`：明确指定存档，先独立备份当前暂停进度，再发送一次读档请求，等待新会话并读取游戏状态、地图和原生 pending。
 - MCP `verify_loaded_game(request_id)`：中断或超时后，只续查原来的读档请求，绝不重新读档。
-- Python `HeadlessClient.load_game(...)` 与 `verify_loaded_game(...)` 同上。
+- Python `NoGuiClient.load_game(...)` 与 `verify_loaded_game(...)` 同上。
 - CLI `scripts/load_game.py` 提供 `load --slot <槽名> --session <当前会话>` 与 `verify --request-id <原请求ID>`；前置参数为 `--bridge-dir <桥接目录> --mod-content <模组内容目录>`。设置 `PYTHONPATH=server/src;scripts` 后使用项目 Python 执行。
 
-启用能力通过 `headless_status.receiver.loadGameVersion=1`、`loadGameAvailable=true` 确认。首次安装仍需手动载入一次新版脚本；磁盘代码更新不改变当前运行的 Lua 状态，也不通过旧通道注入代码。MCP 服务需重新加载 Python 代码才能显示新命名工具；CLI 可直接使用新代码。
+启用能力通过 `no_gui_status.receiver.loadGameVersion=1`、`loadGameAvailable=true` 确认。首次安装仍需手动载入一次新版脚本；磁盘代码更新不改变当前运行的 Lua 状态，也不通过旧通道注入代码。MCP 服务需重新加载 Python 代码才能显示新命名工具；CLI 可直接使用新代码。
 
 ## 支持范围与证据
 
 首版仅接受本通道曾保存并完成文件校验的本地 `.sav` 槽，保留原始存档和回执。槽名限定 1～80 个 ASCII 字母、数字、下划线和连字符，不接受路径、后缀、Windows 设备名、云端或内置地图。人工保存、未校验存档和任意路径尚未接入。
 
-读档前重新比对目标文件签名和 SHA-256，并创建新的 `tf3_before_load_<uuid>` 备份；失败时不覆盖或删除目标。要求游戏暂停、会话匹配、公共工作流锁、主机和引擎无 pending。低层 `send_headless_request(kind="load", command="load_game", arguments={slot, backup_save}, expected_session=...)` 也必须具备10秒内的原生状态/pending读数和120秒内同会话、同游戏时间的已校验备份。
+读档前重新比对目标文件签名和 SHA-256，并创建新的 `tf3_before_load_<uuid>` 备份；失败时不覆盖或删除目标。要求游戏暂停、会话匹配、公共工作流锁、主机和引擎无 pending。低层 `send_no_gui_request(kind="load", command="load_game", arguments={slot, backup_save}, expected_session=...)` 也必须具备10秒内的原生状态/pending读数和120秒内同会话、同游戏时间的已校验备份。
 
 原生端遵循游戏自带 `gui/menu/savegame_react_util.tl`：从 `app.findAllSavegames(app.SaveGameNamespace.getSavegame())` 找到唯一同名存档，使用其真实 `path`、`saveName` 构造 `api.type.SavegameId`，调用 `app.setWaitForStartReadyGame()` 和 `app.loadGame(saveId,false,nil)`。不操控窗口、键鼠，不重启游戏，不修改存档或自动改速。
 

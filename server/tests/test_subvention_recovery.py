@@ -5,7 +5,7 @@ import asyncio
 import pytest
 import test_ui_consolidated as ui
 from test_subventions import FIXTURE
-from tf3_mcp.headless_client import HeadlessClient, HeadlessOutcomeUnknown
+from tf3_mcp.no_gui_client import NoGuiClient, NoGuiOutcomeUnknown
 
 
 def pending_previous(c):
@@ -53,7 +53,7 @@ def test_predispatch_error_closes_only_new_workflow(tmp_path):
     assert not c.query('commit_subvention',{'preview_token':token})['ok']
 
 
-def test_headless_accept_not_blocked_by_unresolved_historical_contract(tmp_path):
+def test_no_gui_accept_not_blocked_by_unresolved_historical_contract(tmp_path):
     c=ui.Channel(tmp_path,FIXTURE)
     token=pending_previous(c)
     r=c.query('commit_subvention',{'preview_token':token})
@@ -146,7 +146,7 @@ def test_dispatch_exception_cannot_be_reconciled_as_rejection(tmp_path):
 
 @pytest.mark.parametrize('fault',[None,'session','pending','version','readback'])
 def test_client_reconciliation_checks_version_session_and_independent_readback(fault):
-    class Client(HeadlessClient):
+    class Client(NoGuiClient):
         def __init__(self):
             super().__init__(None);self.calls=[]
         async def status(self):
@@ -161,7 +161,7 @@ def test_client_reconciliation_checks_version_session_and_independent_readback(f
     async def run():
         c=Client()
         if fault:
-            with pytest.raises((ValueError,HeadlessOutcomeUnknown)):
+            with pytest.raises((ValueError,NoGuiOutcomeUnknown)):
                 await c.reconcile_subvention_rejection('r','s')
         else:assert (await c.reconcile_subvention_rejection('r','s'))['verification']['pending'] is None
         assert c.calls.count('reconcile_subvention_rejection')==(1 if fault in (None,'readback') else 0)

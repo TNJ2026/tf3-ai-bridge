@@ -43,9 +43,9 @@ def build_package(source: Path, output: Path):
         digest.update(name.encode() + b'\0' + hashlib.sha256(data).digest())
     generation = digest.hexdigest()[:32]
     replacements = {
-        'local HEADLESS_GENERATION = "disabled"': f'local HEADLESS_GENERATION = "{generation}"',
-        'local HEADLESS_ON_DEMAND = false': 'local HEADLESS_ON_DEMAND = true',
-        'local HEADLESS_USERDATA = false': 'local HEADLESS_USERDATA = true',
+        'local NO_GUI_GENERATION = "disabled"': f'local NO_GUI_GENERATION = "{generation}"',
+        'local NO_GUI_ON_DEMAND = false': 'local NO_GUI_ON_DEMAND = true',
+        'local NO_GUI_USERDATA = false': 'local NO_GUI_USERDATA = true',
     }
     for before, after in replacements.items():
         if text.count(before) != 1:

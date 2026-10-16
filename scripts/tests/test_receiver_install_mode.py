@@ -1,5 +1,5 @@
 import pytest
-from install_headless_diagnostic import select_receiver_mode
+from install_no_gui_diagnostic import select_receiver_mode
 
 
 @pytest.mark.parametrize('path,expected,downloaded', [

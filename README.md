@@ -21,7 +21,7 @@ See the [documentation index](docs/README.md) for interface capabilities and val
 
 ## How it works
 
-The `headless` transport delivers requests through single-use Lua resource files and reads results and receiver status from the game log.
+The recommended `no_gui` transport delivers requests through Lua resource files or a native userdata mailbox, depending on receiver mode, and reads results and receiver status from the game log. The legacy `file` transport was removed after a failed live read-only retest; use `no_gui`. See [transport modes and request.lua limitations](docs/reference/TRANSPORT_CHANNELS.md).
 
 ```text
 AI client → MCP (stdio) → Python server → single-use request resources → game mod → game engine
@@ -29,13 +29,13 @@ AI client → MCP (stdio) → Python server → single-use request resources →
                               └──────── responses in the game log ────────┘
 ```
 
-Request resources reside in the installed mod's `content/tf3_mcp_bridge/headless/` directory. Local request ledgers and coordination files default to:
+For `demand` / `indexed` receiver modes, request resources reside in the installed mod's `content/tf3_mcp_bridge/no_gui/` directory. Local request ledgers and coordination files default to:
 
 ```text
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
 
-New release packages include an enabled receiver. Load the mod, set `TF3_MCP_TRANSPORT=headless` for the MCP server, and point `TF3_MCP_HEADLESS_MOD` to the installed mod's `content/tf3_mcp_bridge` directory. The local MCP server still requires separate configuration. The observed mod.io mount does not discover new request files at runtime: installer `--mode auto` selects a reusable native userdata mailbox in the existing `mod_presets` directory. Live MCP reads, native save/reload, and reads after restarting the external MCP server have passed. A fresh game load is required after installing the receiver. See [downloaded-mod compatibility](docs/reference/MODIO_CONNECTION.md) and the [headless transport guide](docs/HEADLESS_TRANSPORT_20261009.md).
+New release packages include an enabled receiver. Load the mod, set `TF3_MCP_TRANSPORT=no_gui` for the MCP server, and point `TF3_MCP_NO_GUI_MOD` to the installed mod's `content/tf3_mcp_bridge` directory. `no_gui` means no manual bridge-panel interaction; the game still runs with its window. The local MCP server still requires separate configuration. The observed mod.io mount does not discover new request files at runtime: installer `--mode auto` selects a reusable native userdata mailbox in the existing `mod_presets` directory. Live MCP reads, native save/reload, and reads after restarting the external MCP server have passed. A fresh game load is required after installing the receiver. See [downloaded-mod compatibility](docs/reference/MODIO_CONNECTION.md) and the [no_gui transport guide](docs/NO_GUI_TRANSPORT_20261009.md).
 
 ## Requirements
 
@@ -74,7 +74,7 @@ Open your Agent App, create a new project, and select the extracted project fold
 
 ### 4. Set up and connect
 
-> I have downloaded and activated the game mod. Read this project's documentation and help me install and configure the local MCP server and headless transport. Check the local dependencies, receiver, and MCP connection, then verify connectivity once the game has loaded.
+> I have downloaded and activated the game mod. Read this project's documentation and help me install and configure the local MCP server and no_gui transport. Check the local dependencies, receiver, and MCP connection, then verify connectivity once the game has loaded.
 
 ### 5. Understand the current map
 
@@ -127,9 +127,11 @@ See the [current validation record](docs/TEST_VALIDATION_20261010.md) for the la
 
 ## Publishing and documentation
 
+Read the [publishing workflow](docs/guides/PUBLISHING.md) before changing metadata, preparing or cleaning a release, validating, or uploading. Exclude runtime `content/tf3_mcp_bridge/no_gui/` files; preserve request evidence outside the mod and rerun native validation after cleanup.
+
 Publishing sources live in `mod/tf3_mcp_bridge/`; the local publishing copy lives under the game's userdata `staging_area/tnj_tf3_ai_bridge/`. Validate and upload through **Mod Hub → My Mods**. The current publishing workflow does not generate or upload ZIP files.
 
-**Every upgrade must increase both the integer `revision` in `mod.json` and `BRIDGE_VERSION` in the bridge script.** The description and changelog heading must use the bridge version rather than a date. Synchronize source and local publishing copies; the two version numbers need not have the same value. The current baseline is revision `3`, bridge version `0.12.20`.
+**Every upgrade must increase both the integer `revision` in `mod.json` and `BRIDGE_VERSION` in the bridge script.** The description and changelog heading must use the bridge version rather than a date. Synchronize source and local publishing copies; the two version numbers need not have the same value. Determine the actual baseline from the source, publishing copy, and previous release record.
 
 See the [publishing workflow](docs/guides/PUBLISHING.md) for version synchronization and upload checks. Keep bilingual release notes concise, describing fixes and features.
 

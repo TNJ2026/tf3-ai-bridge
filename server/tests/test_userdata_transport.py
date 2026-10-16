@@ -1,8 +1,8 @@
 import json
 import pytest
-from test_headless import host, GEN, SCRIPT
+from test_no_gui import host, GEN, SCRIPT
 from test_warehouses import warehouse_game
-from tf3_mcp.headless import TAG, HeadlessRequests
+from tf3_mcp.no_gui import TAG, NoGuiRequests
 from tf3_mcp.bridge import encode_message, decode_message
 
 
@@ -19,7 +19,7 @@ def test_publication_and_restart_recovery(host):
     ticket=host.send('get_game_state')
     payload=decode_message(path.read_text())
     assert payload['input']==ticket['id']+' get_game_state'
-    restarted=HeadlessRequests(host.directory,host.mod)
+    restarted=NoGuiRequests(host.directory,host.mod)
     with pytest.raises(ValueError,match='unresolved'):restarted.send('get_game_state')
     response=dict(id=ticket['id'],cmd='get_game_state',ok=True,result={'world':2})
     with host.log.open('a') as f:f.write('[TNJ_UI_READ_V1] id='+ticket['id']+' part=1 total=1 hex='+json.dumps(response).encode().hex()+'\n')
@@ -44,12 +44,12 @@ def test_status_rejects_untrusted_mailbox_paths(host,change):
 
 def test_atomic_publication_failure_preserves_intent(host,monkeypatch):
     row,path=setup_host(host)
-    from tf3_mcp import headless
-    original=headless.atomic
+    from tf3_mcp import no_gui
+    original=no_gui.atomic
     def fail(p,data):
         if p==path:raise OSError('publication unknown')
         return original(p,data)
-    monkeypatch.setattr(headless,'atomic',fail)
+    monkeypatch.setattr(no_gui,'atomic',fail)
     with pytest.raises(OSError):host.send('get_game_state')
     assert host._load()['pending']
     with pytest.raises(ValueError,match='unresolved'):host.send('get_game_state')
@@ -58,14 +58,14 @@ def test_atomic_publication_failure_preserves_intent(host,monkeypatch):
 @pytest.mark.parametrize('packaged', [False, True])
 def test_native_userdata_idle_replay_and_301_reads(warehouse_game, tmp_path, packaged):
     lua,_=warehouse_game
-    lua.execute('''headlessNow=1;os.clock=function()return headlessNow end
+    lua.execute('''no_guiNow=1;os.clock=function()return no_guiNow end
       files={}; app={}
       app.getAllUserdata=function(d) assert(d=='mod_presets');local r={};for k in pairs(files)do r[#r+1]=k end;return r end
       app.loadUserdata=function(d,n)return files[n] end
       app.removeUserdata=function(d,n)files[n]=nil end
       resolveutil=nil
     ''')
-    text=SCRIPT.read_text(encoding='utf-8').replace('local HEADLESS_GENERATION = "disabled"',f'local HEADLESS_GENERATION = "{GEN}"').replace('local HEADLESS_ON_DEMAND = false','local HEADLESS_ON_DEMAND = true').replace('local HEADLESS_USERDATA = false','local HEADLESS_USERDATA = true')
+    text=SCRIPT.read_text(encoding='utf-8').replace('local NO_GUI_GENERATION = "disabled"',f'local NO_GUI_GENERATION = "{GEN}"').replace('local NO_GUI_ON_DEMAND = false','local NO_GUI_ON_DEMAND = true').replace('local NO_GUI_USERDATA = false','local NO_GUI_USERDATA = true')
     generation = GEN
     if packaged:
         from build_mod_package import build_package
@@ -79,7 +79,7 @@ def test_native_userdata_idle_replay_and_301_reads(warehouse_game, tmp_path, pac
     tick=lambda:script['guiUpdate'](None,None,None)
     tick()
     for t in (100,7200):
-        lua.globals().headlessNow=t;tick();assert rows[-1]['slot']==1
+        lua.globals().no_guiNow=t;tick();assert rows[-1]['slot']==1
     mailbox='tnj_mcp_'+generation+'_request.preset'
     old=None
     for n in range(1,302):
@@ -88,11 +88,11 @@ def test_native_userdata_idle_replay_and_301_reads(warehouse_game, tmp_path, pac
         if n==2:
             # Reappearing old bytes cannot execute or consume another sequence.
             lua.globals().files[mailbox]=lua.table_from(dict(hex=json.dumps(old).encode().hex()))
-            lua.globals().headlessNow=r['due'];tick()
+            lua.globals().no_guiNow=r['due'];tick()
             assert rows[-1]['slot']==2 and len(output)==1
             r=rows[-1];packet['expires']=r['due']+20
         lua.globals().files[mailbox]=lua.table_from(dict(hex=json.dumps(packet).encode().hex()))
-        lua.globals().headlessNow=r['due'];tick()
+        lua.globals().no_guiNow=r['due'];tick()
         assert rows[-1]['status']=='ready' and rows[-1]['slot']==n+1
         assert lua.globals().files[mailbox] is None
         old=packet

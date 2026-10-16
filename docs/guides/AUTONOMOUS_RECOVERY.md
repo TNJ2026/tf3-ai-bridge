@@ -7,7 +7,7 @@
 ## 入口
 
 - `server/src/tf3_mcp/recovery_runtime.py`：恢复状态机和施工接入 API。
-- `server/src/tf3_mcp/recovery_adapter.py`：当前 headless 通道的查询、保存、进程身份和显式启动入口。
+- `server/src/tf3_mcp/recovery_adapter.py`：当前 no_gui 通道的查询、保存、进程身份和显式启动入口。
 - MCP `recovery_control`：`status`、`checkpoint`、`recover_once`。MCP 服务需刷新后才有新工具。
 - `scripts/recovery_control.py`：相同逻辑的一次性 CLI。不是后台服务。
 
@@ -23,10 +23,10 @@ server/.venv/Scripts/python.exe scripts/recovery_control.py status --directory o
 
 ## 检查点与操作账本
 
-1. 当前游戏必须已经暂停，headless 接收器新鲜，主机和引擎均无 pending。
+1. 当前游戏必须已经暂停，no_gui 接收器新鲜，主机和引擎均无 pending。
 2. 读取完整城市身份、player、gameTime、会话、加载代次/能力版本和配置的对象审计。
 3. 先持久化保存意图，再保存到独立 `tf3_recovery_before_<uuid>` 槽，禁止覆盖已有文件。
-4. 复用 headless 保存的“原生回执＋新文件非空且写入稳定”验证；另保存 SHA-256，并在保存后重新读取原生基线。
+4. 复用 no_gui 保存的“原生回执＋新文件非空且写入稳定”验证；另保存 SHA-256，并在保存后重新读取原生基线。
 5. `RecoveryRuntime.execute(id, plan, prepare, submit, verify)` 用于接入获授权的施工流程。`prepare` 必须只读并获取新鲜原生预览；`submit` 恰好调用一次；`verify` 必须独立读回，不得把提交回执包装成验收。
 6. 同一 ID 再调用只返回原记录；换 ID 也不能重试被隔离的同一方案。提交、回执或验证中断后保留未知状态，禁止后续修改。
 
@@ -45,7 +45,7 @@ API 为本地可信集成点，不接受来自游戏文本的可执行回调。`
 | 同一恢复已记录启动意图、但没有回执 | 只观察结果；控制器重启也不能重新发送 |
 | 启动等待超过期限或原生比对失败 | 停止并保留证据；不自动换备份、不扩大重试次数 |
 
-启动前复制原日志尾部、headless 请求账本尾部及进程绑定到事件目录，每文件最多 2 MiB，记录偏移/截断和散列。原账本、请求 ID、错误和存档均保留；日志缺失不能证明没有修改。
+启动前复制原日志尾部、no_gui 请求账本尾部及进程绑定到事件目录，每文件最多 2 MiB，记录偏移/截断和散列。原账本、请求 ID、错误和存档均保留；日志缺失不能证明没有修改。
 
 目前项目没有经过验证的通用 TF3 命令行载入参数。因此 `bootstrap` 必须由部署者先在独立存档验证：`argv[0]` 是绝对可执行路径，后续参数必须有独立的 `{checkpoint}` 占位参数，运行时替换为指定备份文件的绝对路径；配置 `executableSha256` 和 `validated: true`。可以是经过验证的专用启动器，不能把 `validated` 当作实机验证的替代。控制器使用参数数组和 `shell=False`，隐藏启动器窗口，不调用强制结束进程。脚本/外部依赖还须由部署者固定版本；本层只校验启动器可执行文件。
 

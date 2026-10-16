@@ -1,11 +1,19 @@
 # TF3 文档导航
 
+- [通信方式与接收器模式：no_gui、file 及 request.lua 边界](reference/TRANSPORT_CHANNELS.md)
+
+
 本项目用于 Transport Fever 3。文档按“发展决策 → 执行流程 → 接口参考 → 历史证据”分类。最后整理：2026-10-06。
 
 ## 按任务阅读
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 一次发送工程，由接收器逐项预览、提交和验收 | [接收器工程批处理](reference/CONSTRUCTION_PROJECT.md) | 支持范围、进度续作、预算及未知结果保护 |
+| 自动线路配色、默认色、逐节涂装及图片源包 | [载具外观 v2](reference/VEHICLE_APPEARANCE_V2.md) | 启停、预算、配置保护与资源加载边界 |
+| 读取载具外观、单车/多车/线路统一配色 | [载具改色接口](reference/VEHICLE_APPEARANCE.md) | 遮罩限制、逐车回执与未决保护 |
+| 一次读取多项游戏数据 | [接收器只读批处理](reference/READ_BATCH.md) | 白名单、返回语义、大小及时间预算 |
+| 了解 AI 如何通过 MCP 读取、规划和操作游戏 | [AI 控制游戏的完整过程与实现逻辑](guides/HOW_AI_CONTROLS_TF3.md) | 架构、通信、道路、建筑、线路、车辆及结果验证 |
 | 在既有道路上增加电车轨道或公交车道 | [道路升级](reference/ROAD_UPGRADE.md) | 结构预览边界、车道权限及限定实测 |
 | 读取城市声誉、运送、噪音、加成、幸福感、交通和污染 | [城市面板概览](reference/TOWN_OVERVIEW.md) | 字段可用性、原生统计口径与实测限制 |
 | 货运规划收尾、维护分流、交付时效与批量执行 | [运营预测与执行契约](guides/CARGO_PLAN_FINALIZATION.md) | [统一规划流程](guides/PLANNING_WORKFLOW.md) |

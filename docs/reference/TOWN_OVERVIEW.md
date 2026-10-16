@@ -57,7 +57,7 @@
 122项相关测试通过，覆盖原生结构体、部分字段失败、非有限值、false保留、只读状态隔离和参数校验。Lua 5.1～5.5及LuaJIT 2.1编译检查通过。复查命令：
 
 ```powershell
-server/.venv/Scripts/python.exe -m pytest server/tests/test_town_overview.py server/tests/test_town_cargo_supply.py server/tests/test_headless.py server/tests/test_ui_consolidated.py -q
+server/.venv/Scripts/python.exe -m pytest server/tests/test_town_overview.py server/tests/test_town_cargo_supply.py server/tests/test_no_gui.py server/tests/test_ui_consolidated.py -q
 ```
 
 本次接口验证没有启动监控或游戏建设；文档更新不改变现有任务授权与监控启停。

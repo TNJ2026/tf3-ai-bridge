@@ -1,22 +1,10 @@
-"""Transport to the tf3_mcp_bridge game script through the game's userdata files.
-
-Game scripts have neither sockets nor the io library. The only file access they get is
-``app.saveUserdata`` / ``app.loadUserdata`` in the GUI state, which store Lua tables as
-``<userdata>/local/<dir>/<name>.lua``. The mod polls ``request.lua`` in the ``tf3_mcp``
-directory and answers in ``response.lua``; it also writes ``heartbeat.lua`` about once
-per second. Each file holds ``{ hex = "<hex-encoded UTF-8 JSON>" }`` so neither side
-depends on how the game escapes strings.
-"""
-
+"""Shared path and userdata encoding helpers; the legacy file transport is removed."""
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
 import sys
-import time
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -77,124 +65,12 @@ class BridgeError(RuntimeError):
 
 
 class Bridge:
-    def __init__(self, directory: Path | None = None, timeout: float = 10.0, poll: float = 0.05):
+    """Compatibility error for historical scripts; never sends a request."""
+    def __init__(self, directory=None, **kwargs):
         self.dir = directory or default_bridge_dir()
-        self.timeout = timeout
-        self.poll = poll
-        self._lock = asyncio.Lock()
-        self.dir.mkdir(parents=True, exist_ok=True)
 
-    @property
-    def request_path(self) -> Path:
-        return self.dir / "request.lua"
+    async def call(self, *args, **kwargs):
+        raise BridgeError("Legacy file transport removed; use the no_gui MCP client")
 
-    @property
-    def response_path(self) -> Path:
-        return self.dir / "response.lua"
-
-    @property
-    def heartbeat_path(self) -> Path:
-        return self.dir / "heartbeat.lua"
-
-    def heartbeat(self) -> dict[str, Any]:
-        """Return the last heartbeat plus its age, or a description of why there is none."""
-        try:
-            stat = self.heartbeat_path.stat()
-        except FileNotFoundError:
-            return {
-                "connected": False,
-                "reason": f"no heartbeat at {self.heartbeat_path}; is the game running a loaded save "
-                "with the TF3 MCP Bridge mod enabled?",
-            }
-        age = time.time() - stat.st_mtime
-        return {
-            "connected": age < HEARTBEAT_STALE_SECONDS,
-            "heartbeatAgeSeconds": round(age, 2),
-            "heartbeat": _read_message(self.heartbeat_path),
-        }
-
-    async def call(
-        self, cmd: str, args: dict[str, Any] | None = None, timeout: float | None = None, engine: bool = False
-    ) -> Any:
-        """Send a command to the mod. ``engine=True`` asks the mod to run it in the engine state
-        instead of the GUI state (build commands always run there)."""
-        async with self._lock:
-            # All local clients share one request file, including the map-cache poller.
-            lock_file = open(self.dir / "client.lock", "a+b")
-            acquired = False
-            deadline = time.monotonic() + (timeout or self.timeout)
-            try:
-                lock_file.seek(0)
-                if os.fstat(lock_file.fileno()).st_size == 0:
-                    lock_file.write(b"0"); lock_file.flush()
-                while not acquired:
-                    try:
-                        lock_file.seek(0)
-                        if os.name == "nt":
-                            import msvcrt
-                            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
-                        else:
-                            import fcntl
-                            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        acquired = True
-                    except OSError:
-                        if time.monotonic() >= deadline:
-                            raise BridgeError("timed out waiting for another bridge client")
-                        await asyncio.sleep(self.poll)
-                return await self._call(cmd, args or {}, timeout or self.timeout, engine)
-            finally:
-                if acquired:
-                    lock_file.seek(0)
-                    if os.name == "nt":
-                        import msvcrt
-                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-                    else:
-                        import fcntl
-                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                lock_file.close()
-
-    async def _call(self, cmd: str, args: dict[str, Any], timeout: float, engine: bool) -> Any:
-        req_id = uuid.uuid4().hex
-        request: dict[str, Any] = {"id": req_id, "cmd": cmd, "args": args}
-        if engine:
-            request["engine"] = True
-        _write_atomic(self.request_path, encode_message(request))
-        deadline = time.monotonic() + timeout
-        try:
-            while time.monotonic() < deadline:
-                resp = _read_message(self.response_path)
-                if isinstance(resp, dict) and resp.get("id") == req_id:
-                    if resp.get("ok"):
-                        return resp.get("result")
-                    raise BridgeError(str(resp.get("error")))
-                await asyncio.sleep(self.poll)
-        finally:
-            # Leave an id-less placeholder instead of deleting: loading a missing userdata
-            # file makes the engine log an error on every poll.
-            _write_atomic(self.request_path, encode_message(IDLE_REQUEST))
-        hb = self.heartbeat()
-        hint = "" if hb.get("connected") else f" ({hb.get('reason') or 'heartbeat is stale'})"
-        raise BridgeError(f"timed out after {timeout:.0f}s waiting for the game to answer '{cmd}'{hint}")
-
-
-def _read_message(path: Path) -> Any:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (FileNotFoundError, PermissionError):
-        return None
-    # None when caught mid-write; the caller polls again
-    return decode_message(text)
-
-
-def _write_atomic(path: Path, text: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".srv.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    for attempt in range(20):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            # the game may be reading the file right now
-            time.sleep(0.01 * (attempt + 1))
-    os.replace(tmp, path)
-
+    def heartbeat(self):
+        raise BridgeError("Legacy file transport removed; use no_gui_status")
