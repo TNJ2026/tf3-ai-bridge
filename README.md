@@ -72,35 +72,56 @@ Open [GitHub Releases](https://github.com/TNJ2026/tf3-ai-bridge/releases), choos
 
 Open your Agent App, create a new project, and select the extracted project folder as its directory. Use the folder containing `README.md`, `server/`, and `mod/`.
 
-### 4. Set up and connect
+### 4. Install and invoke the skill (recommended)
+
+The [tf3-mcp skill](skills/tf3-mcp/SKILL.md) guides the Agent through first connection, queries, planning, construction acceptance, and troubleshooting.
+
+Copy the entire `skills/tf3-mcp/` folder, including `agents/` and `references/`, into your client's skills directory. For Codex, use `$CODEX_HOME/skills/`, or `~/.codex/skills/` when unset (usually `%USERPROFILE%\.codex\skills\` on Windows). The installed layout should be:
+
+```text
+<skills directory>/tf3-mcp/
+├── SKILL.md
+├── agents/openai.yaml
+└── references/
+    ├── connection.md
+    └── operations.md
+```
+
+You can ask the Agent to install it:
+
+> Install this project's skills/tf3-mcp folder into my client's skills directory. Back up local customizations if the skill already exists. Install only the skill; do not modify the game mod.
+
+After the client discovers the skill, include `$tf3-mcp` and your goal in a message. If it is not recognized, check the directory layout and reload skills using your client's supported mechanism. Clients without skill support can instead read `skills/tf3-mcp/SKILL.md` and its references directly. Keep the project documentation accessible during use.
+
+Older Release archives may not contain `skills/`. Obtain the entire folder from the [main branch skill directory](https://github.com/TNJ2026/tf3-ai-bridge/tree/main/skills/tf3-mcp); this does not require overwriting the installed game mod.
+
+### 5. Set up and connect for the first time
 
 See the [complete first-connection guide (Chinese)](docs/guides/FIRST_CONNECTION.md) for automatic mod-directory discovery, server configuration, loaded-source checks, and read-only verification.
 
-> I have downloaded and activated the game mod. Read this project's documentation and help me install and configure the local MCP server and no_gui transport. Check the local dependencies, receiver, and MCP connection, then verify connectivity once the game has loaded.
+> Use $tf3-mcp. I have downloaded and activated the game mod. Find the mod actually loaded by the game, check dependencies, and configure the local MCP server and no_gui transport. Once the map is loaded, verify the connection with read-only queries. Do not overwrite the downloaded mod, build anything, or resume monitoring.
 
-### 5. Understand the current map
+Installing the skill does not configure the MCP server. The Agent checks the loaded source using the guide; you normally do not need to supply the mod path manually. Without the skill, replace the opening instruction with “Read docs/guides/FIRST_CONNECTION.md”.
 
-> Analyze the current map, city demand, existing transport lines, and finances. Identify the main supply bottlenecks and opportunities for improvement.
+### 6. Understand the current map
 
-### 6. Plan a project
+> Use $tf3-mcp to analyze the current map, city demand, existing transport lines, and finances. Identify supply bottlenecks and opportunities for improvement. Use read-only queries; do not change the game.
 
-> Plan a supply route for Chengde using nearby industries and existing infrastructure where possible. Estimate construction and operating costs, and show me the plan before building anything.
+### 7. Plan a project
+
+> Use $tf3-mcp to plan a supply route for Chengde using nearby industries and existing infrastructure where possible. Estimate construction and operating costs, and show me the plan before building anything.
 
 Replace Chengde with a city on your map. You can also ask for bus routes, warehouse placement, or improvements to an existing network.
 
-### 7. Build the reviewed plan
+### 8. Build the reviewed plan
 
-> Implement the plan we just reviewed within its budget. Build the infrastructure, configure the lines, and purchase the vehicles included in the plan. Verify actual loading, delivery, and maintenance, and report any blockers or unfinished work.
+> Use $tf3-mcp to implement the plan we just reviewed within its budget. Build the infrastructure, configure the lines, and purchase the vehicles included in the plan. Verify actual loading, delivery, and maintenance, and report any blockers or unfinished work.
 
 For a follow-up operating check:
 
-> Check the new routes for supply shortages, congestion, cargo expiry, and financial risks, and suggest improvements.
+> Use $tf3-mcp to check the new routes for supply shortages, congestion, loading errors, cargo expiry, and financial risks. Diagnose and suggest improvements without editing lines or buying vehicles.
 
-## Optional: install the Agent skill
-
-The repository includes the [tf3-mcp skill](skills/tf3-mcp/SKILL.md) for first connection, queries, planning, authorized construction, acceptance, and recovery. Copy the entire `skills/tf3-mcp/` folder into your client's skills directory. For Codex, use `$CODEX_HOME/skills/`, or `~/.codex/skills/` when unset. Back up any existing local customization before updating. After the client discovers the skill, invoke it with `$tf3-mcp`.
-
-The skill does not install the MCP server or grant game-operation permissions. Follow the first-connection guide and keep the project documentation accessible to the Agent. The repository contains the shared skill; changes to a locally installed copy do not automatically sync back. Keep personal paths and actual MCP configuration out of the skill.
+The skill does not grant construction, financing, or monitoring permissions; your request determines the scope. Before updating the entire skill folder, back up local customizations. Installed copies do not automatically sync back to the repository. Keep personal paths and actual MCP configuration out of the skill.
 
 ## Operating workflow and current limitations
 
@@ -117,6 +138,7 @@ Read [AGENTS.md](AGENTS.md) and the [operating playbook](docs/guides/AGENT_PLAYB
 | `mod/tf3_mcp_bridge/` | Game mod, publishing metadata, and cover image |
 | `server/` | Python MCP server and the `tf3-bridge` CLI |
 | `scripts/` | Installation, planning, diagnostics, and execution tools; some are historical experiments |
+| `skills/tf3-mcp/` | Installable Agent skill with connection and operating references |
 | `config/` | Planning templates and configuration |
 | `docs/` | Interface references, operating guides, and historical records, primarily in Chinese |
 | `.mcp.example.json` | Portable client configuration example |
