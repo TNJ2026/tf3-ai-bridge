@@ -74,6 +74,8 @@ Open your Agent App, create a new project, and select the extracted project fold
 
 ### 4. Set up and connect
 
+See the [complete first-connection guide (Chinese)](docs/guides/FIRST_CONNECTION.md) for automatic mod-directory discovery, server configuration, loaded-source checks, and read-only verification.
+
 > I have downloaded and activated the game mod. Read this project's documentation and help me install and configure the local MCP server and no_gui transport. Check the local dependencies, receiver, and MCP connection, then verify connectivity once the game has loaded.
 
 ### 5. Understand the current map

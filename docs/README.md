@@ -9,6 +9,7 @@
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 首次连接 MCP、发现下载模组目录或排查连接 | [Agent 首次连接完整指南](guides/FIRST_CONNECTION.md) | [通信模式](reference/TRANSPORT_CHANNELS.md)、[下载版连接](reference/MODIO_CONNECTION.md) |
 | 一次发送工程，由接收器逐项预览、提交和验收 | [接收器工程批处理](reference/CONSTRUCTION_PROJECT.md) | 支持范围、进度续作、预算及未知结果保护 |
 | 自动线路配色、默认色、逐节涂装及图片源包 | [载具外观 v2](reference/VEHICLE_APPEARANCE_V2.md) | 启停、预算、配置保护与资源加载边界 |
 | 读取载具外观、单车/多车/线路统一配色 | [载具改色接口](reference/VEHICLE_APPEARANCE.md) | 遮罩限制、逐车回执与未决保护 |
