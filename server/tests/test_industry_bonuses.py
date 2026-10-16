@@ -85,8 +85,8 @@ def test_argument_validation(args):
 
 def test_old_receiver_never_publishes():
  from unittest.mock import AsyncMock,Mock
- from tf3_mcp.headless_client import HeadlessClient
- c=HeadlessClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
+ from tf3_mcp.no_gui_client import NoGuiClient
+ c=NoGuiClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
  with pytest.raises(ValueError,match='lacks industry bonuses'):asyncio.run(c.call('get_industry_bonuses',{'industry':5}))
  c.requests.send.assert_not_called()
 

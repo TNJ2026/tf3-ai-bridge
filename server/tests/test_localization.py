@@ -92,10 +92,14 @@ def test_rail_plan_localization_with_offline_snapshot(tmp_path, monkeypatch, lan
     from tf3_mcp import server
     from test_route_planner import snapshot as rail_snapshot
     class Cache:
+        snapshot = None
         async def refresh(self, *args, **kwargs):
             return rail_snapshot(), {'hit': True}
     monkeypatch.setenv('TF3_UI_LANGUAGE', lang)
-    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'file')
+    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'no_gui')
+    class Client:
+        async def status(self):return {'receiver': {'session': 'offline'}}
+    monkeypatch.setattr(server, 'no_gui_client', lambda: Client())
     monkeypatch.setattr(server, '_map_cache', Cache())
     result = asyncio.run(server.plan_rail_connection(1, 2, output_dir=str(tmp_path)))
     plan = json.loads(Path(result.structured_content['plan_path']).read_text('utf-8'))
@@ -114,11 +118,9 @@ def test_windows_bom_json_inputs(tmp_path, monkeypatch):
     assert read_snapshot(path) == snapshot()
     plan = plan_local(snapshot())
     path.write_text(json.dumps(plan, ensure_ascii=False), encoding='utf-8-sig')
-    async def card(value, *args):
-        assert value == plan
-        return 'report reached'
-    monkeypatch.setattr(server, '_planning_card', card)
-    assert asyncio.run(server.export_planning_report(str(path), str(tmp_path))) == 'report reached'
+    # Report display now requires an existing SVG rather than rendering JSON.
+    with pytest.raises(ValueError, match='existing .svg'):
+        asyncio.run(server.export_planning_report(str(path), str(tmp_path)))
     config = tmp_path/'Recovery config 中文.json'
     config.write_text(json.dumps({'stateDirectory': str(tmp_path/'state')}), encoding='utf-8-sig')
     monkeypatch.setenv('TF3_CONFIG_ROOT', str(tmp_path))

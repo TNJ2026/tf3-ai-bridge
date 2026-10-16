@@ -27,7 +27,7 @@
 
 ## 加载与当前验收边界
 
-Python MCP入口须刷新MCP进程才能出现在工具清单；本地新Python进程可使用相同具名headless协议。游戏侧新命令和版本标记需重新载入存档，不能只刷新MCP就声称游戏已更新。禁止自动重载；按项目AGENTS与执行手册取得用户重载授权或由用户手动加载。
+Python MCP入口须刷新MCP进程才能出现在工具清单；本地新Python进程可使用相同具名no_gui协议。游戏侧新命令和版本标记需重新载入存档，不能只刷新MCP就声称游戏已更新。禁止自动重载；按项目AGENTS与执行手册取得用户重载授权或由用户手动加载。
 
 专项测试覆盖原生模块槽位、三类预览/单次提交、资源/许可/碰撞/重复/未知参数拒绝、旧接收器前置拒绝。安装包模板离线执行与槽位逐项比较通过；六种Lua运行时及16个额外局部变量余量编译通过。证据位于`output/water_facilities_20261011/`。
 
@@ -35,7 +35,7 @@ Python MCP入口须刷新MCP进程才能出现在工具清单；本地新Python�
 
 2026-10-11 指纹修订：脚本描述符按fileName及lossless params比较，不把原生userdata包装地址或包装方法当作配置；metadata与模块数据拒绝不支持的非无损对象，不序列化地址兜底。心跳新增waterFacilityFingerprintVersion=2。原生包装对象回归用例重现并覆盖假变更，真实参数变化仍阻止提交；修复后已完成上述三类实机施工，不代表所有布局或长期模拟安全。
 
-新增受限headless命令reconcile_facility_rejection(request_id)，仅接受durable ledger中commit_facility的精确前置错误“facility changed since preview; inspect and preview again”，并核对存在的响应缓存。保留原请求及错误，记录reconciled_rejected和retryAllowed=false；不接受原生失败、超时、缺失错误、其他命令或冲突证据，不重放旧令牌。此入口本身不施工，不替代新鲜地图调查和预览。加载异常现场存档后先核对原pending，再显式对账；不能用读旧档或清空记录绕过未知施工结果。
+新增受限no_gui命令reconcile_facility_rejection(request_id)，仅接受durable ledger中commit_facility的精确前置错误“facility changed since preview; inspect and preview again”，并核对存在的响应缓存。保留原请求及错误，记录reconciled_rejected和retryAllowed=false；不接受原生失败、超时、缺失错误、其他命令或冲突证据，不重放旧令牌。此入口本身不施工，不替代新鲜地图调查和预览。加载异常现场存档后先核对原pending，再显式对账；不能用读旧档或清空记录绕过未知施工结果。
 
 
 ## 小型码头新建和扩建实测（2026-10-13）

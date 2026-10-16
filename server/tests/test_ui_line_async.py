@@ -1,4 +1,4 @@
-"""Existing line business handler through bounded UI/headless engine dispatch."""
+"""Existing line business handler through bounded UI/no_gui engine dispatch."""
 import json
 
 import pytest
@@ -26,8 +26,8 @@ def test_invalid_line_args(args, tmp_path):
 
 @pytest.mark.parametrize('deferred', [False, True])
 @pytest.mark.parametrize('outcome', ['success', 'failure', 'missing_identity'])
-@pytest.mark.parametrize('headless', [False, True])
-def test_line_callback_completion_and_durable_replay(tmp_path, deferred, outcome, headless):
+@pytest.mark.parametrize('no_gui', [False, True])
+def test_line_callback_completion_and_durable_replay(tmp_path, deferred, outcome, no_gui):
     game=FakeGame(tmp_path/'bridge');lua=game.lua
     lua.globals().defer_line=deferred
     lua.globals().line_outcome=outcome
@@ -73,16 +73,16 @@ def test_line_callback_completion_and_durable_replay(tmp_path, deferred, outcome
         state['inEvent']=False
     script=game.script
     ticket=reader.prepare_build(log,'create_line',{'station_groups':[200,201],'name':'New line'})
-    if headless:
+    if no_gui:
         generation='a'*32
         rows=[]
-        lua.globals().debugPrint=lambda line:rows.append(json.loads(line.split('[TNJ_HEADLESS_V1]',1)[1])) if '[TNJ_HEADLESS_V1]' in line else None
-        lua.execute('headless_now=1;os.clock=function()return headless_now end;resolveutil={loadfile=function()return function()return headless_payload end end}')
-        text=SCRIPT.read_text(encoding='utf-8').replace('local HEADLESS_GENERATION = "disabled"',f'local HEADLESS_GENERATION = "{generation}"').replace('local HEADLESS_ON_DEMAND = false','local HEADLESS_ON_DEMAND = true')
+        lua.globals().debugPrint=lambda line:rows.append(json.loads(line.split('[TNJ_NO_GUI_V1]',1)[1])) if '[TNJ_NO_GUI_V1]' in line else None
+        lua.execute('no_gui_now=1;os.clock=function()return no_gui_now end;resolveutil={loadfile=function()return function()return no_gui_payload end end}')
+        text=SCRIPT.read_text(encoding='utf-8').replace('local NO_GUI_GENERATION = "disabled"',f'local NO_GUI_GENERATION = "{generation}"').replace('local NO_GUI_ON_DEMAND = false','local NO_GUI_ON_DEMAND = true')
         script=lua.execute(text);script['guiUpdate'](None,None,None)
         row=rows[-1]
-        lua.globals().headless_payload=json.dumps(dict(generation=generation,session=row['session'],slot=row['slot'],expires=row['due']+20,kind='build',input=ticket['input']))
-        lua.globals().headless_now=row['due'];script['guiUpdate'](None,None,None)
+        lua.globals().no_gui_payload=json.dumps(dict(generation=generation,session=row['session'],slot=row['slot'],expires=row['due']+20,kind='build',input=ticket['input']))
+        lua.globals().no_gui_now=row['due'];script['guiUpdate'](None,None,None)
     else:
         assert script['guiHandleEvent'](None,None,None,'','tnj_bridge_readonly','tnj_bridge_readonly.request',ticket['input'])=='Submitted; inspect log'
     original=lua.globals().forwarded;event(script,original);flush()

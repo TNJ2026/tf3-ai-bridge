@@ -8,7 +8,7 @@ across Lua 5.1–5.5 and LuaJIT 2.1, with zero and 16 reserved locals. The stage
 diff passed whitespace checks. This submission validation did not contact the game.
 
 The submission includes guarded road graphs, paired highways, special road
-connections, headless routing/save/recovery, legacy receiver removal, and siting
+connections, no_gui routing/save/recovery, legacy receiver removal, and siting
 performance changes with their tests and documentation. Bounded roundabout
 construction, bus driving and save/reload acceptance are recorded separately in
 [ROUNDABOUT.md](reference/ROUNDABOUT.md). The user subsequently clarified that successful roundabout construction satisfies
@@ -27,7 +27,7 @@ checks (six runtimes, zero/16 reserved locals).
 
 The v32 implementation covers named-tool routing, component/snapshot paging,
 bounded complex line edits, journaled vehicle batches, autoaccept transport and
-opt-in read-only monitoring. See [migration scope](reference/HEADLESS_MIGRATION.md).
+opt-in read-only monitoring. See [migration scope](reference/NO_GUI_MIGRATION.md).
 Tests use mocks and local files; they do not prove the native v32 operations.
 
 v32 is installed with a backup and exact byte/hash verification. Evidence:
@@ -51,9 +51,9 @@ during this live acceptance, so the prior offline counts remain applicable.
 ## v31 save-channel follow-up
 
 The latest full offline run passed **1482 tests and 4 subtests in 53.97 seconds**.
-The targeted save/headless run passed 41 tests. Source and installed Lua passed
+The targeted save/no_gui run passed 41 tests. Source and installed Lua passed
 the multi-version compile checks. Save-channel live file-write acceptance is
-recorded separately in [HEADLESS_SAVE.md](reference/HEADLESS_SAVE.md); it does not
+recorded separately in [NO_GUI_SAVE.md](reference/NO_GUI_SAVE.md); it does not
 include a reload test. These changes have not been committed.
 
 ## Earlier committed baseline
@@ -71,8 +71,8 @@ server/.venv/Scripts/python.exe scripts/validate_bridge_compile.py
 
 The bridge passed compile-only checks on Lua 5.1, 5.2, 5.3, 5.4, 5.5 and LuaJIT 2.1, both without additional locals and with 16 reserved locals. These 12 checks do not execute the bridge or reproduce the native game loader.
 
-The suites cover the file transport, UI/log and opt-in headless transports, request identity and persistence, guarded construction and configuration, passenger/cargo identity reads, game speed control, and planning helpers. Tests use mocks and temporary files; this validation did not connect to or change the game.
+The suites cover the file transport, UI/log and opt-in no_gui transports, request identity and persistence, guarded construction and configuration, passenger/cargo identity reads, game speed control, and planning helpers. Tests use mocks and temporary files; this validation did not connect to or change the game.
 
-Live evidence and its limits are recorded separately in [operation acceptance](UI_OPERATION_ACCEPTANCE_20261009.md) and [headless transport](HEADLESS_TRANSPORT_20261009.md). Same-person railway alighting is deferred by user request, not marked passed. Long-term native cache reclamation, unlimited operation/building and exhaustive vehicle/cargo combinations remain unverified. Runtime evidence, saves and local configuration are excluded from Git.
+Live evidence and its limits are recorded separately in [operation acceptance](UI_OPERATION_ACCEPTANCE_20261009.md) and [no_gui transport](NO_GUI_TRANSPORT_20261009.md). Same-person railway alighting is deferred by user request, not marked passed. Long-term native cache reclamation, unlimited operation/building and exhaustive vehicle/cargo combinations remain unverified. Runtime evidence, saves and local configuration are excluded from Git.
 
 中文摘要：提交前重跑全套离线测试，1457 项测试及 4 项子测试通过；六种 Lua 运行时共 12 个编译检查通过。本轮未连接游戏。铁路同人下车暂时跳过，长期稳定性与所有参数组合不在已证明范围内。

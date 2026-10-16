@@ -1,3 +1,4 @@
+from legacy_file_transport_fixture import legacy_engine_source
 """Native warehouse starter layouts, collision/session guards and stock readback."""
 import asyncio
 import json
@@ -151,7 +152,7 @@ def test_facility_ticket_survives_engine_recreation_and_is_single_use(warehouse_
     def event(cmd, epoch="one", **args):
         nonlocal counter
         counter += 1
-        script = lua.execute(SCRIPT.read_text("utf8"))
+        script = lua.execute(legacy_engine_source(SCRIPT.read_text("utf8")))
         script["handleEvent"](None, state, None, "tf3_mcp", "tf3_mcp_request",
             json.dumps(dict(id=str(counter), cmd=cmd, args=args, facilityEpoch=epoch)))
         responses = state["get"](state)["responses"]

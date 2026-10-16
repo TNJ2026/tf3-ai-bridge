@@ -118,7 +118,9 @@ def test_mcp_offline_pipeline_never_calls_game(tmp_path,monkeypatch):
         g=(await server.plan_global_development(path,1,str(tmp_path),supply_chains=[chain()])).structured_content
         l=(await server.plan_local_development(path,str(tmp_path),sites=[site()])).structured_content
         assert g['plan_path'] and l['sites']
-        assert (await server.export_planning_report(l['plan_path'],str(tmp_path))).structured_content['files']['png']
+        svg=tmp_path/'route.svg'
+        svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>')
+        assert (await server.export_planning_report(svg_path=str(svg),output_dir=str(tmp_path))).structured_content['files']['svg']
     asyncio.run(run())
 
 

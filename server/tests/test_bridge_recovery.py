@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from tf3_mcp.bridge import Bridge, BridgeError, decode_message, encode_message
+from legacy_file_transport_fixture import Bridge, BridgeError, decode_message, encode_message
 
 
 def read(path):

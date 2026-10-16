@@ -85,8 +85,8 @@ def test_host_rejects_invalid_args(args):
 
 def test_defaults_and_old_receiver_gate():
     validate_build_arguments('get_notifications',{})
-    from tf3_mcp.headless_client import HeadlessClient
-    c=HeadlessClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
+    from tf3_mcp.no_gui_client import NoGuiClient
+    c=NoGuiClient(Mock());c.status=AsyncMock(return_value={'receiver':{'session':'s'},'pending':None})
     with pytest.raises(ValueError,match='lacks notifications'):asyncio.run(c.call('get_notifications',{}))
     c.requests.send.assert_not_called()
 
@@ -132,4 +132,4 @@ def test_low_level_host_old_receiver_cannot_publish(host):
         host.send('get_notifications',{},kind='build',expected_session='session')
     assert not host.ledger.exists()
 
-from test_headless import host
+from test_no_gui import host

@@ -61,8 +61,8 @@ def test_demand_vehicle_callbacks_and_replay(tmp_path,command,args,native_kind,m
     lua.execute('''
       components[700]={[3]={stops={{stationGroup=200},{stationGroup=201}}},[1]={name="test"},[10]={player=2}}
       components[701]={[9]={carrier=0,state=0,depot=300,line=-1,userStopped=false},[10]={player=2}}
-      mutation_calls=0;headless_now=1;os.clock=function()return headless_now end
-      resolveutil={loadfile=function()return function()return headless_payload end end}
+      mutation_calls=0;no_gui_now=1;os.clock=function()return no_gui_now end
+      resolveutil={loadfile=function()return function()return no_gui_payload end end}
       local old=api.cmd.sendCommand
       api.cmd.makeScriptingSendEventCmd=function(script,id,name,param)return {event=true,id=id,name=name,param=param}end
       api.cmd.sendCommand=function(cmd,cb)
@@ -77,16 +77,16 @@ def test_demand_vehicle_callbacks_and_replay(tmp_path,command,args,native_kind,m
       end
     ''')
     generation='b'*32
-    text=SCRIPT.read_text(encoding='utf-8').replace('local HEADLESS_GENERATION = "disabled"',f'local HEADLESS_GENERATION = "{generation}"').replace('local HEADLESS_ON_DEMAND = false','local HEADLESS_ON_DEMAND = true')
+    text=SCRIPT.read_text(encoding='utf-8').replace('local NO_GUI_GENERATION = "disabled"',f'local NO_GUI_GENERATION = "{generation}"').replace('local NO_GUI_ON_DEMAND = false','local NO_GUI_ON_DEMAND = true')
     script=lua.execute(text);state=lua.execute('local s={value={}};function s:get()return self.value end;function s:set(v)self.value=v end;return s')
     rows=[];output=[]
-    lua.globals().debugPrint=lambda line:rows.append(json.loads(line.split('[TNJ_HEADLESS_V1]',1)[1])) if '[TNJ_HEADLESS_V1]' in line else None
+    lua.globals().debugPrint=lambda line:rows.append(json.loads(line.split('[TNJ_NO_GUI_V1]',1)[1])) if '[TNJ_NO_GUI_V1]' in line else None
     lua.globals().print=lambda *v:output.append(' '.join(map(str,v)))
     log=tmp_path/'stdout.txt';log.touch();reader=UiLogRequests()
     ticket=reader.prepare_build(log,command,args)
     script['guiUpdate'](None,None,None);row=rows[-1]
-    lua.globals().headless_payload=json.dumps(dict(generation=generation,session=row['session'],slot=row['slot'],expires=row['due']+20,kind='build',input=ticket['input']))
-    lua.globals().headless_now=row['due'];script['guiUpdate'](None,None,None)
+    lua.globals().no_gui_payload=json.dumps(dict(generation=generation,session=row['session'],slot=row['slot'],expires=row['due']+20,kind='build',input=ticket['input']))
+    lua.globals().no_gui_now=row['due'];script['guiUpdate'](None,None,None)
     e=lua.globals().forwarded
     def event(module,event):module['handleEvent'](None,state,'',event['id'],event['name'],event['param'])
     def flush():

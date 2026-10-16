@@ -1,6 +1,6 @@
 import pytest
 from test_e2e import FakeGame, bridge_dir, run
-from tf3_mcp.bridge import Bridge
+from legacy_file_transport_fixture import Bridge
 
 NETWORK = r'''
 local CT=api.type.ComponentType
@@ -89,7 +89,7 @@ def test_healthy_junction_does_not_rebuild(bridge_dir):
 
 @pytest.mark.parametrize('preview', [True, False])
 def test_frozen_internal_node_rejected_before_native_proposal(bridge_dir, preview):
-    from tf3_mcp.bridge import BridgeError
+    from legacy_file_transport_fixture import BridgeError
     with FakeGame(bridge_dir) as g:
         g.lua.execute(NETWORK + '''
 frozen[EDGE_BC]=9000
@@ -103,7 +103,7 @@ api.engine.util.proposal.makeProposalData=function() error('native preview must 
 
 @pytest.mark.parametrize('target', ['node', 'edge'])
 def test_missing_transport_network_rejected_before_native_preview(bridge_dir, target):
-    from tf3_mcp.bridge import BridgeError
+    from legacy_file_transport_fixture import BridgeError
     with FakeGame(bridge_dir) as g:
         g.lua.execute(NETWORK)
         g.lua.execute('''

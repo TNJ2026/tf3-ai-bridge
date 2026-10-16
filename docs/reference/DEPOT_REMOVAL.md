@@ -1,6 +1,6 @@
 # 公路车库受限拆除接口
 
-2026-10-11：补齐 headless 的公路车库拆除流程，能力标记为 `depotRemovalVersion=1`。目前通过离线模拟测试，尚未完成原生游戏拆除验收。旧 `bulldoze` 仍不在 headless 白名单内，不自动回退到旧文件通道。
+2026-10-11：补齐 no_gui 的公路车库拆除流程，能力标记为 `depotRemovalVersion=1`。目前通过离线模拟测试，尚未完成原生游戏拆除验收。旧 `bulldoze` 仍不在 no_gui 白名单内，不自动回退到旧文件通道。
 
 同日实机预览修正：原生公路车库的 `subconstructions` 包含自身 VEHICLE_DEPOT 子实体，不能按列表非空拒绝；仅允许与已校验 `depots[1]` 相同的子实体，其他附属对象仍拒绝。引擎状态增加 `depotRemovalFingerprintVersion=2`；49 项专项测试通过。已安装修正，但当前运行实例实测未热更新，仍须重新加载；第一条预览失败在原生提案和施工之前，pending 为空，两座目标均未拆除。
 
@@ -18,7 +18,7 @@ v4 加载后的实机预览识别到合法的入口节点配置替换：西北�
 
 1. 读取新鲜会话、地图身份、pending、速度及目标。暂停游戏；重载后重新解析实体，不复用历史编号。
 2. `preview_depot_removal(entity)` 接受车库或其 construction ID，核对所有权、附属设施、库内车辆、返库车辆、道路及车辆配置，生成一次性 60 秒令牌。
-3. MCP 工具 `commit_depot_removal(preview_token)` 先保存独立的 `tf3_depot_before_<uuid>` 存档，确认新文件稳定及 SHA-256 后，才提交拆除。原始 headless 命令还需要 `backup_save`，主机要求同会话、同 generation、120 秒内的已验证保存记录，且磁盘签名和摘要未变；仅提供文件名不能通过。
+3. MCP 工具 `commit_depot_removal(preview_token)` 先保存独立的 `tf3_depot_before_<uuid>` 存档，确认新文件稳定及 SHA-256 后，才提交拆除。原始 no_gui 命令还需要 `backup_save`，主机要求同会话、同 generation、120 秒内的已验证保存记录，且磁盘签名和摘要未变；仅提供文件名不能通过。
 4. 引擎再次核对暂停、会话、额度轮次、令牌、目标和依赖签名，持久化操作意图后仅调用一次原生 `createProposalRemove` / `applyProposal`，不启用碰撞忽略。
 5. 读取 `get_depot_removal_operation(operation_id)`，其中 operation ID 就是预览令牌。核对车库及内部节点/边消失、相邻外部道路/节点保留、已有车辆和线路配置保留且未新增 `noPath`。维护覆盖、未来返库和实际运行需要另行验收。
 
@@ -36,7 +36,7 @@ v4 加载后的实机预览识别到合法的入口节点配置替换：西北�
 
 ## 加载和验证
 
-安装 Lua 脚本不会热更新运行实例。保持暂停，先保存当前进度，再加载已保存的存档；重新连接 TF3 MCP 以加载新的 Python 工具定义。新会话读取 `headless_status` 和 `get_validation_state` 的能力标记，再重新绑定地图与实体。不得自动重载、恢复速度或恢复监控。
+安装 Lua 脚本不会热更新运行实例。保持暂停，先保存当前进度，再加载已保存的存档；重新连接 TF3 MCP 以加载新的 Python 工具定义。新会话读取 `no_gui_status` 和 `get_validation_state` 的能力标记，再重新绑定地图与实体。不得自动重载、恢复速度或恢复监控。
 
 首次原生验收在独立保存的测试副本上进行，单个空车库单次提交。静态读回、短时模拟、维护/返库检查和保存重载分别记录，不能把离线通过或目标消失等同于长期模拟安全。
 

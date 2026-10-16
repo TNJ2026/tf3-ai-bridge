@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from tf3_mcp.headless_client import HeadlessClient, HeadlessOutcomeUnknown
-from tf3_mcp.headless_workflows import VehicleBatches, OperationsMonitor
+from tf3_mcp.no_gui_client import NoGuiClient, NoGuiOutcomeUnknown
+from tf3_mcp.no_gui_workflows import VehicleBatches, OperationsMonitor
 from tf3_mcp.ui_log import validate_build_arguments
 from test_ui_extended_reads import query
 
@@ -42,8 +42,8 @@ def test_named_transport_does_not_use_file_fallback(monkeypatch):
     from tf3_mcp import server
     r = Requests()
     r.responses['get_game_state'] = {'speedup': 0}
-    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'headless')
-    monkeypatch.setattr(server, '_headless_client', HeadlessClient(r, 0))
+    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'no_gui')
+    monkeypatch.setattr(server, '_no_gui_client', NoGuiClient(r, 0))
     monkeypatch.setattr(server, 'bridge', lambda: pytest.fail('file bridge used'))
     assert asyncio.run(server.get_game_state()) == {'speedup': 0}
     with pytest.raises(Exception, match='not implemented'):
@@ -54,9 +54,9 @@ def test_named_transport_does_not_use_file_fallback(monkeypatch):
 def test_timeout_never_retries_and_session_change_blocks():
     async def run():
         r = Requests()
-        c = HeadlessClient(r, 0)
+        c = NoGuiClient(r, 0)
         r.outcome = 'timeout_unknown'
-        with pytest.raises(HeadlessOutcomeUnknown, match='read this ID'):
+        with pytest.raises(NoGuiOutcomeUnknown, match='read this ID'):
             await c.call('get_game_state')
         assert len(r.calls) == 1
         r.session = 'reloaded'
@@ -70,12 +70,12 @@ def test_cached_planner_rejects_reloaded_session(monkeypatch):
     from tf3_mcp import server
     from tf3_mcp.map_cache import MapCache
     r = Requests()
-    client = HeadlessClient(r, 0)
+    client = NoGuiClient(r, 0)
     client.session = 'previous'
     cache = MapCache(None)
-    cache.snapshot = {'headlessSession': 'previous'}
-    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'headless')
-    monkeypatch.setattr(server, '_headless_client', client)
+    cache.snapshot = {'no_guiSession': 'previous'}
+    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'no_gui')
+    monkeypatch.setattr(server, '_no_gui_client', client)
     monkeypatch.setattr(server, '_map_cache', cache)
     with pytest.raises(Exception, match='session changed'):
         asyncio.run(server.plan_rail_connection(1, 2))
@@ -120,7 +120,7 @@ def test_vehicle_batch_stops_on_purchase_readback_mismatch(tmp_path):
 def test_snapshot_reassembly_checks_byte_identity(corrupt):
     async def run():
         r = Requests()
-        c = HeadlessClient(r, 0)
+        c = NoGuiClient(r, 0)
         raw = json.dumps(dict(state={'player': 2}, grid='中文' * 5000), ensure_ascii=False).encode()
         r.responses['begin_snapshot'] = dict(snapshot='token', bytes=len(raw), session='current', state={'player': 2})
         def page(args):
@@ -143,7 +143,7 @@ def test_speed_readback_precondition_and_unsupported_bulk():
     async def run():
         r = Requests()
         r.responses['get_game_state'] = {'speedup': 4}
-        c = HeadlessClient(r, 0)
+        c = NoGuiClient(r, 0)
         await c.call('set_game_speed', {'speed': 0})
         assert r.calls[-1] == ('set_game_speed', {'speed': 0, 'expected_speed': 4})
         with pytest.raises(ValueError, match='batch'):
@@ -157,7 +157,7 @@ def test_speed_readback_precondition_and_unsupported_bulk():
 def test_legacy_defaults_adapt_without_discarding_meaningful_options():
     async def run():
         r = Requests()
-        client = HeadlessClient(r, 0)
+        client = NoGuiClient(r, 0)
         await client.call('build_warehouse', dict(x=1, y=2, z=3, rotation=0, name='', preview=True, module_count=4))
         assert r.calls[-1] == ('build_warehouse', dict(x=1, y=2, z=3, rotation=0, module_count=4))
         await client.call('list_facility_resources', dict(kind='construction', search='', limit=100, offset=0))
@@ -168,17 +168,17 @@ def test_legacy_defaults_adapt_without_discarding_meaningful_options():
         assert r.calls[-1] == ('preview_facility_parameter', dict(entity=1, key='capacity', value=2))
         with pytest.raises(ValueError, match='combined replacement'):
             await client.call('configure_facility', dict(entity=1, parameters={'x': 1, 'y': 2}))
-        with pytest.raises(ValueError, match='Unsupported headless option'):
+        with pytest.raises(ValueError, match='Unsupported no_gui option'):
             await client.call('build_road', dict(preview=True, allow_collisions=True))
     asyncio.run(run())
 
 
-def test_terrain_named_commit_uses_verified_headless_save(monkeypatch, tmp_path):
+def test_terrain_named_commit_uses_verified_no_gui_save(monkeypatch, tmp_path):
     from tf3_mcp import server
     class BridgeDir:
         dir = tmp_path / 'bridge'
     monkeypatch.setattr(server, 'bridge', lambda: BridgeDir())
-    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'headless')
+    monkeypatch.setenv('TF3_MCP_TRANSPORT', 'no_gui')
     calls = []
     async def call(command, **args):
         calls.append((command, args))
@@ -196,7 +196,7 @@ def test_unpaused_save_is_rejected_without_sending_save():
         r = Requests()
         r.responses['get_game_state'] = {'speedup': 4}
         with pytest.raises(ValueError, match='Pause before saving'):
-            await HeadlessClient(r, 0).call('save_game', {'slot': 'test'})
+            await NoGuiClient(r, 0).call('save_game', {'slot': 'test'})
         assert [name for name, _ in r.calls] == ['get_game_state']
     asyncio.run(run())
 
@@ -344,7 +344,7 @@ class WorkflowClient:
         self.line = None
         self.fail_assign = False
 
-    map_digest = staticmethod(HeadlessClient.map_digest)
+    map_digest = staticmethod(NoGuiClient.map_digest)
 
     async def status(self):
         return dict(receiver={'session': self.session}, pending=None)
@@ -357,7 +357,7 @@ class WorkflowClient:
         if command == 'get_map_info': return dict(towns=[], industries=[])
         if command == 'buy_vehicles': return dict(bought=[101], failures=[])
         if command == 'assign_vehicles':
-            if self.fail_assign: raise HeadlessOutcomeUnknown('lost callback')
+            if self.fail_assign: raise NoGuiOutcomeUnknown('lost callback')
             self.line = args['line']
             return dict(assigned=[101], line=self.line, failures=[])
         if command == 'get_entity': return dict(components={'TRANSPORT_VEHICLE': {'line': self.line, 'depot': 1}})
@@ -405,7 +405,7 @@ def test_autoaccept_restart_retains_intent_before_send(tmp_path):
             saved = json.loads(path.read_text())
             assert saved['attempted']['1']['result'] == 'intent'
             sent.append(args['uid'])
-            raise HeadlessOutcomeUnknown('unknown')
+            raise NoGuiOutcomeUnknown('unknown')
         one = SubventionAutoAccept(call, path)
         one.dry_run = False
         await one.run_once()
@@ -492,7 +492,7 @@ def test_autoaccept_adapter_previews_terms_before_commit(changed):
         r.responses['preview_subvention'] = dict(preview_token='p', task={'toDeliver': 30 if changed else 20})
         r.responses['commit_subvention'] = dict(verified=False, submitted=True)
         r.responses['get_subvention_operation'] = dict(verified=True, submitted=True)
-        client = HeadlessClient(r, 0)
+        client = NoGuiClient(r, 0)
         if changed:
             with pytest.raises(ValueError, match='terms changed'):
                 await client.call('accept_subvention', {'uid': 1, 'expect': {'toDeliver': 20}})

@@ -1,6 +1,6 @@
 import asyncio
 from tf3_mcp.finance_watch import assess
-from tf3_mcp.headless_workflows import OperationsMonitor
+from tf3_mcp.no_gui_workflows import OperationsMonitor
 
 
 def sample(balance, t=1, session='s', **finance):

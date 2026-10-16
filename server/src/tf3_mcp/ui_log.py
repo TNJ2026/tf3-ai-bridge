@@ -59,7 +59,37 @@ def validate_arguments(command: str, arguments: dict | None) -> dict:
         if not valid:
             raise ValueError(f"Invalid or unsupported argument: {key}")
     return dict(arguments)
+READ_BATCH_COMMANDS = set(SCHEMAS) | {"get_town_overview", "get_town_cargo_supply", "get_industry_bonuses", "get_entity", "get_terrain", "get_vehicle_motion"}
+
+
+def validate_read_batch(arguments):
+    if not isinstance(arguments, dict) or set(arguments) != {"requests"}:
+        raise ValueError("Expected requests only")
+    rows = arguments["requests"]
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 16:
+        raise ValueError("read_batch requires 1-16 requests")
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"command", "arguments"}:
+            raise ValueError("Each request requires command and arguments")
+        cmd = row["command"]
+        if not isinstance(cmd, str) or cmd not in READ_BATCH_COMMANDS:
+            raise ValueError("Command is not allowed in read_batch")
+        if not isinstance(row["arguments"], dict):
+            raise ValueError("Arguments must be an object")
+        (validate_arguments if cmd in SCHEMAS else validate_build_arguments)(cmd, row["arguments"])
+    return arguments
+
+
 BUILD_SCHEMAS = {
+    "execute_project": {}, "resume_project": {}, "get_project": {}, "cancel_project": {},
+    "list_vehicle_liveries": {"vehicle":"entity", "part":"offset"},
+    "reset_vehicle_color": {"vehicle":"entity"},
+    "get_line_appearance": {"line":"entity"},
+    "preview_vehicle_appearance": {"vehicle":"entity", "part":"offset", "model":"text", "r":"ratio", "g":"ratio", "b":"ratio", "reset":"bool"},
+    "commit_vehicle_appearance": {"preview_token":"token", "backup_save":"save_slot", "max_cost":"number", "cash_floor":"number"},
+    "get_vehicle_appearance": {"vehicle": "entity"},
+    "set_vehicle_color": {"vehicle": "entity", "r": "ratio", "g": "ratio", "b": "ratio", "expected_line":"entity"},
+    "read_batch": {"requests": "read_requests"},
     "get_industry_bonuses": {"industry":"entity"},
     "preview_depot_removal": {"entity":"entity"},
     "commit_depot_removal": {"preview_token":"token", "backup_save":"save_slot"},
@@ -175,10 +205,22 @@ BUILD_SCHEMAS = {
 
 
 def validate_build_arguments(command, arguments):
+    if command in ("execute_project", "resume_project", "get_project", "cancel_project"):
+        from .construction_project import validate_project
+        return validate_project(command, arguments)
+    if command == "read_batch":
+        return validate_read_batch(arguments)
     if command not in BUILD_SCHEMAS or not isinstance(arguments, dict):
         raise ValueError("Unsupported UI construction command or arguments")
     schema = BUILD_SCHEMAS[command]
     required = ({"x", "y", "z"} if command.startswith("build_") else set(schema))
+    if command == "set_vehicle_color":
+        required.discard("expected_line")
+    if command == "preview_vehicle_appearance":
+        required = {"vehicle", "part"}
+        choices = ("model" in arguments) + ("r" in arguments or "g" in arguments or "b" in arguments) + (arguments.get("reset") is True)
+        if choices != 1 or (("r" in arguments or "g" in arguments or "b" in arguments) and not {"r","g","b"} <= arguments.keys()):
+            raise ValueError("Choose one model, complete RGB, or reset=true")
     if command == "build_water_facility":
         required.add("kind")
         if 'harbor_size' in arguments and arguments.get('kind') != 'harbor':
@@ -310,7 +352,7 @@ class UiLogRequests:
 
     def prepare_save(self, path: Path, command: str, arguments: dict) -> dict:
         ticket = self._prepare(path, command, validate_save_arguments(command, arguments))
-        ticket['instruction'] = 'Headless save only; no panel dispatch. Read the original ID until file verification completes.'
+        ticket['instruction'] = 'NoGui save only; no panel dispatch. Read the original ID until file verification completes.'
         return ticket
 
     def prepare_load(self, path: Path, command: str, arguments: dict) -> dict:
@@ -325,7 +367,7 @@ class UiLogRequests:
             anchor = f.read(stat.st_size - f.tell())
         request_id = uuid.uuid4().hex
         suffix = " " + json.dumps(arguments, separators=(",", ":"), sort_keys=True) if arguments else ""
-        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > (8192 if command in ("preview_line_edit", "preview_road_graph") else 512):
+        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > (8192 if command in ("preview_line_edit", "preview_road_graph", "read_batch", "execute_project") else 512):
             raise ValueError("UI request exceeds command byte limit")
         self.pending[request_id] = (path, stat.st_ino, stat.st_size, command, anchor, self.clock())
         return {"id": request_id, "input": f"{request_id} {command}{suffix}",

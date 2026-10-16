@@ -2,7 +2,7 @@
 
 ## v32 实现更新
 
-用户选择先实现有明确路径的迁移。当前已补充具名工具新通道路由、组件选择/分页、整体冻结规划快照、2～32 站复杂线路编辑、持久车辆批次，以及自动接取适配与显式只读监控。离线回归及有限实机验收已完成：两站重排与恢复、停运标记批次及重启防重放、两轮只读采样、自动接取dry-run。实际接取新任务、批次购车/出售及全部复杂站序组合未实测。详细范围、参数限制和未实现项见 [HEADLESS_MIGRATION.md](reference/HEADLESS_MIGRATION.md)。
+用户选择先实现有明确路径的迁移。当前已补充具名工具新通道路由、组件选择/分页、整体冻结规划快照、2～32 站复杂线路编辑、持久车辆批次，以及自动接取适配与显式只读监控。离线回归及有限实机验收已完成：两站重排与恢复、停运标记批次及重启防重放、两轮只读采样、自动接取dry-run。实际接取新任务、批次购车/出售及全部复杂站序组合未实测。详细范围、参数限制和未实现项见 [NO_GUI_MIGRATION.md](reference/NO_GUI_MIGRATION.md)。
 
 监控和自动接取未开启，历史工程脚本未重放。普通拆除、任意 eval、自动读档、联动多模块以及全部旧参数不在本轮完成范围内。以下保留 v31 审计原文作为迁移前证据，不再作为 v32 功能缺失清单。
 
@@ -21,7 +21,7 @@
 
 | 类别 | 源码事实与影响 | 已有替代／建议 |
 |---|---|---|
-| 1. 旧具名 MCP 工具的统一路由 | `server.py:206` 的 `_call` 仍直接调用 `Bridge.call`，后者写旧 `request.lua`。例如直接调用旧 `get_game_state`、`buy_vehicles` 不会自动走 headless。 | 新通道已支持的功能须显式使用 `send_headless_request` / `read_headless_result`。若要旧工具无缝复用，需要适配层；不能只替换传输后沿用旧参数、超时和重试语义。 |
+| 1. 旧具名 MCP 工具的统一路由 | `server.py:206` 的 `_call` 仍直接调用 `Bridge.call`，后者写旧 `request.lua`。例如直接调用旧 `get_game_state`、`buy_vehicles` 不会自动走 no_gui。 | 新通道已支持的功能须显式使用 `send_no_gui_request` / `read_no_gui_result`。若要旧工具无缝复用，需要适配层；不能只替换传输后沿用旧参数、超时和重试语义。 |
 | 2. 整体规划快照、路由快照及缓存刷新 | `get_planning_snapshot`、`get_route_snapshot`未入新白名单。`capture_planning_snapshot`、`plan_rail_connection`的现场刷新，以及`map_cache_control`的start/refresh仍依赖旧桥接。 | 分页地形、实体查询已有，但未组装成原快照契约。纯离线全局/局部规划、选址、报表可复用已有合规快照；旧快照不能冒充当前现场。 |
 | 3. 通用组件选择及集合分页 | 新`get_entity`只接受`id`，不接收旧`components`参数；`get_component_collection`未接入。默认组件列表不能替代任意受支持组件和长集合的完整分页。 | 已有设施、库存、乘客/货物等专用读取以及`list_map_entities`分页，覆盖若干用途，但未达到旧通用查询接口的参数范围。 |
 | 4. 普通拆除与孤立站点修复 | `bulldoze`、`repair_orphan_street_stop`未接入。 | `preview_test_removal/commit_test_removal`仅允许当前会话由本通道建成并确认的受限对象：无依赖测试边或自有空测试仓库。不能据此拆除既有设施、任意车站或道路。 |

@@ -1,18 +1,9 @@
--- TF3 MCP Bridge: game script side.
---
--- Game scripts have neither sockets nor the io library, so we talk to the external
--- MCP server through the game's own userdata files (app.saveUserdata/loadUserdata,
--- available in the GUI state), stored in <userdata>/local/tf3_mcp/:
---   request.lua    written by the server: {"id": "...", "cmd": "...", "args": {...}}
---   response.lua   written by us:         {"id": "...", "ok": true, "result": ..., "error": "..."}
---   heartbeat.lua  written by us periodically, with environment probe results
--- Each file holds a table { hex = "<hex-encoded JSON>" }, so neither side depends on
--- how the game escapes strings. One request is in flight at a time.
+-- TF3 MCP Bridge: no_gui receiver. Requests arrive through resource files or
+-- the native mod_presets mailbox; responses and heartbeat use structured logs.
+-- The retired fixed request.lua/response.lua transport is not polled.
 
-local BRIDGE_VERSION = "0.12.21"
-local USERDATA_DIR = "tf3_mcp"
-local POLL_INTERVAL = 0.1       -- seconds (wall clock) between request polls
-local HEARTBEAT_INTERVAL = 1.0  -- seconds (wall clock) between heartbeats
+local BRIDGE_VERSION = "0.12.32"
+local NO_GUI_GENERATION = "disabled"
 local MAX_LIST = 2000
 -- Diagnostic installer may pin one audited legacy rejection; never caller supplied.
 local NETWORK_REJECTION_MIGRATION = nil
@@ -333,46 +324,7 @@ local function isCallable(f)
 	return f ~= nil and f ~= false
 end
 
-local function transportAvailable()
-	return type(app) == "table" and isCallable(app.saveUserdata) and isCallable(app.loadUserdata)
-end
-
-local function describe(f)
-	local mt = nil
-	pcall(function() mt = getmetatable(f) end)
-	return type(f) .. " mt=" .. type(mt) .. " call=" .. tostring(type(mt) == "table" and type(mt.__call) or nil)
-end
-
-local function writeMessage(name, text)
-	local ok, err = pcall(app.saveUserdata, USERDATA_DIR, name, { hex = hexEncode(text) })
-	if ok then return true end
-	return false, tostring(err)
-end
-
-local function messageExists(name)
-	local ok, names = pcall(app.getAllUserdata, USERDATA_DIR)
-	if not ok or type(names) ~= "table" then return true end -- can't tell; just try
-	for _, n in ipairs(names) do
-		if n == name then return true end
-	end
-	return false
-end
-
-local function readMessage(name)
-	if not messageExists(name) then return nil end
-	local ok, t = pcall(app.loadUserdata, USERDATA_DIR, name)
-	if ok and type(t) == "table" and type(t.hex) == "string" then
-		return hexDecode(t.hex)
-	end
-	return nil
-end
-
-local function removeMessage(name)
-	if isCallable(app.removeUserdata) then
-		pcall(app.removeUserdata, USERDATA_DIR, name)
-	end
-end
-
+-- Removed legacy file adapter section 0.
 local function userdataFolder()
 	if type(app) ~= "table" or not isCallable(app.getUserDataFolder) then return nil end
 	local ok, v = pcall(app.getUserDataFolder)
@@ -537,7 +489,7 @@ local RECORD_SCHEMAS = {
 -- END GENERATED COMPONENT SCHEMAS
 
 -- Use the verified plural laneConfigs field. Build 40420 does not expose the
--- documented singular laneConfig alias (see headless_frontage_signature reads).
+-- documented singular laneConfig alias (see no_gui_frontage_signature reads).
 RECORD_SCHEMAS["Network.BaseEdge"] = {}
 for key,hint in pairs(RECORD_SCHEMAS["Engine.Component.BaseEdge"]) do
  if key~="laneConfig" then RECORD_SCHEMAS["Network.BaseEdge"][key]=hint end
@@ -1137,6 +1089,9 @@ commands.create_line = function(args, reply)
 		stop.stationGroup = group
 		stop.station = 0
 		stop.terminal = 0
+		stop.waypoints = {}
+		stop.alternativeTerminals = {}
+		stop.maxAdditionalWaitingTime = 0
 		-- The GUI initializes these vectors; Line.Stop.new() leaves them empty.
 		-- Empty load vectors produce "not configured to load any cargo", including passengers.
 		local groupComp = getComponent(group, "STATION_GROUP")
@@ -1891,29 +1846,7 @@ end
 -- request loop
 ------------------------------------------------------------------------------
 
-local lastRequestId = nil
-local lastPoll = -1e9
-local lastHeartbeat = -1e9
-local updateCount = 0
-local requestsHandled = 0
-local lastError = nil
-local startedLogged = false
-local transportLogged = false
-
-local function writeResponse(id, ok, payload)
-	local resp = { id = id, ok = ok }
-	if ok then resp.result = payload else resp.error = tostring(payload) end
-	local okEnc, text = pcall(json.encode, resp)
-	if not okEnc then
-		text = json.encode({ id = id, ok = false, error = "failed to encode result: " .. tostring(text) })
-	end
-	local okW, err = writeMessage("response", text)
-	if not okW then
-		lastError = "write response failed: " .. tostring(err)
-		log(lastError)
-	end
-end
-
+-- Removed legacy file adapter section 1.
 -- Runs a request's handler and calls respond(ok, payload) exactly once.
 -- In the engine state command callbacks fire synchronously, so ASYNC handlers still
 -- respond before this returns there; in the GUI state they respond a few frames later.
@@ -1950,26 +1883,15 @@ end
 -- work in the engine state. The GUI forwards such requests as a script event; the engine
 -- runs them in handleEvent and publishes the encoded response in the game script state,
 -- which guiUpdate reads (read-only) and writes back to the response file.
-local ENGINE_EVENT = "tf3_mcp_request"
-local ENGINE_EVENT_ID = "tf3_mcp"
 local MAX_ENGINE_RESPONSES = 8
 local ENGINE_COMMANDS = {get_notifications=true,get_industry_bonuses=true}   -- filled by the construction commands below
-local pendingEngine = {}     -- request id -> wall clock when forwarded
-local ENGINE_TIMEOUT = 25.0
 local terrainStateBind = nil
 local facilityStateBind = nil
 local prospectionStateBind = nil
 local workflowStateBinders = {}
 local terrainEpoch = tostring(wallClock()) .. ":" .. tostring({})
 
-local function forwardToEngine(req)
-	req.facilityEpoch = terrainEpoch
-	if req.cmd and req.cmd:find("terrain", 1, true) then req.terrainEpoch = terrainEpoch end
-	local cmd = api.cmd.makeScriptingSendEventCmd("tf3_mcp_bridge", ENGINE_EVENT_ID, ENGINE_EVENT, json.encode(req))
-	api.cmd.sendCommand(cmd)
-	pendingEngine[req.id] = wallClock() or 0
-end
-
+-- Removed legacy file adapter section 2.
 local function handleEngineEvent(state, param)
 	local req = json.decode(param or "")
 	if type(req) ~= "table" or req.id == nil then return end
@@ -2018,75 +1940,7 @@ local function handleEngineEvent(state, param)
 	state:set(s)
 end
 
-local function collectEngineResponses(state)
-	if next(pendingEngine) == nil or state == nil then return end
-	local s = tryField(function() return state:get() end)
-	local responses = s and s.responses or {}
-	for _, r in ipairs(responses) do
-		if pendingEngine[r.id] then
-			pendingEngine[r.id] = nil
-			local okW, err = writeMessage("response", r.text)
-			if not okW then lastError = "write response failed: " .. tostring(err) end
-		end
-	end
-	local now = wallClock()
-	if now then
-		for id, sent in pairs(pendingEngine) do
-			if now - sent > ENGINE_TIMEOUT then
-				pendingEngine[id] = nil
-				writeResponse(id, false, "the engine did not answer (is the game running a loaded save?)")
-			end
-		end
-	end
-end
-
-local function handleRequest(req)
-	requestsHandled = requestsHandled + 1
-	if req.engine == true or ENGINE_COMMANDS[req.cmd or ""] then
-		local ok, err = pcall(forwardToEngine, req)
-		if not ok then writeResponse(req.id, false, "could not forward to engine: " .. tostring(err)) end
-		return
-	end
-	runRequest(req, function(ok, payload) writeResponse(req.id, ok, payload) end)
-end
-
-local function pollRequest()
-	local text = readMessage("request")
-	if text == nil or text == "" then return end
-	local req, err = json.decode(text)
-	if req == nil then
-		-- probably caught mid-write; try again next poll
-		lastError = "bad request json: " .. tostring(err)
-		return
-	end
-	if req.id == nil or req.id == lastRequestId then return end
-	lastRequestId = req.id
-	removeMessage("request")
-	handleRequest(req)
-end
-
-local function writeHeartbeat(dt)
-	local hb = {
-		bridgeVersion = BRIDGE_VERSION,
-		updateCount = updateCount,
-		requestsHandled = requestsHandled,
-		dt = dt,
-		clock = wallClock(),
-		time = (type(os) == "table" and type(os.time) == "function") and tryField(os.time) or nil,
-		paused = (dt == 0),
-		lastError = lastError,
-		probe = probe,
-		userdataFolder = userdataFolder(),
-	}
-	local world = tryField(function() return api.engine.util.getWorld() end)
-	if world then
-		local gt = getComponent(world, "GAME_TIME")
-		hb.gameTime = tryField(function() return gt.gameTime end)
-		hb.tickCount = tryField(function() return gt.tickCount end)
-	end
-	writeMessage("heartbeat", json.encode(hb))
-end
-
+-- Removed legacy file adapter section 3.
 ------------------------------------------------------------------------------
 -- construction
 ------------------------------------------------------------------------------
@@ -4958,7 +4812,7 @@ local function networkNodeConfigSnapshot(cfg)
  return out
 end
 
--- Native subventions (补贴任务). get_subventions reads the native game-script state;
+-- Native subventions (琛ヨ创浠诲姟). get_subventions reads the native game-script state;
 -- accept_subvention sends the same "Subvention"/"onAccept" event as the UI button, once per uid.
 -- Automation belongs to the MCP server: update() runs in several unshared Lua states and must
 -- never accept on its own.
@@ -5797,69 +5651,7 @@ commands.bulldoze = function(args)
 end
 ENGINE_COMMANDS.bulldoze = true
 
--- Throttle by wall clock when os.clock exists, otherwise by update count.
-local function due(last, interval)
-	local now = wallClock()
-	if now == nil then
-		return (updateCount - last) >= math.max(1, math.floor(interval * 5)), updateCount
-	end
-	return (now - last) >= interval, now
-end
-
--- Names of every global in this Lua state, to discover what each state exposes.
-local function globalNames()
-	local names = {}
-	for k in pairs(_G) do names[#names + 1] = tostring(k) end
-	table.sort(names)
-	return table.concat(names, ",")
-end
-
--- The engine runs update() from a pool of Lua states (one per "Sim Pool" worker) that
--- do not share module state and have no app module. The single GUI state (guiUpdate)
--- has app.saveUserdata/loadUserdata, so it runs the request loop; the others stay idle.
-local function bridgeTick(dt, stateLabel, state)
-	updateCount = updateCount + 1
-
-	if not startedLogged then
-		startedLogged = true
-		probe.state = stateLabel
-		log("started in " .. stateLabel .. " state, probe:", json.encode(probe))
-		if stateLabel == "gui" then log("gui globals:", globalNames()) end
-	end
-	-- only the single GUI state serves requests; the engine pool states must stay idle
-	if stateLabel ~= "gui" or not transportAvailable() then return end
-	if not transportLogged then
-		transportLogged = true
-		probe.state = stateLabel
-		-- sample file so the external side can verify the on-disk format
-		local okW, errW = writeMessage("probe", json.encode(probe))
-		local okR, errR = pcall(app.loadUserdata, USERDATA_DIR, "probe")
-		log("userdata transport in " .. stateLabel .. " state:",
-			"save=" .. tostring(okW) .. (errW and (" (" .. errW .. ")") or ""),
-			"load=" .. tostring(okR) .. " -> " .. (okR and type(errR) or tostring(errR)),
-			"saveUserdata=" .. describe(app.saveUserdata),
-			"folder=" .. tostring(userdataFolder()))
-	end
-
-	local okAll, err = pcall(function()
-		local pollDue, now = due(lastPoll, POLL_INTERVAL)
-		if pollDue then
-			lastPoll = now
-			pollRequest()
-			collectEngineResponses(state)
-		end
-		local hbDue, now2 = due(lastHeartbeat, HEARTBEAT_INTERVAL)
-		if hbDue then
-			lastHeartbeat = now2
-			writeHeartbeat(dt)
-		end
-	end)
-	if not okAll then
-		lastError = tostring(err)
-		log("update error:", lastError)
-	end
-end
-
+-- Removed legacy file adapter section 4.
 -- Read-only UI fallback: explicit allowlist, bounded request ledger, framed logs.
 -- Independent of userdata transport; never evaluates input as Lua.
 local uiReadRequests, uiReadCount = {}, 0
@@ -7073,7 +6865,7 @@ do
  local SAVED_MUTATION_LIMIT=1024 -- active receipts; reset retires terminal IDs without forgetting them
  local QUOTA_LIMIT=256
  local REPLAY_ID_LIMIT=65536 -- finite storage guard, never reset or silently evict
- local schemas={get_town_overview={town="entity"},get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+ local schemas={execute_project={},resume_project={},get_project={},cancel_project={},list_vehicle_liveries={vehicle="entity",part="offset"},reset_vehicle_color={vehicle="entity"},get_line_appearance={line="entity"},preview_vehicle_appearance={vehicle="entity",part="offset",model="text",r="ratio",g="ratio",b="ratio",reset="bool"},commit_vehicle_appearance={preview_token="token",backup_save="save_slot",max_cost="number",cash_floor="number"},get_vehicle_appearance={vehicle="entity"},set_vehicle_color={vehicle="entity",r="ratio",g="ratio",b="ratio",expected_line="entity"},read_batch={requests="read_requests"},get_town_overview={town="entity"},get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
   get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
   begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
   read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
@@ -7142,7 +6934,7 @@ do
  }
  -- Only audited world-read commands may release incorrectly charged legacy slots.
  -- Previews, mutations, unknown commands and unresolved non-read requests stay protected.
- local pureEngineReads={get_town_overview=true,get_station_removal_operation=true,get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
+ local pureEngineReads={get_project=true,list_vehicle_liveries=true,get_line_appearance=true,get_vehicle_appearance=true,read_batch=true,get_town_overview=true,get_station_removal_operation=true,get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
   list_facilities=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,check_road_junction_path=true,check_network_junction_path=true,
   list_cargo_types=true,get_terrain=true,find_nearby=true,list_facility_resources=true,
   list_industry_resources=true,list_prospections=true,get_prospections=true,get_loans=true,
@@ -7191,7 +6983,32 @@ do
   end
   return count==#value
  end
+ local batchReads={get_town_overview=true,get_town_cargo_supply=true,get_industry_bonuses=true,get_entity=true,get_terrain=true,get_vehicle_motion=true}
  local function validate(cmd,args)
+  if cmd=="execute_project" or cmd=="resume_project" or cmd=="get_project" or cmd=="cancel_project" then return uiBuild.validateProject(cmd,args) end
+  if cmd=="read_batch" then
+   assert(type(args)=="table" and type(args.requests)=="table","Expected requests")
+   for k in pairs(args) do assert(k=="requests","Unexpected batch argument") end
+   local rows=args.requests;assert(#rows>=1 and #rows<=16,"read_batch requires 1-16 requests")
+   local count=0
+   for k,row in pairs(rows) do
+    count=count+1;assert(type(k)=="number" and k%1==0 and k>=1 and k<=#rows,"Invalid request array")
+    assert(type(row)=="table" and type(row.command)=="string" and type(row.arguments)=="table","Expected command and arguments")
+    for key in pairs(row) do assert(key=="command" or key=="arguments","Unexpected item field") end
+    local basic=uiReadAllowed[row.command]
+    assert(basic or batchReads[row.command],"Command is not allowed in read_batch")
+    if basic then
+     for key,v in pairs(row.arguments) do
+      local kind=basic[key]
+      assert((kind=="bool" and type(v)=="boolean") or
+       ((kind=="limit" or kind=="year") and type(v)=="number" and v%1==0 and v>=1 and v<=(kind=="limit" and 500 or 9999)) or
+       (kind=="carrier" and type(v)=="string" and ({ROAD=true,RAIL=true,TRAM=true,WATER=true,AIR=true})[v]),"Invalid read argument")
+     end
+    else validate(row.command,row.arguments) end
+   end
+   assert(count==#rows,"Invalid request array")
+   return
+  end
   local schema=schemas[cmd]
   assert(schema and type(args)=="table","Unsupported UI construction command or arguments")
   for key,value in pairs(args) do
@@ -7295,7 +7112,7 @@ do
    or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection" or cmd=="reconcile_subvention_rejection" or cmd=="reconcile_facility_rejection") and {"request_id"}
    or cmd=="preview_road" and {"start","end","street_type"} or cmd=="get_entity" and {"id"}
    or cmd=="survey_build_site" and {"x","y"} or (cmd=="list_facilities" or cmd=="list_street_types") and {} or {"entity"}
-  local extraRequired={get_town_overview={"town"},preview_station_removal={"entity"},commit_station_removal={"preview_token","backup_save"},get_station_removal_operation={"operation_id"},get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
+  local extraRequired={list_vehicle_liveries={"vehicle","part"},reset_vehicle_color={"vehicle"},get_line_appearance={"line"},preview_vehicle_appearance={"vehicle","part"},commit_vehicle_appearance={"preview_token","backup_save","max_cost","cash_floor"},get_vehicle_appearance={"vehicle"},set_vehicle_color={"vehicle","r","g","b"},get_town_overview={"town"},preview_station_removal={"entity"},commit_station_removal={"preview_token","backup_save"},get_station_removal_operation={"operation_id"},get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
    check_network_junction_path={"node","from_edge","to_edge","mode"},
    preview_road_upgrade={"edge","street_type"},preview_street_stop={"edge","param","side","two_sided"},commit_edge_edit={"preview_token"},
    preview_facility_module={"entity","slot","resource"},preview_facility_parameter={"entity","key","value"},build_headquarters={"town","x","y","z"},
@@ -7314,6 +7131,31 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   required=extraRequired[cmd] or required
   for _,key in ipairs(required) do assert(args[key]~=nil,"Missing construction argument: "..key) end
  end
+ -- Validate all children before executing any; only synchronous reads are admitted.
+ commands.read_batch=function(args)
+  validate("read_batch",args)
+  local started=assert(wallClock(),"Batch clock unavailable");local bytes=0
+  local out={readOnly=true,readBatchVersion=1,complete=true,results={}}
+  for i,item in ipairs(args.requests) do
+   local row={index=i-1,command=item.command,executed=false,ok=false}
+   if wallClock()-started>0.1 then row.error="time_budget_exceeded"
+   else
+    row.executed=true
+    local ok,value=pcall(commands[item.command],item.arguments)
+    row.ok=ok
+    if ok then row.result=value else row.error=tostring(value):sub(1,512) end
+    local encoded,text=pcall(json.encode,row)
+    if not encoded or #text+bytes>48000 then
+     row.result=nil;row.ok=false;row.error=encoded and "response_size_limit" or "response_encoding_failed"
+    end
+   end
+   if not row.ok then out.complete=false end
+   bytes=bytes+#json.encode(row);out.results[#out.results+1]=row
+  end
+  out.count=#out.results;out.elapsedMs=(wallClock()-started)*1000
+  return out
+ end
+ ENGINE_COMMANDS.read_batch=true
  local function emit(req,ok,value)
   local r={id=req.id,cmd=req.cmd,ok=ok}
   if ok then r.result=value else r.error=tostring(value) end
@@ -7326,6 +7168,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     resultFailureReason=good and "encoded_size_limit" or "encoding_failed",
     encodedBytes=good and #text or nil,maxEncodedBytes=65536})
   end
+  if uiBuild.projectCaptures and uiBuild.projectCaptures[req.id] then uiBuild.projectCaptures[req.id].response=json.decode(text);return end
   local payload=hexEncode(text);local total=math.max(1,math.ceil(#payload/1500))
   for part=1,total do print("[TNJ_UI_READ_V1] id="..req.id.." part="..part.." total="..total.." hex="..payload:sub((part-1)*1500+1,part*1500)) end
  end
@@ -8337,7 +8180,565 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   return reconcile(op)
  end
 
- uiBuild.engine=function(state,param)
+
+ -- Appearance-only native reads. No model replacement, cargo or age mutation.
+ uiBuild.appearance=function(args)
+  local id=requireEntity(args,"vehicle","TRANSPORT_VEHICLE")
+  local v=getComponent(id,"TRANSPORT_VEHICLE")
+  local parts=listOf(v.transportVehicleConfig.vehicles)
+  assert(#parts>0 and #parts<=128,"Unsupported vehicle part count")
+  local out={vehicle=id,owner=ownerOf(id),line=v.line,parts={},readOnly=true,vehicleAppearanceVersion=2,canColor=false,complete=true}
+  for i,part in ipairs(parts) do
+   local p=part.part;local model=api.res.modelRep.get(p.modelId)
+   local mask=tryField(function()return model.metadata.transportVehicle.noCblendMask end)
+   local color=tryField(function()return {r=p.color.x,g=p.color.y,b=p.color.z} end)
+   local known=type(mask)=="boolean" and color and type(color.r)=="number" and type(color.g)=="number" and type(color.b)=="number"
+   out.parts[#out.parts+1]={index=i-1,modelId=p.modelId,color=color,colorable=type(mask)=="boolean" and not mask or false,available=known==true}
+   if not known then out.complete=false end
+   if mask==false then out.canColor=true end
+  end
+  return out
+ end
+ commands.get_vehicle_appearance=uiBuild.appearance
+ ENGINE_COMMANDS.get_vehicle_appearance=true
+ ENGINE_COMMANDS.set_vehicle_color=true
+
+ commands.get_line_appearance=function(args)
+  local id=requireEntity(args,"line","LINE")
+  assert(ownerOf(id)==api.engine.util.getPlayer(),"Line not owned")
+  local color=getComponent(id,"COLOR").color
+  local vehicles=listOf(api.engine.system.transportVehicleSystem.getLineVehicles(id))
+  assert(#vehicles<=64,"Line exceeds appearance limit")
+  return {line=id,color={r=color.x,g=color.y,b=color.z},vehicles=vehicles,readOnly=true}
+ end
+ ENGINE_COMMANDS.get_line_appearance=true
+ ENGINE_COMMANDS.reset_vehicle_color=true
+ ENGINE_COMMANDS.preview_vehicle_appearance=true
+ ENGINE_COMMANDS.commit_vehicle_appearance=true
+ commands.list_vehicle_liveries=function(args)
+  local id=requireEntity(args,"vehicle","TRANSPORT_VEHICLE")
+  local parts=listOf(getComponent(id,"TRANSPORT_VEHICLE").transportVehicleConfig.vehicles)
+  assert(args.part<#parts,"Invalid part")
+  local current=parts[args.part+1].part.modelId
+  local function group(mid)
+   local name=api.res.modelRep.getName(mid)
+   local g=api.res.modelRep.get(mid).metadata.transportVehicle.groupFileName
+   return type(g)=="string" and g~="" and g or name
+  end
+  local wanted=group(current);local out={vehicle=id,part=args.part,models={},readOnly=true}
+  api.res.modelRep.forEachModelWithMetadata("transportVehicle",function(name)
+   local mid=api.res.modelRep.find(name)
+   if group(mid)==wanted then
+    assert(#out.models<64,"Too many livery variants; narrow catalog required")
+    local info=modelInfo(mid)
+    out.models[#out.models+1]={modelId=mid,resource=api.res.modelRep.getName(mid),name=info.name,yearFrom=info.yearFrom,yearTo=info.yearTo,current=mid==current,requiresCompatibilityPreview=true}
+   end
+  end)
+  return out
+ end
+ ENGINE_COMMANDS.list_vehicle_liveries=true
+ uiBuild.makeAppearanceConfig=function(args)
+  local id=requireEntity(args,"vehicle","TRANSPORT_VEHICLE")
+  assert(ownerOf(id)==api.engine.util.getPlayer(),"Vehicle not owned")
+  local v=getComponent(id,"TRANSPORT_VEHICLE")
+  assert(v.state==api.type.enum.TransportVehicleState.IN_DEPOT,"Appearance replacement requires vehicle in depot")
+  assert(commands.get_game_state({}).speedup==0,"Pause before appearance replacement")
+  assert(#listOf(api.engine.util.vehicle.getVehicleLoadedCargoTypes(id))==0,"Unload before appearance replacement")
+  local old=v.transportVehicleConfig;local source=listOf(old.vehicles)
+  assert(#source>0 and #source<=64 and args.part<#source,"Part index outside consist")
+  local choices=(args.model and 1 or 0)+(args.r~=nil and 1 or 0)+(args.reset==true and 1 or 0)
+  assert(choices==1 and ((args.r==nil and args.g==nil and args.b==nil) or (args.r~=nil and args.g~=nil and args.b~=nil)),"Choose one model, RGB, or reset")
+  local config=api.type.TransportVehicleConfig.new();local parts={}
+  for i,src in ipairs(source) do
+   local part=api.type.TransportVehiclePart.new()
+   part.part.modelId=src.part.modelId;part.part.reversed=src.part.reversed
+   part.part.compartment2loadConfig=listOf(src.part.compartment2loadConfig)
+   part.part.color=api.type.Vec3f.new(src.part.color.x,src.part.color.y,src.part.color.z)
+   part.purchaseTime=src.purchaseTime;part.maintenanceChange=src.maintenanceChange;part.maintenanceState=src.maintenanceState
+   part.autoLoadConfig=listOf(src.autoLoadConfig);parts[i]=part
+  end
+  local target=parts[args.part+1]
+  if args.model then
+   local modelId=resolveModel(args.model);local info=modelInfo(modelId)
+   assert(info and info.yearFrom<=currentYear() and (info.yearTo==0 or info.yearTo>=currentYear()),"Target model unavailable")
+   local function mechanical(mid)
+    local data=toPlain(api.res.modelRep.get(mid).metadata)
+    data.description=nil;data.availability=nil;data.cost=nil
+    if data.transportVehicle then data.transportVehicle.groupFileName=nil;data.transportVehicle.noCblendMask=nil end
+    return stableDataSignature(data)
+   end
+   assert(mechanical(modelId)==mechanical(target.part.modelId),"Livery mechanical metadata differs; use vehicle replacement workflow")
+   target.part.modelId=modelId
+  else
+   assert(api.res.modelRep.get(target.part.modelId).metadata.transportVehicle.noCblendMask==false,"Part cannot be recolored")
+   target.part.color=args.reset and api.type.Vec3f.new(-1,-1,-1) or api.type.Vec3f.new(args.r,args.g,args.b)
+  end
+  config.vehicles=parts;config.vehicleGroups=listOf(old.vehicleGroups);config.muFileNames=listOf(old.muFileNames)
+  local upper=0
+  for _,part in ipairs(parts) do
+   local newPart=makeVehicleConfig(part.part.modelId).vehicles[1]
+   local price=api.engine.util.vehicle.getPartPrice(newPart)
+   assert(type(price)=="number" and price>=0 and price<1e15,"Native part price unavailable")
+   upper=upper+price
+  end
+  local before=stableDataSignature(toPlain(old,0,nil,"TransportVehicleConfig"))
+  return config,{vehicle=id,part=args.part,costUpperBound=upper,quoteScope="sum of new native part prices; resale credit ignored",nativeCompatibilityVerified=false},before
+ end
+ -- Receiver-owned, bounded construction projects. Every child still enters the
+ -- existing guarded engine dispatcher; no command whitelist or pending bypass.
+ for _,name in ipairs({"execute_project","resume_project","get_project","cancel_project"})do ENGINE_COMMANDS[name]=true end
+ uiBuild.projectCaptures={}
+ uiBuild.projectPreviews={preview_road="commit_road",preview_network="commit_network",preview_road_graph="commit_road_graph",
+  build_warehouse="commit_facility",build_heliport="commit_facility",build_helipad="commit_facility",build_airfield="commit_facility",
+  build_water_facility="commit_facility",build_headquarters="commit_facility"}
+ uiBuild.projectTransport={create_line=true,buy_vehicles=true,assign_vehicles=true,accept_departure=true,preview_line_edit=true}
+ uiBuild.projectCash=function(s)
+  local value=s.balance
+  if value==nil then value=s.accountBalance end
+  assert(type(value)=="number" and value==value and math.abs(value)<1e15,"Project cash unavailable")
+  return value
+ end
+ uiBuild.projectFunding=function(s,remaining,job)
+  if job.allowNoCosts then
+   assert(api.res.getBaseConfig().noCosts==true and api.engine.util.finance.getPlayersBalance(s.player)==nil,"Authorized no-cost mode is not enabled")
+   return true
+  end
+  return uiBuild.projectCash(s)-remaining>job.cashFloor+job.reserve
+ end
+ uiBuild.projectChecks={get_vehicle_motion=true,get_entity=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,
+  check_road_junction_path=true,check_network_junction_path=true}
+ uiBuild.projectPath=function(value,path)
+  for key in path:gmatch('[^.]+') do
+   assert(type(value)=="table","Missing project result path: "..path)
+   value=value[tonumber(key) or key];assert(value~=nil,"Unknown project result field: "..path)
+  end
+  return value
+ end
+ uiBuild.projectResolve=function(value,outputs,known,depth)
+  assert((depth or 0)<=12,"Project nesting too deep")
+  if type(value)~="table" then return value end
+  if value['$ref'] then
+   local path=value['$ref'];assert(type(path)=="string" and path:match('^[a-z][a-z0-9_]*%.commit%.[%w_%.]+$'),"Invalid project reference")
+   for k in pairs(value)do assert(k=='$ref',"Invalid reference fields")end
+   assert(known[path:match('^([^.]+)')],"Forward/unknown project reference")
+   if not outputs then return 0 end
+   local v=uiBuild.projectPath(outputs,path)
+   assert(type(v)=="number" and v==v and math.abs(v)<1e15,"Only numeric entity/result references supported")
+   return v
+  end
+  local out={};for k,v in pairs(value)do out[k]=uiBuild.projectResolve(v,outputs,known,(depth or 0)+1)end;return out
+ end
+ uiBuild.validateProjectTransport=function(command,a)
+  assert(type(a)=="table","Transport arguments required")
+  if command=="accept_departure" and a.fleets then
+   for k in pairs(a)do assert(k=="fleets" or k=="seconds","Invalid departure field")end
+   assert(type(a.fleets)=="table" and #a.fleets>=1 and #a.fleets<=8,"Departure requires 1-8 fleets")
+   local n=0;for k in pairs(a.fleets)do n=n+1;assert(type(k)=="number" and k%1==0 and k>=1 and k<=#a.fleets,"Invalid fleet array")end;assert(n==#a.fleets,"Sparse fleets")
+   for _,f in ipairs(a.fleets)do
+    for k in pairs(f)do assert(k=="line" or k=="vehicles","Invalid fleet field")end
+    uiBuild.validateProjectTransport(command,{line=f.line,vehicles=f.vehicles,seconds=a.seconds})
+   end
+   return
+  end
+  if command=="buy_vehicles" then
+   for k in pairs(a)do assert(k=="depot" or k=="model" or k=="count" or k=="mode","Invalid purchase field")end
+   assert(type(a.count)=="number" and a.count%1==0 and a.count>=1 and a.count<=16,"Purchase count must be 1-16")
+   assert(type(a.mode)=="string" and MODE_TO_CARRIER[a.mode],"Explicit native transport mode required")
+   validate(command,{depot=a.depot,model=a.model,count=1})
+  elseif command=="assign_vehicles" or command=="accept_departure" then
+   for k in pairs(a)do assert(k=="vehicles" or k=="line" or k==(command=="assign_vehicles" and "stop_index" or "seconds"),"Invalid fleet field")end
+   assert(type(a.vehicles)=="table" and #a.vehicles>=1 and #a.vehicles<=16,"Fleet requires 1-16 vehicles")
+   local n=0;for k in pairs(a.vehicles)do n=n+1;assert(type(k)=="number" and k%1==0 and k>=1 and k<=#a.vehicles,"Invalid vehicle array")end;assert(n==#a.vehicles,"Sparse vehicles")
+   for _,v in ipairs(a.vehicles)do validate("assign_vehicles",{vehicles={v},line=a.line,stop_index=command=="assign_vehicles" and a.stop_index or 0})end
+   if command=="accept_departure" then assert(type(a.seconds)=="number" and a.seconds%1==0 and a.seconds>=1 and a.seconds<=120,"Observation requires 1-120 seconds")end
+  else validate(command,a)end
+ end
+ uiBuild.projectPurchase=function(a)
+  requireEntity(a,"depot","VEHICLE_DEPOT")
+  assert(ownerOf(a.depot)==api.engine.util.getPlayer(),"Depot not owned")
+  local depot=getComponent(a.depot,"VEHICLE_DEPOT");local mode=api.type.enum.TransportMode[a.mode]
+  assert(mode~=nil and depot.transportModes[mode]==true and #listOf(depot.outNodes)>0,"Depot mode/exit unavailable")
+  if a.mode=="HELICOPTER" then assert(#listOf(api.engine.system.transportVehicleSystem.getDepotVehicles(a.depot))<5,"Helicopter parking unavailable")end
+  local model=resolveModel(a.model);local info=modelInfo(model)
+  assert(info and info.carrier==MODE_TO_CARRIER[a.mode],"Model/depot carrier mismatch")
+  assert(readField(api.res.modelRep.get(model).metadata.transportVehicle,"multipleUnitOnly")~=true,"Fixed multiple unit needs consist adapter")
+  local config=makeVehicleConfig(model);local part=config.vehicles[1];part.maintenanceState=1
+  local price=api.engine.util.vehicle.getPartPrice(part)
+  assert(type(price)=="number" and price==price and price>=0 and price<1e15,"Native purchase quote unavailable")
+  return {cost=price,model=model,scope="native part quote and depot mode/exit; departure separately verified"}
+ end
+ uiBuild.projectChild=function(state,job,id,epoch,command,args,row,phase)
+  job.sequence=job.sequence+1;assert(job.sequence<=256,"Project child request limit")
+  local childId=id:sub(1,28)..string.format('%04x',job.sequence)
+  local root=state:get() or {};local ledger=root.uiConstruction or {}
+  assert(not (ledger.requests or {})[childId] and not (ledger.retiredRequests or {})[childId],"Child ID collision; nothing resent")
+  row.phase=phase;row.requests[#row.requests+1]={id=childId,command=command,phase=phase};root.uiProjects[id]=job;state:set(root)
+  uiBuild.projectCaptures[childId]={}
+  local ok,err=pcall(uiBuild.engine,state,json.encode({id=childId,cmd=command,args=args,facilityEpoch=epoch}),id)
+  local response=uiBuild.projectCaptures[childId].response;uiBuild.projectCaptures[childId]=nil
+  assert(ok,tostring(err));assert(response,"Child result missing; never resend")
+  assert(response.ok,response.error or "Child failed")
+  return response.result
+ end
+ uiBuild.projectTransportStep=function(state,job,step,row,args,child,persist,remaining)
+  local initialBudget=row.budgetLeft or step.max_cost
+  local function budget(cost)
+   local now=commands.get_game_state({})
+   assert(now.speedup==0 and now.player==job.player and now.world==job.world,"Project game state changed")
+   assert(cost<=(row.budgetLeft or step.max_cost) and uiBuild.projectFunding(now,remaining-initialBudget+(row.budgetLeft or step.max_cost),job),"Transport budget/cash exceeded")
+  end
+  row.items=row.items or {};row.budgetLeft=row.budgetLeft or step.max_cost
+  if step.preview=="create_line" then
+   for i,group in ipairs(args.station_groups)do terminalSelection({stops={{stationGroup=group}}},{stop_index=0,station_index=0,terminal=0})end
+   budget(0);row.preview={cost=0,configurationOnly=true,pathVerified=false};persist()
+   if not row.result then row.result=child("create_line",args,row,"commit");persist()end
+   row.phase="accept";persist()
+   local id=row.result.line;assert(ownerOf(id)==job.player,"Created line owner mismatch")
+   local stops=listOf(assert(getComponent(id,"LINE"),"Created line missing").stops)
+   assert(#stops==#args.station_groups,"Created line stop count mismatch")
+   for i,s in ipairs(stops)do assert(s.stationGroup==args.station_groups[i] and s.station==0 and s.terminal==0,"Created line stop mismatch")end
+   return row.result
+  elseif step.preview=="preview_line_edit" then
+   if not row.result then
+    local p=child("preview_line_edit",args,row,"preview");assert(p.configurationOnly and p.cost==0,"Unexpected line quote")
+    budget(0);row.preview=p;persist();row.result=child("commit_line_stop",{preview_token=p.preview_token},row,"commit");persist()
+   end
+   row.phase="accept";persist();assert(row.result.configurationVerified==true,"Line edit not verified")
+   return row.result
+  end
+  local count=step.preview=="buy_vehicles" and args.count or #args.vehicles
+  local out={bought={},assigned={},line=args.line}
+  for i=1,count do
+   local item=row.items[i] or {};row.items[i]=item
+   if not item.result then
+    if step.preview=="buy_vehicles" then
+     local p=uiBuild.projectPurchase(args);budget(p.cost*(count-i+1));item.preview=p;persist()
+     item.result=child("buy_vehicles",{depot=args.depot,model=args.model,count=1},row,"commit");persist()
+    else
+     local v=assert(getComponent(args.vehicles[i],"TRANSPORT_VEHICLE"),"Vehicle missing")
+     assert(ownerOf(args.vehicles[i])==job.player and ownerOf(args.line)==job.player,"Fleet/line owner mismatch")
+     assert(v.state==api.type.enum.TransportVehicleState.IN_DEPOT,"Assignment requires vehicle in depot")
+     budget(0);item.result=child("assign_vehicles",{vehicles={args.vehicles[i]},line=args.line,stop_index=args.stop_index},row,"commit");persist()
+    end
+   end
+   row.phase="accept";persist()
+   if step.preview=="buy_vehicles" then
+    local id=item.result.bought[1];local v=assert(getComponent(id,"TRANSPORT_VEHICLE"),"Purchased vehicle missing")
+    assert(ownerOf(id)==job.player and v.depot==args.depot and v.state==api.type.enum.TransportVehicleState.IN_DEPOT,"Purchase depot/owner readback mismatch")
+    local parts=listOf(v.transportVehicleConfig.vehicles)
+    assert(#parts==1 and parts[1].part.modelId==item.preview.model,"Purchase model readback mismatch")
+    if not item.verified then row.budgetLeft=row.budgetLeft-item.preview.cost;item.verified=true;persist()end
+    out.bought[i]=id
+   else
+    local v=assert(getComponent(args.vehicles[i],"TRANSPORT_VEHICLE"),"Assigned vehicle missing")
+    assert(v.line==args.line and v.userStopped==false and v.noPath==false,"Assignment readback failed")
+    out.assigned[i]=args.vehicles[i];item.verified=true;persist()
+   end
+  end
+  return out
+ end
+ uiBuild.projectDepartureSample=function(args,previous,departed)
+  if args.fleets then
+   local all={accepted=true,vehicles={},positions={}}
+   for _,fleet in ipairs(args.fleets)do
+    local result=uiBuild.projectDepartureSample(fleet,previous,departed);all.accepted=all.accepted and result.accepted
+    for id,value in pairs(result.vehicles)do assert(not all.vehicles[id],"Duplicate departure vehicle across fleets");all.vehicles[id]=value end
+    for id,value in pairs(result.positions)do all.positions[id]=value end
+   end
+   return all
+  end
+  assert(ownerOf(args.line)==api.engine.util.getPlayer(),"Departure line owner mismatch")
+  local problems=api.engine.system.lineSystem.getProblemLines(api.engine.util.getPlayer())
+  assert(type(problems)=="table" or type(problems)=="userdata","Native line problem list unavailable")
+  local fault=false;local unknown=false
+  for _,p in ipairs(listOf(problems))do
+   local id=type(p)=="number" and p or readField(p,"line") or readField(p,"lineId") or readField(p,"entity") or readField(p,"id")
+   if type(id)~="number" then unknown=true elseif id==args.line then fault=true end
+  end
+  local out={accepted=true,vehicles={},positions={}};local seen={}
+  local function finite(v)return type(v)=="number" and v==v and math.abs(v)<1e15 end
+  for _,id in ipairs(args.vehicles)do
+   assert(not seen[id],"Duplicate departure vehicle");seen[id]=true
+   local v=assert(getComponent(id,"TRANSPORT_VEHICLE"),"Departure vehicle missing")
+   assert(ownerOf(id)==api.engine.util.getPlayer() and v.line==args.line,"Departure identity/line mismatch")
+   assert(not fault and v.noPath~=true,"Native line/path fault")
+   local m=commands.get_vehicle_motion({vehicle=id,resolve_native_path=false})
+   local speed=m.ground and m.ground.dyn and m.ground.dyn.speed;local air=m.aircraft and m.aircraft.speed
+   local moving=finite(speed) and math.abs(speed)>0 or finite(air) and math.abs(air)>0
+   local p,q=m.position,previous and previous[tostring(id)]
+   if p and finite(p.x) and finite(p.y) and finite(p.z) then
+    out.positions[tostring(id)]=p
+    if q and (p.x~=q.x or p.y~=q.y or p.z~=q.z) then moving=true end
+   end
+   local valid=not unknown and v.noPath==false and v.userStopped==false and (v.state==api.type.enum.TransportVehicleState.EN_ROUTE or v.state==api.type.enum.TransportVehicleState.AT_TERMINAL)
+   if valid and (m.groundAvailable or m.aircraftAvailable) and moving then departed[tostring(id)]=true end
+   local passed=valid and departed[tostring(id)]==true
+   out.vehicles[tostring(id)]=passed and "accepted" or "departure_pending";out.accepted=out.accepted and passed
+  end
+  return out
+ end
+ uiBuild.projectObserveStart=function(state,job,id,row,args,child,persist)
+  -- Observation is terminal: no construction runs while the simulation advances.
+  row.departed={};row.observation=uiBuild.projectDepartureSample(args,nil,row.departed);persist()
+  if row.observation.accepted then row.committed=true;return true end
+  row.observeArgs=args;row.observeStarted=assert(wallClock());row.observeGeneration=NO_GUI_GENERATION
+  row.observeGameTime=commands.get_game_state({}).gameTime
+  row.phase="commit";persist()
+  local speed=child("set_game_speed",{speed=1,expected_speed=0},row,"commit")
+  assert(speed.verified==true,"Observation speed unknown")
+  row.phase="observe";row.status="observing";job.status="observing";persist()
+  return false
+ end
+ -- update() forbids native command callbacks. Dispatch an event without a
+ -- callback, then sample and restore speed from handleEvent instead.
+ uiBuild.projectSchedule=function(state)
+  local root=state:get() or {};local id=root.uiProjectActive;local job=id and (root.uiProjects or {})[id]
+  if not job or job.status~="observing" then return end
+  if job.observationEvent then
+   if assert(wallClock())-job.observationEvent.at>15 then
+    job.status="unknown";job.error="Observation event delivery unknown; never resend";state:set(root)
+   end
+   return
+  end
+  job.observationSequence=(job.observationSequence or 0)+1
+  job.observationEvent={at=assert(wallClock()),sequence=job.observationSequence,generation=NO_GUI_GENERATION};state:set(root)
+  api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("tf3_mcp_bridge","tnj_bridge_build","tnj_bridge_build.request",
+   {projectObservation=id,sequence=job.observationSequence,generation=NO_GUI_GENERATION}))
+ end
+ uiBuild.projectEvent=function(state,param)
+  local root=state:get() or {};local id=root.uiProjectActive;local job=id and (root.uiProjects or {})[id]
+  local pending=job and job.observationEvent
+  if not pending or param.projectObservation~=id or param.sequence~=pending.sequence or param.generation~=pending.generation or param.generation~=NO_GUI_GENERATION then return end
+  job.observationEvent=nil;state:set(root);uiBuild.projectTick(state)
+ end
+ uiBuild.projectTick=function(state)
+  local native,current=state,state:get() or {};state={get=function()return current end,set=function(_,v)current=v;native:set(v)end}
+  local root=state:get() or {};local id=root.uiProjectActive;local job=id and (root.uiProjects or {})[id]
+  if not job or job.status~="observing" then return end
+  local row=job.steps[job.nextStep]
+  local identityVerified=false
+  local function persist()local r=state:get() or {};r.uiProjects[id]=job;state:set(r)end
+  local ok,err=pcall(function()
+   assert(row.observeGeneration==NO_GUI_GENERATION,"Receiver generation changed during observation; inspect speed and results")
+   assert(not (root.uiConstruction or {}).pending,"Pending mutation during observation")
+   local now=commands.get_game_state({})
+   assert(now.world==job.world and now.player==job.player,"Observation identity changed")
+   assert(type(now.gameTime)=="number" and now.gameTime>=row.observeGameTime,"Simulation time moved backwards during observation")
+   row.observeGameTime=now.gameTime
+   identityVerified=true
+   if now.speedup~=1 then job.status="acceptance_failed";job.error="Game speed changed externally; not overridden";return end
+   local sampled,value=pcall(uiBuild.projectDepartureSample,row.observeArgs,row.observation.positions,row.departed)
+   if sampled then row.observation=value end
+   local expired=assert(wallClock())-row.observeStarted>=row.observeArgs.seconds
+   if sampled and not value.accepted and not expired then persist();return end
+   -- Restore only our own speed, with compare-and-exchange and independent readback.
+   local speed=uiBuild.projectChild(state,job,id,job.session,"set_game_speed",{speed=0,expected_speed=1},row,"commit")
+   assert(speed.verified==true,"Observation pause unknown")
+   row.phase="observe";persist()
+   if not sampled then error(value)end
+   if value.accepted then job.status="complete";row.status="complete";row.committed=true;job.nextStep=job.nextStep+1
+   else job.status="acceptance_failed";job.error="Departure pending at observation time limit" end
+  end)
+  if not ok then
+   job.error=tostring(err):sub(1,1024)
+   job.status=(not identityVerified or (state:get().uiConstruction or {}).pending or row.phase=="commit") and "unknown" or "acceptance_failed"
+  end
+  if job.status~="observing" then
+   row.status=job.status;root=state:get() or {};if job.status~="unknown" then root.uiProjectActive=nil end;state:set(root)
+  end
+  persist()
+ end
+ uiBuild.recoverableObservation=function(root,req)
+  if req.cmd~="resume_project" and req.cmd~="cancel_project" then return false end
+  local job=(root.uiProjects or {})[req.args.project_id];local ledger=root.uiConstruction or {}
+  if not job or job.status~="unknown" or (job.session~=req.facilityEpoch and req.cmd~="cancel_project") or ledger.pendingWorkflow then return false end
+  if type(job.error)~="string" then return false end
+  local row=job.steps[job.nextStep]
+  if not row or job.plan[job.nextStep].preview~="accept_departure" then return false end
+  local legacy=job.error:find('Receiver reloaded during observation; inspect speed and results',1,true) and row.phase=="observe" and #row.requests==1 and not ledger.pending
+  local rejected=false
+  if req.cmd=="cancel_project" and row.phase=="commit" and #row.requests==2 and job.error:find('Callbacks are currently disallowed',1,true) then
+   local request=row.requests[2];local receipt=(ledger.requests or {})[request.id]
+   rejected=request.command=="set_game_speed" and ledger.pending==request.id and receipt and receipt.cmd=="set_game_speed" and receipt.status=="error" and receipt.ok==false and
+    type(receipt.result)=="string" and receipt.result:find('Callbacks are currently disallowed',1,true)~=nil and commands.get_game_state({}).speedup==0
+  end
+  if not legacy and not rejected then return false end
+  for i=1,job.nextStep-1 do if job.steps[i].status~="complete" then return false end end
+  local request=row.requests[1];local receipt=(ledger.requests or {})[request.id]
+  local result=receipt and receipt.result
+  return request.command=="set_game_speed" and receipt and receipt.cmd=="set_game_speed" and receipt.status=="returned" and receipt.ok==true and
+   type(result)=="table" and result.verified==true and result.speedup==1 and result.previousSpeed==0
+ end
+ uiBuild.validateProject=function(cmd,a)
+  assert(type(a)=="table" and type(a.project_id)=="string" and #a.project_id==32 and a.project_id:match('^[0-9a-f]+$'),"Project id must be 32 hex characters")
+  local allowed={project_id=true};if cmd=="execute_project" or cmd=="resume_project" then allowed.backup_save=true;assert(type(a.backup_save)=="string" and #a.backup_save<=80 and a.backup_save:match('^[%w_%-]+$'),"Invalid backup slot")end
+  local function money(v)return type(v)=="number" and v==v and v>=0 and v<1e15 end
+  if cmd=="execute_project" then
+   allowed.steps=true;allowed.cash_floor=true;allowed.reserved_cash=true
+   allowed.allow_no_costs=true;assert(a.allow_no_costs==nil or type(a.allow_no_costs)=="boolean","Invalid no-cost authorization")
+   assert(money(a.cash_floor) and a.cash_floor>=5000000 and money(a.reserved_cash),"Invalid project cash floor/reserve")
+   assert(type(a.steps)=="table" and #a.steps>=1 and #a.steps<=8,"Project requires 1-8 steps")
+   local known={};local count=0
+   for index,s in pairs(a.steps)do
+    count=count+1;assert(type(index)=="number" and index%1==0 and index>=1 and index<=#a.steps,"Invalid project step array")
+   end
+   assert(count==#a.steps,"Sparse project steps")
+   for index,s in ipairs(a.steps)do
+    assert(type(s)=="table" and type(s.id)=="string" and #s.id<=32 and s.id:match('^[a-z][a-z0-9_]*$') and not known[s.id],"Invalid/duplicate step id")
+    for k in pairs(s)do assert(({id=true,preview=true,arguments=true,max_cost=true,checks=true})[k],"Invalid step field")end
+    assert((uiBuild.projectPreviews[s.preview] or uiBuild.projectTransport[s.preview]) and money(s.max_cost),"Unsupported project preview/budget")
+    local args=uiBuild.projectResolve(s.arguments,nil,known)
+    if uiBuild.projectTransport[s.preview] then uiBuild.validateProjectTransport(s.preview,args);assert(s.preview=="buy_vehicles" or s.max_cost==0,"Non-purchase transport budget must be zero")
+    else validate(s.preview,args) end
+    known[s.id]=true
+    if s.preview=="accept_departure" then assert(index==#a.steps and type(s.checks)=="table" and next(s.checks)==nil,"Departure must be last with built-in checks")end
+    assert(type(s.checks)=="table" and #s.checks>=(s.preview=="accept_departure" and 0 or 1) and #s.checks<=4,"Independent acceptance checks required")
+    local n=0;for k in pairs(s.checks)do n=n+1;assert(type(k)=="number" and k%1==0 and k>=1 and k<=#s.checks,"Invalid check array")end
+    assert(n==#s.checks,"Sparse checks")
+    for _,c in ipairs(s.checks)do
+     for k in pairs(c)do assert(k=="command" or k=="arguments" or k=="expect","Invalid check field")end
+     assert(uiBuild.projectChecks[c.command],"Acceptance command not allowed")
+     validate(c.command,uiBuild.projectResolve(c.arguments,nil,known))
+     assert(type(c.expect)=="table","Expected fields required");local n=0
+     for path,value in pairs(c.expect)do
+      n=n+1;assert(type(path)=="string" and path:match('^[%w_]+[%.%w_]*$') and not path:find('..',1,true) and path:sub(-1)~='.',"Invalid result path")
+      local v=uiBuild.projectResolve(value,nil,known)
+      assert(type(v)=="boolean" or type(v)=="string" and #v<=256 or type(v)=="number" and v==v and math.abs(v)<1e15,"Expected scalar required")
+     end
+     assert(n>=1 and n<=8,"Expected fields limit")
+    end
+   end
+  end
+  for k in pairs(a)do assert(allowed[k],"Unexpected project argument")end
+ end
+ uiBuild.runProject=function(state,req)
+  local root=state:get() or {};root.uiProjects=root.uiProjects or {};local jobs=root.uiProjects
+  local id=req.args.project_id;local job=jobs[id]
+  local function persist()local r=state:get() or {};r.uiProjects=jobs;state:set(r)end
+  local function summary()
+   return {project_id=id,projectBatchVersion=2,status=job.status,next_step=job.nextStep-1,steps=job.steps,
+    error=job.error,session=job.session,backup_save=job.backup,acceptanceScope="declared construction checks and optional actual departure; not service quantities",complete=job.status=="complete"}
+  end
+  if req.cmd=="get_project" then assert(job,"Unknown project");return summary()end
+  if uiBuild.recoverableObservation(root,req) then
+   local now=commands.get_game_state({});assert(now.player==job.player and now.world==job.world and (now.speedup==0 or now.speedup==1),"Observation recovery identity/speed changed")
+   local row=job.steps[job.nextStep]
+   -- Verify all affected identities and native faults before resolving the proven
+   -- adapter-only rejection. Never reconcile a missing mutation callback here.
+   uiBuild.projectDepartureSample(row.observeArgs,nil,{})
+   if (root.uiConstruction or {}).pending then
+    -- Exact native dispatch rejection, manually paused and independently read.
+    -- Keep the failed receipt; this is not a missing callback or a replay.
+    local journal=root.uiConstruction;local receipt=journal.requests[journal.pending]
+    receipt.reconciliation={reason="callback-disallowed-before-dispatch",verifiedSpeed=now.speedup,session=req.facilityEpoch}
+    journal.pending=nil;state:set(root)
+   end
+   if now.speedup==1 then
+    uiBuild.projectChild(state,job,id,req.facilityEpoch,"set_game_speed",{speed=0,expected_speed=1},row,"commit")
+   end
+   job.observationReconciliation={reason=job.error,verifiedSpeedReceipt=row.requests[1].id,originalSession=job.session,verifiedSession=req.facilityEpoch}
+   job.status="acceptance_failed";row.phase="observe";root=state:get() or {};root.uiProjectActive=nil;state:set(root);persist()
+  end
+  if req.cmd=="cancel_project" then
+   assert(job and (job.session==req.facilityEpoch or job.observationReconciliation and job.observationReconciliation.verifiedSession==req.facilityEpoch),"Unknown/stale project")
+   assert(job.status~="unknown" and job.status~="running" and job.status~="observing" and not (root.uiConstruction or {}).pending,"Cannot cancel an unknown/active mutation")
+   if job.status~="complete" then job.status="cancelled";persist()end;return summary()
+  end
+  assert(not root.uiProjectActive and not (root.uiConstruction or {}).pending and not (root.uiConstruction or {}).pendingWorkflow,"Another mutation/project unresolved")
+  local current=commands.get_game_state({});assert(current.speedup==0,"Pause before executing a construction project")
+  if req.cmd=="execute_project" then
+   assert(not job,"Project id already exists; inspect it, never replay")
+   local count=0;for _ in pairs(jobs)do count=count+1 end;assert(count<32,"Project journal limit reached")
+   job={session=req.facilityEpoch,player=current.player,world=current.world,plan=req.args.steps,
+    cashFloor=req.args.cash_floor,reserve=req.args.reserved_cash,allowNoCosts=req.args.allow_no_costs==true,steps={},nextStep=1,sequence=0,status="blocked",outputs={},calls={}}
+   for _,s in ipairs(job.plan)do job.steps[#job.steps+1]={id=s.id,status="not_started",requests={}}end
+   jobs[id]=job;persist()
+  else
+   assert(job and job.session==req.facilityEpoch and job.player==current.player and job.world==current.world,"Project identity changed; no automatic cross-session continuation")
+   assert(job.status=="blocked" or job.status=="acceptance_failed" or job.status=="yielded","Project cannot resume; inspect unknown results without resending")
+  end
+  job.calls=job.calls or {};if job.calls[req.id] then return summary()end
+  local callCount=0;for _ in pairs(job.calls)do callCount=callCount+1 end;assert(callCount<32,"Project continuation limit")
+  job.calls[req.id]=true;persist()
+  job.backup=req.args.backup_save;job.error=nil
+  local remaining=0;local operations=0
+  for i=job.nextStep,#job.plan do
+   local s=job.plan[i]
+   if not job.steps[i].committed then
+    remaining=remaining+(job.steps[i].budgetLeft or s.max_cost)
+    operations=operations+(s.preview=="buy_vehicles" and s.arguments.count or s.preview=="assign_vehicles" and #s.arguments.vehicles or 2)
+   end
+   operations=operations+#s.checks
+  end
+  assert(uiBuild.projectFunding(current,remaining,job),"Whole remaining project exceeds available cash")
+  local ledger=(state:get() or {}).uiConstruction or {requests={},tokens={},count=0};local q=quotaState(ledger)
+  assert(q.used+operations<=QUOTA_LIMIT and ledger.count+operations<SAVED_MUTATION_LIMIT,"Project needs more operation quota; reset outside project")
+  job.status="running";root=state:get() or {};root.uiProjectActive=id;state:set(root);persist()
+  local started=wallClock();local known={};for _,s in ipairs(job.plan)do known[s.id]=true end
+  local function child(command,args,row,phase)
+   return uiBuild.projectChild(state,job,id,req.facilityEpoch,command,args,row,phase)
+  end
+  local ok,err=pcall(function()
+   for i=job.nextStep,#job.plan do
+    local step,row=job.plan[i],job.steps[i];job.nextStep=i
+    if i>1 and wallClock()-started>20 then job.status="yielded";return end
+    if step.preview=="accept_departure" then
+     local args=uiBuild.projectResolve(step.arguments,job.outputs,known)
+     if not uiBuild.projectObserveStart(state,job,id,row,args,child,persist) then return end
+    elseif not row.committed then
+     row.status="previewing";persist()
+     if uiBuild.projectTransport[step.preview] then
+      local reserved=row.budgetLeft or step.max_cost
+      local built=uiBuild.projectTransportStep(state,job,step,row,uiBuild.projectResolve(step.arguments,job.outputs,known),child,persist,remaining)
+      row.committed=true;remaining=remaining-reserved;job.outputs[step.id]={commit=built};row.status="checking";persist()
+     else
+     local p=child(step.preview,uiBuild.projectResolve(step.arguments,job.outputs,known),row,"preview")
+     local check=p.check or p
+     assert(p.preview==true and type(p.preview_token)=="string" and check.ok==true and
+      not check.structural_only and check.nativePreviewPassed~=false and not check.collisionsUnchecked and
+      not p.blocked and not check.blocked and not check.critical and not check.placementBlocked and
+      type(check.collisions)=="table" and next(check.collisions)==nil,"Full native collision-free preview required")
+     local cost=check.cost;assert(type(cost)=="number" and cost==cost and cost>=0 and cost<=step.max_cost,"Missing/invalid quote or step budget exceeded")
+     row.quote=cost;row.preview_token=p.preview_token
+     local now=commands.get_game_state({})
+     assert(now.speedup==0 and now.player==job.player and now.world==job.world,"Project game state changed")
+     assert(uiBuild.projectFunding(now,remaining,job),"Cash/remaining commitments changed")
+     local args={preview_token=p.preview_token};local commit=uiBuild.projectPreviews[step.preview]
+     if commit=="commit_road_graph" then args.backup_save=job.backup end
+     row.status="committing";persist()
+     local built=child(commit,args,row,"commit")
+     assert(built.built==true and built.verified==true and not (state:get().uiConstruction or {}).pending,"Construction not independently verified; never resend")
+     row.committed=true;remaining=remaining-step.max_cost
+     -- Compact responses are bounded, but preserve numeric IDs for subsequent references.
+     assert(#json.encode(built)<=12000,"Commit result too large; preserve committed state and inspect")
+     job.outputs[step.id]={commit=built};row.status="checking";persist()
+     end
+    end
+    row.checks={}
+    for _,c in ipairs(step.checks)do
+     local result=child(c.command,uiBuild.projectResolve(c.arguments,job.outputs,known),row,"accept")
+     local evidence={command=c.command,fields={}}
+     for path,wanted in pairs(c.expect)do
+      local actual=uiBuild.projectPath(result,path);local expected=uiBuild.projectResolve(wanted,job.outputs,known)
+      assert(type(actual)==type(expected) and actual==expected,"Acceptance mismatch: "..path)
+      evidence.fields[path]=actual
+     end
+     row.checks[#row.checks+1]=evidence;persist()
+    end
+    row.status="complete";row.phase=nil;job.nextStep=i+1;persist()
+   end
+   job.status="complete"
+  end)
+  if not ok then
+   local row=job.steps[job.nextStep];job.error=tostring(err):sub(1,1024)
+   if (state:get().uiConstruction or {}).pending or row and row.phase=="commit" and not row.committed then job.status="unknown"
+   elseif row and row.committed then job.status="acceptance_failed" else job.status="blocked" end
+   if row then row.status=job.status end
+  end
+  root=state:get() or {};if job.status~="unknown" and job.status~="observing" then root.uiProjectActive=nil end;state:set(root);persist()
+  return summary()
+ end
+ uiBuild.engine=function(state,param,projectContext)
   -- Native get() may expose an event-start snapshot. Preserve all nested writes.
   local native,current=state,state:get() or {}
   state={get=function()return current end,set=function(_,v)current=v;native:set(v)end}
@@ -8346,6 +8747,13 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   local valid,why=pcall(validate,req.cmd,req.args)
   if not valid then emit(req,false,why);return end
   assert(type(req.facilityEpoch)=="string","Missing construction session")
+  local projectRoot=state:get() or {}
+  if projectRoot.uiProjectActive and projectRoot.uiProjectActive~=projectContext and not pureEngineReads[req.cmd] and not uiBuild.recoverableObservation(projectRoot,req) then
+   emit(req,false,"Project mutation unresolved; inspect project before new writes");return
+  end
+  if req.cmd=="execute_project" or req.cmd=="resume_project" or req.cmd=="get_project" or req.cmd=="cancel_project" then
+   local ok,result=pcall(uiBuild.runProject,state,req);emit(req,ok,result);return
+  end
   local root=state:get() or {};local ledger=root.uiConstruction or {requests={},tokens={},count=0}
   reclaimReadBudget(ledger);root.uiConstruction=ledger;state:set(root)
   local quota=quotaState(ledger)
@@ -8380,7 +8788,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     ledger.requests={};ledger.count=0
     -- No preview from an earlier round may be committed after resetting.
     ledger.tokens={};ledger.linePreviews={};ledger.edgePreviews={};ledger.workflowTokens={}
-    ledger.stationRemovalPreviews={};ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
+    ledger.stationRemovalPreviews={};ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.appearancePreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
     quota.round=quota.round+1;quota.used=0
     return {reset=true,previous=previous,round=quota.round,used=0,limit=QUOTA_LIMIT,
      remaining=QUOTA_LIMIT,retiredRequestCount=ledger.retiredCount,session=req.facilityEpoch,
@@ -8534,12 +8942,12 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{townOverviewVersion=1,townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,stationRemovalFingerprintVersion=2,stationRemovalVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
+   emit(req,true,{vehicleAppearanceVersion=2,projectBatchVersion=2,readBatchVersion=1,townOverviewVersion=1,townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,stationRemovalFingerprintVersion=2,stationRemovalVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
     roadGraph={command="preview_road_graph",isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1",
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
     roadJunctionBranch={command="preview_network",flag="connect_road_junctions",existingDegree=2,isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1"},
-    durableRequestCount=ledger.count,pending=ledger.pending,mutationLimit=SAVED_MUTATION_LIMIT,
+    durableRequestCount=ledger.count,pending=ledger.pending,activeProject=(state:get() or {}).uiProjectActive,mutationLimit=SAVED_MUTATION_LIMIT,
     operationQuota={version=1,round=quota.round,used=quota.used,limit=QUOTA_LIMIT,
      remaining=math.max(0,QUOTA_LIMIT-quota.used),activeRequestCount=ledger.count-1,
      retiredRequestCount=ledger.retiredCount,replayIdLimit=REPLAY_ID_LIMIT,
@@ -8594,6 +9002,17 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
    state:set(root);emit(req,ok,value);return
   end
+  if req.cmd=="preview_vehicle_appearance" then
+   local ok,value=pcall(function()
+    local config,review,signature=uiBuild.makeAppearanceConfig(req.args)
+    local token=req.id.."_appearance"
+    ledger.appearancePreviews=ledger.appearancePreviews or {}
+    ledger.appearancePreviews[token]={args=req.args,signature=signature,created=wallClock(),epoch=req.facilityEpoch,cost=review.costUpperBound}
+    review.preview_token=token;return review
+   end)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
+   state:set(root);emit(req,ok,value);return
+  end
   if req.cmd=="preview_consist" or req.cmd=="preview_multiple_unit" then
    local ok,value=pcall(function()
     assert(not ledger.pending,"Previous mutation unresolved")
@@ -8634,15 +9053,52 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
    ledger.requests[req.id]={status=ok and "returned" or "rejected",cmd=req.cmd,ok=ok}
    state:set(root);emit(req,ok,value);return
   end
-  if ({set_game_speed=true,commit_consist=true,create_line=true,buy_vehicles=true,assign_vehicles=true,set_vehicle_stopped=true,send_to_depot=true,delete_line=true,sell_vehicles=true,commit_line_stop=true})[req.cmd] then
+  if ({reset_vehicle_color=true,commit_vehicle_appearance=true,set_vehicle_color=true,set_game_speed=true,commit_consist=true,create_line=true,buy_vehicles=true,assign_vehicles=true,set_vehicle_stopped=true,send_to_depot=true,delete_line=true,sell_vehicles=true,commit_line_stop=true})[req.cmd] then
    if ledger.pending then
     ledger.requests[req.id]={status="rejected",cmd=req.cmd,ok=false}
     state:set(root);emit(req,false,"Previous construction outcome unresolved; reconcile before further mutations");return
    end
    local overrideHandler,expectedLine
-   if req.cmd=="set_game_speed" or req.cmd=="commit_consist" or req.cmd=="assign_vehicles" or req.cmd=="delete_line" or req.cmd=="sell_vehicles" or req.cmd=="commit_line_stop" then
+   if req.cmd=="reset_vehicle_color" or req.cmd=="commit_vehicle_appearance" or req.cmd=="set_vehicle_color" or req.cmd=="set_game_speed" or req.cmd=="commit_consist" or req.cmd=="assign_vehicles" or req.cmd=="delete_line" or req.cmd=="sell_vehicles" or req.cmd=="commit_line_stop" then
     local validAssignment,assignmentError=pcall(function()
-     if req.cmd=="set_game_speed" then
+     if req.cmd=="set_vehicle_color" or req.cmd=="reset_vehicle_color" then
+      if req.cmd=="reset_vehicle_color" then req.args.r=-1;req.args.g=-1;req.args.b=-1 end
+      local before=uiBuild.appearance(req.args)
+      assert(req.args.expected_line==nil or before.line==req.args.expected_line,"Line membership changed")
+      assert(before.owner==api.engine.util.getPlayer(),"Vehicle is not owned by current player")
+      assert(before.complete and before.canColor,"Vehicle color unavailable or no color blend mask")
+      overrideHandler=function(args,reply)
+       return sendGameCommand(api.cmd.makeEntitySetColorCmd(args.vehicle,api.type.Vec3f.new(args.r,args.g,args.b)),reply,function()
+        local after=uiBuild.appearance(args)
+        assert(after.owner==before.owner and #after.parts==#before.parts,"Vehicle changed during coloring")
+        for i,p in ipairs(after.parts) do
+         assert(p.available and p.modelId==before.parts[i].modelId,"Vehicle parts changed during coloring")
+         if p.colorable then
+          assert(math.abs(p.color.r-args.r)<0.0001 and math.abs(p.color.g-args.g)<0.0001 and math.abs(p.color.b-args.b)<0.0001,"Color readback mismatch; never retry")
+         end
+        end
+        return {vehicle=args.vehicle,verified=true,before=before,after=after,scope="native part colors; rendered appearance not verified"}
+       end)
+      end
+     elseif req.cmd=="commit_vehicle_appearance" then
+      local t=(ledger.appearancePreviews or {})[req.args.preview_token]
+      if ledger.appearancePreviews then ledger.appearancePreviews[req.args.preview_token]=nil end
+      state:set(root)
+      assert(t and t.epoch==req.facilityEpoch and wallClock()>=t.created and wallClock()-t.created<=60,"Stale appearance preview")
+      local config,review,signature=uiBuild.makeAppearanceConfig(t.args)
+      assert(signature==t.signature and review.costUpperBound==t.cost,"Appearance or price changed")
+      assert(req.args.cash_floor>=5000000 and req.args.max_cost>=review.costUpperBound,"Appearance budget insufficient")
+      assert(commands.get_game_state({}).balance-review.costUpperBound>req.args.cash_floor,"Cash floor would be breached")
+      local wanted=stableDataSignature(toPlain(config,0,nil,"TransportVehicleConfig"))
+      overrideHandler=function(_,reply)
+       return sendGameCommand(api.cmd.makeVehicleReplaceCmd(t.args.vehicle,config),reply,function()
+        local actual=getComponent(t.args.vehicle,"TRANSPORT_VEHICLE")
+        assert(ownerOf(t.args.vehicle)==api.engine.util.getPlayer() and actual.state==api.type.enum.TransportVehicleState.IN_DEPOT,"Vehicle identity/state changed")
+        assert(stableDataSignature(toPlain(actual.transportVehicleConfig,0,nil,"TransportVehicleConfig"))==wanted,"Appearance config readback mismatch; never retry")
+        return {vehicle=t.args.vehicle,verified=true,after=uiBuild.appearance(t.args),costUpperBound=review.costUpperBound,backup_save=req.args.backup_save}
+       end)
+      end
+     elseif req.cmd=="set_game_speed" then
       local before=commands.get_game_state({})
       assert(before.speedup==req.args.expected_speed,"Game speed changed; read current state before a new request")
       overrideHandler=function(args,reply)
@@ -8728,7 +9184,8 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     local function entity(v)return type(v)=="number" and v%1==0 and v>=0 and v<2147483647 end
     local complete=false
     if ok and type(value)=="table" then
-     if req.cmd=="set_game_speed" then complete=value.verified==true and value.speedup==req.args.speed and value.previousSpeed==req.args.expected_speed
+     if req.cmd=="set_vehicle_color" or req.cmd=="reset_vehicle_color" or req.cmd=="commit_vehicle_appearance" then complete=value.verified==true and (req.cmd=="commit_vehicle_appearance" or value.vehicle==req.args.vehicle)
+     elseif req.cmd=="set_game_speed" then complete=value.verified==true and value.speedup==req.args.speed and value.previousSpeed==req.args.expected_speed
      elseif req.cmd=="commit_consist" then complete=type(value.bought)=="table" and #value.bought==1 and entity(value.bought[1])
      elseif req.cmd=="create_line" then complete=entity(value.line)
      elseif req.cmd=="buy_vehicles" then
@@ -9022,108 +9479,28 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
  end
 end
 
--- Bounded, read-only ingress experiment. This does not dispatch commands. The
--- installed native base/init.lua calls resolveutil.loadfile(resolved) and then
--- chunk(); its require cache is separate. Whether loadfile sees changed disk
--- bytes must be verified live before using this as a request transport.
--- Disabled after build 40420 returned the initial marker for all 120 reads,
--- despite an atomic on-disk replacement. This is not a usable live inbox.
-local ENABLE_RESOURCE_INGRESS_PROBE = false
-local ingressProbe = {last=nil, started=nil, value=nil, stopped=false, reads=0}
-local function probeResourceIngress()
-	if ingressProbe.stopped or type(resolveutil) ~= "table" or type(resolveutil.loadfile) ~= "function" then return end
-	local now = wallClock()
-	if not now then ingressProbe.stopped=true;return end
-	if ingressProbe.last and now-ingressProbe.last < 1 then return end
-	ingressProbe.started=ingressProbe.started or now
-	ingressProbe.last=now
-	if now-ingressProbe.started > 120 then
-		ingressProbe.stopped=true
-		log("[TNJ_INGRESS_PROBE_V1]", json.encode({status="ended",reads=ingressProbe.reads,session=terrainEpoch}))
-		return
-	end
-	local ok,value=pcall(function()
-		local chunk,why=resolveutil.loadfile("tnj_tf3_ai_bridge::/tf3_mcp_bridge/ingress_probe.lua")
-		assert(type(chunk)=="function",tostring(why))
-		local v=chunk()
-		assert(type(v)=="string" and #v<=64 and v:match("^[a-z0-9_-]+$"),"Invalid ingress probe value")
-		return v
-	end)
-	if not ok then
-		ingressProbe.stopped=true
-		log("[TNJ_INGRESS_PROBE_V1]",json.encode({status="error",error=tostring(value),session=terrainEpoch}))
-		return
-	end
-	ingressProbe.reads=ingressProbe.reads+1
-	if value~=ingressProbe.value then
-		ingressProbe.value=value
-		log("[TNJ_INGRESS_PROBE_V1]",json.encode({status="observed",value=value,reads=ingressProbe.reads,session=terrainEpoch}))
-	end
-end
-
--- Separate first-read experiment: each path is read exactly once. Kept off in
--- release builds. A host watcher replaces a marker AFTER the ready log and
--- BEFORE its first read; this distinguishes native bytecode cache from VFS data.
-local ENABLE_FIRST_READ_PROBE = false
-local firstReadProbe = {slot=1, due=nil, stopped=false}
-local function probeFirstReadIngress()
-	if firstReadProbe.stopped then return end
-	local now=wallClock()
-	if not now or type(resolveutil)~="table" or type(resolveutil.loadfile)~="function" then
-		firstReadProbe.stopped=true
-		log("[TNJ_FIRST_READ_V1]",json.encode({status="error",error="loader or clock unavailable",session=terrainEpoch}))
-		return
-	end
-	local slot=firstReadProbe.slot
-	if not firstReadProbe.due then
-		firstReadProbe.due=now+30
-		log("[TNJ_FIRST_READ_V1]",json.encode({status="ready",slot=slot,session=terrainEpoch}))
-		return
-	end
-	if now<firstReadProbe.due then return end
-	-- A delayed tick must not consume a marker long after the observer timed out.
-	if now>firstReadProbe.due+30 then
-		firstReadProbe.stopped=true
-		log("[TNJ_FIRST_READ_V1]",json.encode({status="error",error="read window expired",slot=slot,session=terrainEpoch}))
-		return
-	end
-	local ok,value=pcall(function()
-		local path="tnj_tf3_ai_bridge::/tf3_mcp_bridge/ingress_first_read_v1_"..slot..".lua"
-		local chunk,why=resolveutil.loadfile(path)
-		assert(type(chunk)=="function",tostring(why))
-		local v=chunk()
-		assert(type(v)=="string" and #v<=64 and v:match("^[a-z0-9_-]+$"),"Invalid marker")
-		return v
-	end)
-	log("[TNJ_FIRST_READ_V1]",json.encode({status=ok and "observed" or "error",slot=slot,value=tostring(value),session=terrainEpoch}))
-	if not ok or slot==2 then firstReadProbe.stopped=true;return end
-	firstReadProbe.slot=slot+1
-	firstReadProbe.due=nil
-end
-
 -- Opt-in bounded transport: installer provides a unique generation of indexed
 -- resource slots. Every slot is read once, including empty ones. Never recycle
 -- cached filenames or automatically dispatch after a session reload.
-local HEADLESS_GENERATION = "disabled"
-local HEADLESS_ON_DEMAND = false
-local HEADLESS_USERDATA = false
+local NO_GUI_ON_DEMAND = false
+local NO_GUI_USERDATA = false
 -- Same command-specific limit in the ingress and the construction dispatcher.
 function uiBuild.inputLimit(text)
-	return type(text)=="string" and (text:match("^[0-9a-f]+ preview_line_edit ") or text:match("^[0-9a-f]+ preview_road_graph ")) and 8192 or 512
+	return type(text)=="string" and (text:match("^[0-9a-f]+ preview_line_edit ") or text:match("^[0-9a-f]+ preview_road_graph ") or text:match("^[0-9a-f]+ read_batch ") or text:match("^[0-9a-f]+ execute_project ")) and 8192 or 512
 end
-local headless = {slot=1,due=nil,stopped=false,seen={},order={},saveIds={},saveCount=0}
-function headless.canSave()
+local no_gui = {slot=1,due=nil,stopped=false,seen={},order={},saveIds={},saveCount=0}
+function no_gui.canSave()
 	-- Native bindings can be callable tables with a hidden metatable.
 	return type(app)=="table" and (type(app.saveGame)=="function" or type(app.saveGame)=="table")
 end
-function headless.canLoad()
+function no_gui.canLoad()
 	return type(app)=="table" and isCallable(app.loadGame) and isCallable(app.findAllSavegames)
 		and isCallable(app.setWaitForStartReadyGame) and type(app.SaveGameNamespace)=="table"
 		and isCallable(app.SaveGameNamespace.getSavegame) and api.type.SavegameId~=nil
 end
 -- Same native entry and identifier construction as gui/menu/savegame_react_util.tl.
 -- Acknowledgement precedes the destructive state transition and is NOT completion.
-function headless.load(input)
+function no_gui.load(input)
 	local id,cmd,raw=input:match("^([0-9a-f]+) ([a-z_]+) (.+)$")
 	assert(id and #id==32 and cmd=="load_game" and raw:match("^%s*{"),"Invalid load request")
 	local args=json.decode(raw)
@@ -9136,7 +9513,7 @@ function headless.load(input)
 		assert(not ({con=true,prn=true,aux=true,nul=true})[lower] and not lower:match("^com%d$") and not lower:match("^lpt%d$"),"Reserved load slot")
 	end
 	assert(args.slot~=args.backup_save,"Load target must differ from backup")
-	assert(headless.canLoad(),"Native load API unavailable")
+	assert(no_gui.canLoad(),"Native load API unavailable")
 	local current=commands.get_game_state({});assert(current.speedup==0,"Pause before loading")
 	local namespace=app.SaveGameNamespace.getSavegame()
 	local selected,count=nil,0
@@ -9146,7 +9523,7 @@ function headless.load(input)
 	assert(count==1 and selected.size>0,"Load target missing, empty or ambiguous")
 	local saveId=api.type.SavegameId.new()
 	saveId.path=selected.path;saveId.saveGameName=selected.saveName;saveId.saveGameNamespace=namespace
-	headless.stopped=true -- Never process another command in the departing session, even on error.
+	no_gui.stopped=true -- Never process another command in the departing session, even on error.
 	local encoded=json.encode({id=id,cmd=cmd,ok=true,result={requested=true,verified=false,
 		slot=args.slot,session=terrainEpoch,verification="new_session_and_readback_required"}})
 	local payload=hexEncode(encoded);local total=math.max(1,math.ceil(#payload/1500))
@@ -9157,7 +9534,7 @@ function headless.load(input)
 end
 -- Saving runs in the application/GUI state without a visible panel or engine event.
 -- Keep the callback empty; the host verifies that the .sav was actually written.
-function headless.save(input)
+function no_gui.save(input)
 	local id,cmd,raw=input:match("^([0-9a-f]+) ([a-z_]+) (.+)$")
 	assert(id and #id==32 and cmd=="save_game","Invalid save request")
 	assert(raw:match("^%s*{"),"Save arguments must be an object")
@@ -9170,11 +9547,11 @@ function headless.save(input)
 	assert(type(slot)=="string" and #slot>=1 and #slot<=80 and slot:match("^[A-Za-z0-9][A-Za-z0-9_%-]*$"),"Invalid save slot")
 	local lower=slot:lower()
 	assert(not ({con=true,prn=true,aux=true,nul=true})[lower] and not lower:match("^com%d$") and not lower:match("^lpt%d$"),"Reserved save slot")
-	assert(not headless.saveIds[id] and headless.saveCount<256,"Save request duplicate or limit reached")
-	assert(headless.canSave(),"Native save API unavailable")
+	assert(not no_gui.saveIds[id] and no_gui.saveCount<256,"Save request duplicate or limit reached")
+	assert(no_gui.canSave(),"Native save API unavailable")
 	local current=commands.get_game_state({})
 	assert(current.speedup==0,"Pause the game before saving")
-	headless.saveIds[id]=true;headless.saveCount=headless.saveCount+1
+	no_gui.saveIds[id]=true;no_gui.saveCount=no_gui.saveCount+1
 	app.saveGame(slot,function() end,false,true)
 	local encoded=json.encode({id=id,cmd=cmd,ok=true,result={requested=true,verified=false,
 		slot=slot,session=terrainEpoch,gameTime=current.gameTime,player=current.player,world=current.world,verification="host_file_check_required"}})
@@ -9185,21 +9562,23 @@ function headless.save(input)
 	end
 	return "Result logged"
 end
-local function headlessTick()
-	if HEADLESS_GENERATION=="disabled" or headless.stopped then return end
+local function no_guiTick()
+	if NO_GUI_GENERATION=="disabled" or no_gui.stopped then return end
 	local function emit(status,extra)
 		local row=extra or {};row.status=status;row.session=terrainEpoch
-		row.generation=HEADLESS_GENERATION;row.slot=headless.slot
-		row.mode=HEADLESS_USERDATA and "userdata" or (HEADLESS_ON_DEMAND and "demand" or "bounded")
-		if HEADLESS_USERDATA then
+		row.generation=NO_GUI_GENERATION;row.slot=no_gui.slot
+		row.mode=NO_GUI_USERDATA and "userdata" or (NO_GUI_ON_DEMAND and "demand" or "bounded")
+		if NO_GUI_USERDATA then
 			row.userdataVersion=1;row.userdataDirectory="mod_presets"
-			row.filename="tnj_mcp_"..HEADLESS_GENERATION.."_request.preset.lua"
+			row.filename="tnj_mcp_"..NO_GUI_GENERATION.."_request.preset.lua"
 		end
-		row.saveGameAvailable=headless.canSave()
-		row.loadGameVersion=1;row.loadGameAvailable=headless.canLoad()
+		row.saveGameAvailable=no_gui.canSave()
+		row.loadGameVersion=1;row.loadGameAvailable=no_gui.canLoad()
 		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
-		row.saveRequestCount=headless.saveCount;row.saveRequestLimit=256
+		row.saveRequestCount=no_gui.saveCount;row.saveRequestLimit=256
 		row.operationQuotaVersion=1
+		row.vehicleAppearanceVersion=2
+		row.projectBatchVersion=2;row.readBatchVersion=1
 		row.townOverviewVersion=1
 		row.stationRemovalFingerprintVersion=2
 		row.stationRemovalVersion=1
@@ -9212,23 +9591,23 @@ local function headlessTick()
 		row.assignmentReconciliationVersion=1
 		row.notificationsVersion=1
 		row.waterFacilityFingerprintVersion=2
-		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192};row.roadGraphVersion=40
-		if HEADLESS_ON_DEMAND and not HEADLESS_USERDATA then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua" end
+		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192,read_batch=8192,execute_project=8192};row.roadGraphVersion=40
+		if NO_GUI_ON_DEMAND and not NO_GUI_USERDATA then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..no_gui.slot..".lua" end
 		row.utc=os.time();row.clock=wallClock()
-		log("[TNJ_HEADLESS_V1]",json.encode(row))
+		log("[TNJ_NO_GUI_V1]",json.encode(row))
 	end
 	local now=wallClock()
-	if not now or (not HEADLESS_USERDATA and (type(resolveutil)~="table" or type(resolveutil.loadfile)~="function")) then
-		headless.stopped=true;emit("stopped",{error="loader or clock unavailable"});return
+	if not now or (not NO_GUI_USERDATA and (type(resolveutil)~="table" or type(resolveutil.loadfile)~="function")) then
+		no_gui.stopped=true;emit("stopped",{error="loader or clock unavailable"});return
 	end
-	if not headless.due then headless.due=now+2;emit("ready",{due=headless.due});return end
-	if now<headless.due then return end
-	if not HEADLESS_ON_DEMAND and now>headless.due+5 then headless.stopped=true;emit("stopped",{error="late update; no replay"});return end
+	if not no_gui.due then no_gui.due=now+2;emit("ready",{due=no_gui.due});return end
+	if now<no_gui.due then return end
+	if not NO_GUI_ON_DEMAND and now>no_gui.due+5 then no_gui.stopped=true;emit("stopped",{error="late update; no replay"});return end
 	local consumed=false
 	local ok,err=pcall(function()
 		local value
-		local mailbox="tnj_mcp_"..HEADLESS_GENERATION.."_request.preset"
-		if HEADLESS_USERDATA then
+		local mailbox="tnj_mcp_"..NO_GUI_GENERATION.."_request.preset"
+		if NO_GUI_USERDATA then
 			local found=false
 			local names=app.getAllUserdata("mod_presets")
 			assert(type(names)=="table","Userdata directory enumeration failed")
@@ -9238,27 +9617,27 @@ local function headlessTick()
 			assert(type(data)=="table" and type(data.hex)=="string" and #data.hex<=32768,"Invalid userdata envelope")
 			value=hexDecode(data.hex)
 		else
-		local filename=HEADLESS_ON_DEMAND and ("s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..headless.slot..".lua") or (headless.slot..".lua")
-		local chunk,why=resolveutil.loadfile("tnj_tf3_ai_bridge::/tf3_mcp_bridge/headless/"..HEADLESS_GENERATION.."/"..filename)
-		if HEADLESS_ON_DEMAND and chunk==nil and type(why)=="string" and why:find("Could not find file",1,true) then return end
+		local filename=NO_GUI_ON_DEMAND and ("s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..no_gui.slot..".lua") or (no_gui.slot..".lua")
+		local chunk,why=resolveutil.loadfile("tnj_tf3_ai_bridge::/tf3_mcp_bridge/no_gui/"..NO_GUI_GENERATION.."/"..filename)
+		if NO_GUI_ON_DEMAND and chunk==nil and type(why)=="string" and why:find("Could not find file",1,true) then return end
 		assert(type(chunk)=="function",tostring(why))
 		value=chunk()
 		end
-		if not HEADLESS_ON_DEMAND and value=="" then return end
-		assert(type(value)=="string" and #value<=16384,"Invalid headless payload")
+		if not NO_GUI_ON_DEMAND and value=="" then return end
+		assert(type(value)=="string" and #value<=16384,"Invalid no_gui payload")
 		local req=json.decode(value)
 		-- Stale persisted mail must never execute in a new session or twice.
 		-- The host keeps the original durable intent; no automatic replay occurs.
-		if HEADLESS_USERDATA and type(req)=="table" and req.generation==HEADLESS_GENERATION
-			and (req.session~=terrainEpoch or (type(req.slot)=="number" and req.slot<headless.slot)) then return end
-		assert(type(req)=="table" and req.session==terrainEpoch and req.generation==HEADLESS_GENERATION and req.slot==headless.slot,"Headless session/slot mismatch")
-		assert(type(req.expires)=="number" and now<=req.expires and req.expires<=headless.due+(HEADLESS_ON_DEMAND and 60 or 5),"Expired headless request")
+		if NO_GUI_USERDATA and type(req)=="table" and req.generation==NO_GUI_GENERATION
+			and (req.session~=terrainEpoch or (type(req.slot)=="number" and req.slot<no_gui.slot)) then return end
+		assert(type(req)=="table" and req.session==terrainEpoch and req.generation==NO_GUI_GENERATION and req.slot==no_gui.slot,"NoGui session/slot mismatch")
+		assert(type(req.expires)=="number" and now<=req.expires and req.expires<=no_gui.due+(NO_GUI_ON_DEMAND and 60 or 5),"Expired no_gui request")
 		assert(type(req.input)=="string","Invalid request input")
 		local id,cmd=req.input:match("^([0-9a-f]+) ([a-z_]+)")
-		assert(id and #id==32 and not headless.seen[id],"Duplicate or invalid request ID")
-		headless.seen[id]=true -- reserve before invoking either existing dispatcher
-		headless.order[#headless.order+1]=id
-		if #headless.order>256 then headless.seen[table.remove(headless.order,1)]=nil end
+		assert(id and #id==32 and not no_gui.seen[id],"Duplicate or invalid request ID")
+		no_gui.seen[id]=true -- reserve before invoking either existing dispatcher
+		no_gui.order[#no_gui.order+1]=id
+		if #no_gui.order>256 then no_gui.seen[table.remove(no_gui.order,1)]=nil end
 		consumed=true
 		if #req.input>uiBuild.inputLimit(req.input) then
 			-- Identity/envelope validated, but no dispatcher has been called.
@@ -9267,24 +9646,24 @@ local function headlessTick()
 			return
 		end
 		emit("consumed",{id=id})
-		if HEADLESS_USERDATA then app.removeUserdata("mod_presets",mailbox) end
+		if NO_GUI_USERDATA then app.removeUserdata("mod_presets",mailbox) end
 		local status
 		if req.kind=="build" then
 			assert(uiBuild.recognizes(req.input),"Unsupported construction command")
-			status=uiBuild.forward(req.input,HEADLESS_ON_DEMAND)
-		elseif req.kind=="read" then status=handleUiRead(req.input,HEADLESS_ON_DEMAND)
-		elseif req.kind=="save" then status=headless.save(req.input)
-		elseif req.kind=="load" then status=headless.load(req.input)
+			status=uiBuild.forward(req.input,NO_GUI_ON_DEMAND)
+		elseif req.kind=="read" then status=handleUiRead(req.input,NO_GUI_ON_DEMAND)
+		elseif req.kind=="save" then status=no_gui.save(req.input)
+		elseif req.kind=="load" then status=no_gui.load(req.input)
 		else error("Unsupported request kind") end
 		emit("dispatched",{id=id,detail=status})
 		assert(status=="Submitted; inspect log" or status=="Result logged","Dispatch failed or unknown: "..tostring(status))
 	end)
-	if not ok then headless.stopped=true;emit("stopped",{error=tostring(err)});return end
-	if headless.stopped then return end
-	if not HEADLESS_ON_DEMAND and headless.slot>=1024 then headless.stopped=true;emit("exhausted");return end
+	if not ok then no_gui.stopped=true;emit("stopped",{error=tostring(err)});return end
+	if no_gui.stopped then return end
+	if not NO_GUI_ON_DEMAND and no_gui.slot>=1024 then no_gui.stopped=true;emit("exhausted");return end
 	-- Never catch up missed frames or perform multiple reads on one update.
-	if not HEADLESS_ON_DEMAND or consumed then headless.slot=headless.slot+1 end
-	headless.due=now+(HEADLESS_ON_DEMAND and 1 or 2);emit("ready",{due=headless.due})
+	if not NO_GUI_ON_DEMAND or consumed then no_gui.slot=no_gui.slot+1 end
+	no_gui.due=now+(NO_GUI_ON_DEMAND and 1 or 2);emit("ready",{due=no_gui.due})
 end
 
 local bridgeScript = {
@@ -9294,31 +9673,27 @@ local bridgeScript = {
 			-- GUI events share the game-script subscription filter. Migrate saves
 			-- that already subscribed only to the original file-channel event.
 			if not state:hasEventSubscriptions() or saved.bridgeSubscriptionsVersion ~= 2 then
-				state:subscribeToEvent(ENGINE_EVENT)
 				state:subscribeToEvent("tnj_bridge_readonly.request")
 				state:subscribeToEvent("tnj_bridge_build.request")
 				saved.bridgeSubscriptionsVersion = 2
 				state:set(saved)
 			end
 		end
-		bridgeTick(dt, "engine", state)
+		if state ~= nil then uiBuild.projectSchedule(state) end
+
 	end,
 
 	handleEvent = function(_userParams, state, _src, id, name, param)
 		if id == "tnj_bridge_build" and name == "tnj_bridge_build.request" then
+			if type(param)=="table" and param.projectObservation then uiBuild.projectEvent(state,param);return end
 			uiBuild.engine(state,param);return
 		end
-		if id == ENGINE_EVENT_ID and name == ENGINE_EVENT then
-			local ok, err = pcall(handleEngineEvent, state, param)
-			if not ok then log("engine request failed:", err) end
-		end
+
 	end,
 
 	guiUpdate = function(_userParams, state, _guiState)
-		if not HEADLESS_USERDATA then bridgeTick(nil, "gui", state) end
-		if ENABLE_RESOURCE_INGRESS_PROBE then probeResourceIngress() end
-		if ENABLE_FIRST_READ_PROBE then probeFirstReadIngress() end
-		headlessTick()
+
+		no_guiTick()
 	end,
 
 	guiHandleEvent = function(_userParams, _state, _guiState, _src, _id, _name, _param)

@@ -15,7 +15,7 @@ from .planning_app import apps, TOOL_META, card_result
 from .subventions import SubventionAutoAccept, make_policy
 from .compact import compact_ping, compact_road, compact_status
 from .ui_log import UiLogRequests
-from .headless import HeadlessRequests
+from .no_gui import NoGuiRequests
 from mcp.types import CallToolResult
 
 ALLOW_EVAL = os.environ.get("TF3_MCP_ALLOW_EVAL", "") == "1"
@@ -34,30 +34,30 @@ mcp = MCPServer(
 
 _bridge: Bridge | None = None
 _ui_log_requests = UiLogRequests()
-_headless_client = None
+_no_gui_client = None
 _operations_monitor = None
 
 
 def transport_mode():
-    mode = os.environ.get('TF3_MCP_TRANSPORT', 'headless' if os.environ.get('TF3_MCP_HEADLESS_MOD') else 'file')
-    if mode not in ('file', 'headless'):
-        raise ToolError('TF3_MCP_TRANSPORT must be file or headless')
+    mode = os.environ.get('TF3_MCP_TRANSPORT', 'no_gui')
+    if mode != 'no_gui':
+        raise ToolError('TF3_MCP_TRANSPORT must be no_gui; file transport has been removed')
     return mode
 
 
-def headless_client():
-    global _headless_client
-    if _headless_client is None:
-        from .headless_client import HeadlessClient
-        _headless_client = HeadlessClient(headless())
-    return _headless_client
+def no_gui_client():
+    global _no_gui_client
+    if _no_gui_client is None:
+        from .no_gui_client import NoGuiClient
+        _no_gui_client = NoGuiClient(no_gui())
+    return _no_gui_client
 
 
 @mcp.tool()
-async def bind_headless_session(expected_session: str) -> dict:
+async def bind_no_gui_session(expected_session: str) -> dict:
     """Explicitly bind the current session after reload and map/entity reconciliation.
     Reads state and map; invalidates route cache. Does not replay pending work."""
-    result = await headless_client().bind(expected_session)
+    result = await no_gui_client().bind(expected_session)
     _map_cache.invalidate()
     return result
 
@@ -72,12 +72,12 @@ async def isolate_previous_session_save(request_id: str, expected_session: str) 
     verification remains gated and may be continued with these same arguments.
     """
     _map_cache.invalidate()
-    return await headless_client().isolate_previous_save(request_id, expected_session)
+    return await no_gui_client().isolate_previous_save(request_id, expected_session)
 
 
 @mcp.tool()
 async def load_game(slot: str, expected_session: str) -> dict:
-    """Explicitly load a previously headless-verified local save, without GUI input.
+    """Explicitly load a previously no_gui-verified local save, without GUI input.
     Requires user authorization to load/roll back, a paused native-load-v1 receiver
     and no pending. Saves current progress to a new independent backup first.
     Checks target hash, publishes once, waits for a new session and independently
@@ -87,14 +87,14 @@ async def load_game(slot: str, expected_session: str) -> dict:
     First installation still requires loading the updated bridge once.
     """
     _map_cache.invalidate()
-    return await headless_client().load_game(slot, expected_session)
+    return await no_gui_client().load_game(slot, expected_session)
 
 
 @mcp.tool()
 async def verify_loaded_game(request_id: str) -> dict:
     """Read back one previously submitted load; never issues another load or clears unknown pending."""
     _map_cache.invalidate()
-    return await headless_client().verify_loaded_game(request_id)
+    return await no_gui_client().verify_loaded_game(request_id)
 
 
 @mcp.tool()
@@ -105,7 +105,7 @@ async def reconcile_subvention_rejection(request_id: str, expected_session: str)
     the original failure. Never accepts an opportunity, retries, resets quota,
     resolves unknown older submissions, reloads or resumes monitoring.
     """
-    return await headless_client().reconcile_subvention_rejection(request_id, expected_session)
+    return await no_gui_client().reconcile_subvention_rejection(request_id, expected_session)
 
 
 @mcp.tool()
@@ -117,7 +117,7 @@ async def reset_operation_quota(expected_session: str, expected_round: int, expe
     the new round. Never retries work, reloads, or starts monitoring. Requires
     the quota-v1 receiver to be loaded; does not revive an old stopped receiver.
     """
-    return await headless_client().reset_operation_quota(expected_session, expected_round, expected_used)
+    return await no_gui_client().reset_operation_quota(expected_session, expected_round, expected_used)
 
 
 @mcp.tool()
@@ -134,14 +134,14 @@ async def execute_vehicle_batch(batch_id: str, operations: list[dict], expected_
     if use_recovery:
         from .recovery_workflows import execute_vehicle_batch as guarded_batch
         return await guarded_batch(_configured_recovery(), batch_id, operations, expected_session)
-    from .headless_workflows import VehicleBatches
-    return await VehicleBatches(headless_client(), bridge().dir).execute(batch_id, operations, expected_session)
+    from .no_gui_workflows import VehicleBatches
+    return await VehicleBatches(no_gui_client(), bridge().dir).execute(batch_id, operations, expected_session)
 
 
 def _configured_recovery():
     import json
     from pathlib import Path
-    from .recovery_adapter import HeadlessRecoveryAdapter
+    from .recovery_adapter import NoGuiRecoveryAdapter
     from .recovery_runtime import RecoveryRuntime
     configured = os.environ.get('TF3_RECOVERY_CONFIG')
     if not configured:
@@ -150,7 +150,7 @@ def _configured_recovery():
     directory = Path(config['stateDirectory'])
     if not directory.is_absolute():
         raise ToolError('Recovery stateDirectory must be absolute')
-    return RecoveryRuntime(HeadlessRecoveryAdapter(headless(), directory, config), directory, bridge().dir)
+    return RecoveryRuntime(NoGuiRecoveryAdapter(no_gui(), directory, config), directory, bridge().dir)
 
 
 @mcp.tool()
@@ -204,9 +204,9 @@ async def operations_monitor(action: str = 'status', interval_seconds: float = 6
     Cash floor is 1500000. Current finance adapter has no income history;
     cash changes are never reported as income. No historical business reconciliation."""
     global _operations_monitor
-    from .headless_workflows import OperationsMonitor
+    from .no_gui_workflows import OperationsMonitor
     if _operations_monitor is None:
-        _operations_monitor = OperationsMonitor(headless_client(), bridge().dir)
+        _operations_monitor = OperationsMonitor(no_gui_client(), bridge().dir)
     if action == 'status': return _operations_monitor.status()
     if action == 'stop': return await _operations_monitor.stop()
     if action == 'run_once': return await _operations_monitor.once()
@@ -215,33 +215,33 @@ async def operations_monitor(action: str = 'status', interval_seconds: float = 6
 
 
 
-def headless() -> HeadlessRequests:
+def no_gui() -> NoGuiRequests:
     directory = bridge().dir
-    configured = os.environ.get("TF3_MCP_HEADLESS_MOD")
+    configured = os.environ.get("TF3_MCP_NO_GUI_MOD")
     if not configured:
-        raise ValueError("Set TF3_MCP_HEADLESS_MOD to the diagnostic mod's content/tf3_mcp_bridge directory")
+        raise ValueError("Set TF3_MCP_NO_GUI_MOD to the diagnostic mod's content/tf3_mcp_bridge directory")
     from pathlib import Path
-    return HeadlessRequests(directory, Path(configured))
+    return NoGuiRequests(directory, Path(configured))
 
 
 @mcp.tool()
-async def headless_status() -> dict:
+async def no_gui_status() -> dict:
     """Read the opt-in receiver and durable pending request. No game request, GUI
     input, reload or fallback. bounded mode expires after about 34 minutes;
     demand mode waits on a missing filename without consuming idle slots. Native
     cache reclamation remains unverified; do not claim unlimited memory safety."""
     try:
-        return headless().status()
+        return no_gui().status()
     except (ValueError, OSError) as exc:
         raise ToolError(str(exc)) from exc
 
 
 @mcp.tool()
-async def send_headless_request(command: str, arguments: dict | None = None,
+async def send_no_gui_request(command: str, arguments: dict | None = None,
                                 kind: str = "read", expected_session: str | None = None) -> dict:
     """Publish exactly one request without panel input/clicks. kind=save accepts
     save_game(slot, overwrite=False) only; requires a loaded save-capable receiver,
-    verified expected_session and paused game. read_headless_result waits for a
+    verified expected_session and paused game. read_no_gui_result waits for a
     new nonempty stable .sav file, not just the native requested acknowledgement.
     Existing slots require explicit overwrite=True. kind=load accepts load_game
     with slot and backup_save, both previously verified by this channel; requires
@@ -250,7 +250,7 @@ async def send_headless_request(command: str, arguments: dict | None = None,
     Low-level load results require verify_loaded_game before further writes.
     Same whitelist as
     prepare_ui_read_request (kind=read) or prepare_ui_build_request (kind=build).
-    Engine operations require expected_session from a fresh headless_status plus
+    Engine operations require expected_session from a fresh no_gui_status plus
     independent map verification. build_* commands preview; commit_* consumes a
     same-session preview. create_line directly creates an empty line (no vehicle)
     and waits for the native callback. buy_vehicles buys exactly one unassigned
@@ -268,14 +268,14 @@ async def send_headless_request(command: str, arguments: dict | None = None,
     block subsequent publication. No retry, GUI fallback or implicit save/speed change."""
     import asyncio
     try:
-        return await asyncio.to_thread(headless().send, command, arguments,
+        return await asyncio.to_thread(no_gui().send, command, arguments,
                                        kind=kind, expected_session=expected_session)
     except (ValueError, OSError) as exc:
         raise ToolError(str(exc)) from exc
 
 
 @mcp.tool()
-async def read_headless_result(request_id: str) -> dict:
+async def read_no_gui_result(request_id: str) -> dict:
     """Read an existing durable request after service restart too. Pending and
     timeout_unknown never authorize resubmission. Reloaded logs require manual
     reconciliation. Saves remain pending until a new nonempty stable file is
@@ -283,7 +283,7 @@ async def read_headless_result(request_id: str) -> dict:
     A verified saved file is not proof that loading it will succeed.
     Successful replies reuse the existing framed log protocol."""
     try:
-        return headless().read(request_id)
+        return no_gui().read(request_id)
     except (ValueError, OSError) as exc:
         raise ToolError(str(exc)) from exc
 
@@ -390,9 +390,8 @@ BUILD_TIMEOUT = 30.0  # build commands may try several placements
 async def _call(cmd: str, _timeout: float | None = None, _engine: bool = False, **args: Any) -> Any:
     mutation = (cmd.startswith(("build_", "commit_")) or cmd in {"upgrade_road", "bulldoze", "eval"}) and not args.get("preview", False)
     try:
-        if transport_mode() == 'headless':
-            return await headless_client().call(cmd, args)
-        return await bridge().call(cmd, args, timeout=_timeout, engine=_engine)
+        transport_mode()
+        return await no_gui_client().call(cmd, args)
     except (BridgeError, ValueError, RuntimeError) as e:
         # surface as a tool error the agent can read and react to
         raise ToolError(str(e)) from e
@@ -444,34 +443,12 @@ async def commit_flatten_terrain(preview_token: str) -> dict:
     path = bridge().dir.parent / "save" / (slot + ".sav")
     if path.exists():
         raise ToolError("Backup slot unexpectedly exists; no terrain submission")
-    if transport_mode() == 'headless':
-        saved = await _call('save_game', slot=slot, overwrite=False)
-        if saved.get('verified') is not True:
-            raise ToolError('Backup not verified; terrain was not submitted')
-        result = await _call('commit_flatten_terrain', preview_token=preview_token, backup_save=slot)
-        return dict(result, backup_save=slot, backup_path=saved['file']['path'])
-    await _call("eval", code=f'app.saveGame("{slot}",function() end,false,true);return {{requested=true}}')
-    previous = None
-    stable_since = None
-    for _ in range(60):
-        await asyncio.sleep(.25)
-        try:
-            stat = path.stat()
-            current = (stat.st_size, stat.st_mtime_ns)
-        except FileNotFoundError:
-            current = None
-        if current and current[0] > 0 and current == previous:
-            stable_since = stable_since or time.monotonic()
-            if time.monotonic() - stable_since >= 1:
-                result = await _call("commit_flatten_terrain", _engine=True, _timeout=30,
-                                     preview_token=preview_token, backup_save=slot)
-                result["backup_save"] = slot
-                result["backup_path"] = str(path)
-                return result
-        else:
-            stable_since = None
-        previous = current
-    raise ToolError(f"Backup write not confirmed ({slot}); terrain was not submitted")
+    transport_mode()
+    saved = await _call('save_game', slot=slot, overwrite=False)
+    if saved.get('verified') is not True:
+        raise ToolError('Backup not verified; terrain was not submitted')
+    result = await _call('commit_flatten_terrain', preview_token=preview_token, backup_save=slot)
+    return dict(result, backup_save=slot, backup_path=saved['file']['path'])
 
 
 @mcp.tool()
@@ -697,14 +674,11 @@ async def bridge_status(verbose: bool = False) -> dict:
     """Check whether the game is connected: heartbeat age, bridge version, game time, paused flag.
     When disconnected, compact output puts historical fields under lastKnown; they are not live state.
     verbose=True adds the full heartbeat and the Lua environment probe (libraries exposed to mods)."""
-    if transport_mode() == 'headless':
-        status = await headless_status()
-        row = status['receiver']
-        return dict(status, transport='headless', connected=row['status']=='ready' and status['ageSeconds']<=5,
-                    bridgeDir=str(bridge().dir))
-    status = bridge().heartbeat()
-    status["bridgeDir"] = str(bridge().dir)
-    return status if verbose else compact_status(status)
+    transport_mode()
+    status = await no_gui_status()
+    row = status['receiver']
+    return dict(status, transport='no_gui', connected=row['status']=='ready' and status['ageSeconds']<=5,
+                bridgeDir=str(bridge().dir))
 
 
 @mcp.tool()
@@ -817,8 +791,8 @@ async def get_subventions(assess: bool = True) -> dict:
 
 async def _subvention_call(cmd: str, **args: Any) -> Any:
     result = await _call(cmd, _engine=True, **args)
-    if transport_mode() == 'headless' and cmd == 'get_subventions':
-        result = dict(result, transportSession=headless_client().session)
+    if transport_mode() == 'no_gui' and cmd == 'get_subventions':
+        result = dict(result, transportSession=no_gui_client().session)
     return result
 
 
@@ -1042,6 +1016,253 @@ async def get_map_data(layer: str | None = None, offset: int = 0, limit: int = 5
 async def set_game_speed(speed: int) -> dict:
     """Set the simulation speed multiplier. 0 pauses; 1, 2, 4 are the usual in-game speeds."""
     return await _call("set_game_speed", speed=speed)
+
+
+_appearance_sync = None
+
+
+@mcp.tool()
+async def vehicle_color_sync(action: str = 'status', lines: list[int] | None = None,
+                             interval_seconds: int = 30) -> dict:
+    """Start/stop/status continuous line-color sync while this MCP process is alive.
+
+    Explicit start only, 1-16 owned lines; detects newly assigned vehicles and
+    changed line colors. Stops on errors, unknown outcomes or session changes.
+    Does not resume automatically after server restart or reload. Start overrides
+    manual vehicle/part colors on the selected lines. No AI polling is required.
+    """
+    global _appearance_sync
+    if transport_mode() != 'no_gui':
+        raise ToolError('Color sync requires no_gui transport')
+    from .appearance_sync import AppearanceSync
+    if _appearance_sync is None:
+        _appearance_sync = AppearanceSync(no_gui_client())
+    if action == 'status': return _appearance_sync.status()
+    if action == 'stop': return await _appearance_sync.stop()
+    if action == 'start': return await _appearance_sync.start(lines, interval_seconds)
+    raise ToolError('Use start, stop or status')
+
+
+@mcp.tool()
+async def reset_vehicle_color(vehicle: int) -> dict:
+    """Restore original model colors using native RGB(-1,-1,-1), appearance v2."""
+    if transport_mode() != 'no_gui':
+        raise ToolError('Reset requires guarded no_gui transport')
+    from .vehicle_appearance import color_vehicles
+    return await color_vehicles(no_gui_client(), [vehicle], 0, 0, 0, reset=True)
+
+
+@mcp.tool()
+async def list_vehicle_liveries(vehicle: int, part: int = 0) -> dict:
+    """List loaded models in the current part's native variant group; preview compatibility before switching."""
+    return await _call('list_vehicle_liveries', _engine=True, vehicle=vehicle, part=part)
+
+
+@mcp.tool()
+async def preview_vehicle_appearance(vehicle: int, part: int = 0, model: str | None = None,
+                                     r: float | None = None, g: float | None = None,
+                                     b: float | None = None, reset: bool = False) -> dict:
+    """Preview ONE part's livery change, RGB tint or default-color reset (v2).
+
+    Zero-based part index. Choose model OR complete RGB OR reset=true. Requires
+    paused, empty vehicle in depot; strict mechanical metadata equality for a
+    livery. Returns a 60-second token and conservative full-purchase cost bound,
+    not a promise of free replacement. Preserves other parts/configuration.
+    """
+    args = dict(vehicle=vehicle, part=part)
+    args.update({k:v for k,v in dict(model=model,r=r,g=g,b=b).items() if v is not None})
+    if reset: args['reset'] = True
+    return await _call('preview_vehicle_appearance', _engine=True, **args)
+
+
+@mcp.tool()
+async def commit_vehicle_appearance(preview_token: str, max_cost: float,
+                                    cash_floor: float = 5000000) -> dict:
+    """Save a backup, consume an appearance preview once and verify native config.
+
+    Applies per-part color/livery through native vehicle replacement, not direct
+    memory edits. Vehicle must remain paused/empty/in depot. At least 5M reserve.
+    Unknown results stay pending; never replay. No automatic return to depot.
+    """
+    import uuid
+    from .no_gui import workflow_lock
+    if transport_mode() != 'no_gui':
+        raise ToolError('Appearance replacement requires no_gui transport')
+    client = no_gui_client()
+    with workflow_lock(client.requests.directory):
+        slot = 'appearance_' + uuid.uuid4().hex
+        args = dict(preview_token=preview_token, max_cost=max_cost, cash_floor=cash_floor, backup_save=slot)
+        from .ui_log import validate_build_arguments
+        validate_build_arguments('commit_vehicle_appearance', args)
+        if cash_floor < 5000000 or max_cost < 0:
+            raise ToolError('Nonnegative budget and at least 5M cash reserve required')
+        saved = await client.call('save_game', {'slot':slot, 'overwrite':False})
+        if not saved.get('verified'): raise ToolError('Backup not verified')
+        result = await client.call('commit_vehicle_appearance', args)
+        result['independentAppearance'] = await client.call('get_vehicle_appearance', {'vehicle':result['vehicle']})
+        return result
+
+
+@mcp.tool()
+async def execute_project(project_id: str, steps: list[dict], cash_floor: float = 5000000,
+                          reserved_cash: float = 0, allow_no_costs: bool = False) -> dict:
+    """Back up a PAUSED game once, then send one construction project to receiver.
+
+    project_id: new 32-hex ID, retained for status/recovery. 1-8 steps:
+    {id, preview, arguments, max_cost, checks:[{command,arguments,expect}]}.
+    Supports road/network/road-graph previews and warehouse/heliport/helipad/
+    airfield/water/headquarters starters. Full native quote/collision preview
+    required. Numeric {"$ref":"step.commit.entity"} references use 1-based arrays.
+    Each step needs 1-4 independent acceptance queries and exact expected fields.
+    Also supports create_line, preview_line_edit, buy_vehicles (count 1-16 plus
+    explicit mode), assign_vehicles (1-16), and terminal accept_departure
+    {vehicles,line,seconds:1-120} or {fleets:[{line,vehicles}],seconds}, checks=[].
+    Departure runs across receiver ticks,
+    returns observing, restores pause on completion/fault/timeout; poll get_project.
+    Receiver retains completed steps and individual purchases. No demolition,
+    loans, structural-only construction previews or automatic retry.
+    An unknown parent result must be read by original request ID, never resubmitted.
+    Requires explicit user authorization for allow_no_costs=True; native noCosts
+    must already be enabled. Does not enable cheats or relax step quote caps.
+    """
+    return await _construction_project('execute_project', dict(project_id=project_id,
+        steps=steps, cash_floor=cash_floor, reserved_cash=reserved_cash,allow_no_costs=allow_no_costs))
+
+
+@mcp.tool()
+async def resume_project(project_id: str) -> dict:
+    """Fresh backup, then explicitly continue blocked/yielded project in same session.
+    Completed construction is never repeated. Failed acceptance only reruns reads.
+    Unknown mutation results and changed sessions stay blocked. No plan edits.
+    """
+    return await _construction_project('resume_project', dict(project_id=project_id))
+
+
+async def _construction_project(command, args):
+    import uuid
+    from .no_gui import workflow_lock
+    from .construction_project import validate_project
+    if transport_mode() != 'no_gui':
+        raise ToolError('Construction projects require no_gui transport')
+    client = no_gui_client()
+    args = dict(args, backup_save='project_' + uuid.uuid4().hex)
+    validate_project(command, args)
+    with workflow_lock(client.requests.directory):
+        status = await client.status()
+        if status['receiver'].get('projectBatchVersion') != 2:
+            raise ToolError('Reload receiver with projectBatchVersion=2 first')
+        state = await client.call('get_game_state', {})
+        native = await client.call('get_validation_state', {})
+        if state['speedup'] != 0 or native.get('pending') or native.get('activeProject'):
+            raise ToolError('Paused game without unknown mutation/project required')
+        saved = await client.call('save_game', {'slot':args['backup_save'], 'overwrite':False})
+        if not saved.get('verified'):
+            raise ToolError('Backup not verified; project not dispatched')
+        return await client.call(command, args)
+
+
+@mcp.tool()
+async def get_project(project_id: str) -> dict:
+    """Read receiver project progress and child request IDs; never resumes/replays."""
+    return await _call('get_project', _engine=True, project_id=project_id)
+
+
+@mcp.tool()
+async def cancel_project(project_id: str) -> dict:
+    """Cancel remaining steps of an inactive, known-outcome project. No rollback.
+    Cannot cancel/clear unknown mutations or running projects.
+    """
+    return await _call('cancel_project', _engine=True, project_id=project_id)
+
+
+@mcp.tool()
+async def build_vehicle_repaint(source_archive: str, model_entry: str, source_resource: str,
+                                texture_entry: str, output_dir: str, mod_id: str, title: str,
+                                overlays: list[dict] | None = None,
+                                replacement_image: str | None = None) -> dict:
+    """Build a separate local repaint mod from an explicit original model/UV atlas.
+
+    Input ZIP entry names are exact. source_resource is fully qualified. Provide
+    a complete same-size replacement image or overlays [{image|text,box:[x0,y0,x1,y1],color?}]
+    in UV ATLAS PIXELS (not vehicle-space). Preserves base files, all model LODs
+    and mechanical metadata; creates new materials and a TGA atlas. Does not install
+    or hot-load. Model Editor visual validation/UI icons are still required.
+    """
+    import asyncio
+    from .repaint_builder import build_repaint
+    return await asyncio.to_thread(build_repaint, source_archive, model_entry, source_resource,
+                                  texture_entry, output_dir, mod_id, title, overlays, replacement_image)
+
+
+@mcp.tool()
+async def get_vehicle_appearance(vehicle: int) -> dict:
+    """Read per-part model IDs, RGB colors and recoloring support. Requires appearance v1."""
+    return await _call('get_vehicle_appearance', _engine=True, vehicle=vehicle)
+
+
+@mcp.tool()
+async def set_vehicle_color(vehicle: int, r: float, g: float, b: float) -> dict:
+    """Change an owned vehicle's native tint (RGB 0..1), with durable readback.
+
+    Does not replace models/textures. Unsupported masks are skipped; unknown
+    outcomes stop without retries. Rendered appearance still depends on materials.
+    """
+    return await set_vehicles_color([vehicle], r, g, b)
+
+
+@mcp.tool()
+async def set_vehicles_color(vehicles: list[int], r: float, g: float, b: float) -> dict:
+    """Color 1-64 owned vehicles sequentially; journal partial results, stop on error.
+
+    RGB 0..1. Not atomic; no automatic retry or replacement of unsupported models.
+    """
+    if transport_mode() != 'no_gui':
+        raise ToolError('Appearance changes require guarded no_gui transport')
+    from .vehicle_appearance import color_vehicles
+    return await color_vehicles(no_gui_client(), vehicles, r, g, b)
+
+
+@mcp.tool()
+async def set_line_vehicles_color(line: int, r: float, g: float, b: float) -> dict:
+    """Apply RGB 0..1 to current vehicles on a line (max 64); no ongoing sync.
+
+    Does not change the line color itself. Checks current membership and reports
+    each vehicle independently, including skipped models and partial completion.
+    """
+    if transport_mode() != 'no_gui':
+        raise ToolError('Appearance changes require guarded no_gui transport')
+    from .vehicle_appearance import color_vehicles
+    return await color_vehicles(no_gui_client(), None, r, g, b, line=line)
+
+
+@mcp.tool()
+async def read_planning_data(requests: list[dict]) -> dict:
+    """Default for independent planning reads in one dependency round.
+
+    Accepts 1-256 {command, arguments} items from the read_batch whitelist.
+    Automatically packs batches of up to eight within 8192 bytes. Split dependent
+    queries into separate calls after discovering real IDs. Explicit size/time
+    limits get at most one smaller read; native/transport errors are not retried.
+    Inspect every item's ok and nested availability. Never an atomic snapshot.
+    Keep previews, commits and fresh pre-commit checks separate.
+    """
+    from .planning_reads import read_planning
+    async def call(command, arguments):
+        return await _call(command, _engine=True, **arguments)
+    return await read_planning(call, requests)
+
+
+@mcp.tool()
+async def read_batch(requests: list[dict]) -> dict:
+    """Run 1-16 whitelisted reads in one receiver request (readBatchVersion=1).
+
+    Items contain command and arguments. Ordered per-item results include errors.
+    Sequential, not an atomic snapshot; no writes, previews or nested batches.
+    See docs/reference/READ_BATCH.md for supported commands and bounds.
+    """
+    from .ui_log import validate_read_batch
+    validate_read_batch({"requests": requests})
+    return await _call("read_batch", _engine=True, requests=requests)
 
 
 @mcp.tool()
@@ -1284,17 +1505,23 @@ async def find_facility_sites(snapshot_path: str, output_dir: str, requests: lis
 
 
 @mcp.tool(meta=TOOL_META)
-async def export_planning_report(plan_path: str, output_dir: str, width: int = 1600, height: int = 1100) -> CallToolResult:
-    """Show an MCP Apps image card and export a saved global/local plan to self-contained interactive HTML, PNG, SVG and JSON.
-    HTML supports zoom/layer toggles; north is up and coordinates are world metres. No external network/game calls.
-    A loopback-only link opens the report ONLY when the user clicks it; never auto-open HTML.
-    Creates a unique report directory and returns absolute file paths. PNG CJK font can be set with
-    TF3_PLANNING_FONT. Dimensions 800..4096 x 600..4096. Never overwrites earlier reports.
+async def export_planning_report(plan_path: str | None = None, output_dir: str | None = None,
+                                 width: int = 1600, height: int = 1100,
+                                 svg_path: str | None = None, title: str | None = None) -> CallToolResult:
+    """Display an existing SVG image unchanged in an MCP Apps card. No redraw, rasterization or game calls.
+    Pass svg_path and output_dir; title is optional. plan_path is a legacy alias for the SVG path,
+    not a plan JSON input. width/height are retained for caller compatibility and do not resize the SVG.
+    Copies the exact SVG bytes into a unique report directory and creates an HTML image viewer.
+    Card supports zoom/pan. Open the HTML link only when clicked; never auto-open it.
     """
-    import json
-    from pathlib import Path
-    plan = json.loads(Path(plan_path).read_text(encoding='utf-8-sig'))
-    return await _planning_card(plan, output_dir, dict(plan_path=plan_path), width, height)
+    import asyncio
+    from .planning_app import export_svg_card
+    if svg_path and plan_path and svg_path != plan_path:
+        raise ValueError('Pass svg_path or its legacy alias plan_path, not different paths')
+    source = svg_path or plan_path
+    if not source or not output_dir:
+        raise ValueError('svg_path and output_dir are required; no image is generated from plan JSON')
+    return await asyncio.to_thread(export_svg_card, source, output_dir, title)
 
 
 @mcp.tool()
@@ -1318,10 +1545,10 @@ async def plan_rail_connection(
         raise ToolError("Choose two different station constructions")
     if not 1 <= max_candidates <= 10:
         raise ToolError("max_candidates must be 1..10")
-    if transport_mode() == 'headless':
+    if transport_mode() == 'no_gui':
         try:
-            current = await headless_client().status()
-            if (_map_cache.snapshot and _map_cache.snapshot.get('headlessSession')
+            current = await no_gui_client().status()
+            if (_map_cache.snapshot and _map_cache.snapshot.get('no_guiSession')
                     != current['receiver']['session']):
                 _map_cache.invalidate()
         except (ValueError, RuntimeError) as exc:
@@ -1558,14 +1785,14 @@ async def preview_depot_removal(entity: int) -> dict:
 @mcp.tool()
 async def commit_depot_removal(preview_token: str) -> dict:
     """Save/verify an independent backup, then remove the previewed empty road depot ONCE.
-    Requires user demolition authorization, paused game and headless depotRemovalVersion=1.
+    Requires user demolition authorization, paused game and no_gui depotRemovalVersion=1.
     No vehicle sale, unrelated road removal or collision override. Unknown results retain
     the mutation block: use get_depot_removal_operation, NEVER repeat commit.
     """
     import uuid
-    if transport_mode() != 'headless':
-        raise ToolError('Guarded depot removal requires the headless channel')
-    status = await headless_client().status()
+    if transport_mode() != 'no_gui':
+        raise ToolError('Guarded depot removal requires the no_gui channel')
+    status = await no_gui_client().status()
     if status['receiver'].get('depotRemovalVersion') != 1 or status.get('pending'):
         raise ToolError('Depot removal v1 receiver without pending request required; nothing submitted')
     slot = 'tf3_depot_before_' + uuid.uuid4().hex
@@ -1597,14 +1824,14 @@ async def preview_station_removal(entity: int) -> dict:
 @mcp.tool()
 async def commit_station_removal(preview_token: str) -> dict:
     """Save/verify an independent backup, then remove the previewed empty road cargo station ONCE.
-    Requires user demolition authorization, paused game and headless stationRemovalVersion=1.
+    Requires user demolition authorization, paused game and no_gui stationRemovalVersion=1.
     No vehicle sale, unrelated road removal or collision override. Unknown results retain
     the mutation block: use get_station_removal_operation, NEVER repeat commit.
     """
     import uuid
-    if transport_mode() != 'headless':
-        raise ToolError('Guarded station removal requires the headless channel')
-    status = await headless_client().status()
+    if transport_mode() != 'no_gui':
+        raise ToolError('Guarded station removal requires the no_gui channel')
+    status = await no_gui_client().status()
     if status['receiver'].get('stationRemovalVersion') != 1 or status.get('pending'):
         raise ToolError('Station removal v1 receiver without pending request required; nothing submitted')
     slot = 'tf3_station_before_' + uuid.uuid4().hex
@@ -1625,7 +1852,7 @@ async def get_station_removal_operation(operation_id: str) -> dict:
 
 @mcp.tool()
 async def bulldoze(entity: int) -> dict:
-    """Legacy FILE channel only; unsupported on headless. For empty road depots use
+    """Legacy FILE channel only; unsupported on no_gui. For empty road depots use
     preview_depot_removal/commit_depot_removal/get_depot_removal_operation.
     Remove a construction (depot, station group or station, or any construction id) or a street
     segment, using the game's own removal. Roadside stops can't be removed by script yet."""

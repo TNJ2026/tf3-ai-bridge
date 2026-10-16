@@ -1,4 +1,4 @@
-"""Current headless reads/saves plus an explicitly configured Windows bootstrap.
+"""Current no_gui reads/saves plus an explicitly configured Windows bootstrap.
 
 The project has no verified universal TF3 command-line load-save switch. Supply
 a locally validated bootstrap argv containing {checkpoint}; no switch is guessed.
@@ -13,8 +13,8 @@ from pathlib import Path
 import subprocess
 import time
 
-from .headless import atomic
-from .headless_client import HeadlessClient
+from .no_gui import atomic
+from .no_gui_client import NoGuiClient
 from .recovery_runtime import RecoveryBlocked, digest, file_digest, validate_snapshot
 
 
@@ -50,10 +50,10 @@ def windows_processes(executable):
     return found
 
 
-class HeadlessRecoveryAdapter:
+class NoGuiRecoveryAdapter:
     def __init__(self, requests, directory, config, *, process_query=windows_processes):
         self.requests = requests
-        self.client = HeadlessClient(requests)
+        self.client = NoGuiClient(requests)
         self.directory = Path(directory)
         self.config = config
         self.process_query = process_query
@@ -139,7 +139,7 @@ class HeadlessRecoveryAdapter:
         folder.mkdir(parents=True, exist_ok=True)
         captured = {'incident': incident_id, 'capturedAt': time.time(), 'files': [],
                     'note': 'Diagnostic bytes only; absence of logs is not proof of no mutation'}
-        paths = [self.requests.directory / 'headless_requests.json',
+        paths = [self.requests.directory / 'no_gui_requests.json',
                  self.requests.directory.parent / 'crash_dump' / 'stdout.txt', self.binding_path]
         for path in paths:
             if not path.is_file():

@@ -1,7 +1,7 @@
 import json
 import pytest
-from test_headless import host, GEN
-from tf3_mcp.headless import TAG
+from test_no_gui import host, GEN
+from tf3_mcp.no_gui import TAG
 
 OLD = '1' * 32
 

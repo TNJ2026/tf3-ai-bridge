@@ -1,4 +1,4 @@
-"""Bounded schemas shared by headless-only workflow adapters."""
+"""Bounded schemas shared by no_gui-only workflow adapters."""
 import math
 import re
 

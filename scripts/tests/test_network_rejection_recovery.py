@@ -38,7 +38,7 @@ def test_legacy_enumeration_requires_exact_reviewed_source_image(tmp_path,monkey
     import hashlib
     import network_rejection_recovery as module
     generation='b'*32;rid='a'*32
-    source=('local HEADLESS_GENERATION = "'+generation+'"\n'+
+    source=('local NO_GUI_GENERATION = "'+generation+'"\n'+
             'local existing={};api.engine.forEachEntityWithComponent(function(id)existing[id]=true end,componentTypes().BASE_EDGE)\n')
     image=tmp_path/'before.lua';image.write_text(source,encoding='utf-8')
     digest=hashlib.sha256(image.read_bytes()).hexdigest()

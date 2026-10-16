@@ -209,11 +209,11 @@ def test_server_tools_route_and_cache_invalidation(monkeypatch):
     from tf3_mcp.bridge import BridgeError
     calls=[]
     class FakeBridge:
-        async def call(self, cmd, args, timeout, engine):
-            calls.append((cmd,args,engine))
+        async def call(self, cmd, args):
+            calls.append((cmd,args,True))
             if cmd=="commit_facility":raise BridgeError("timeout: reconcile")
             return {"preview":True}
-    monkeypatch.setattr(server,"bridge",lambda:FakeBridge())
+    monkeypatch.setattr(server,"no_gui_client",lambda:FakeBridge())
     invalidations=[]
     monkeypatch.setattr(server._map_cache,"invalidate",lambda:invalidations.append(True))
     async def run():

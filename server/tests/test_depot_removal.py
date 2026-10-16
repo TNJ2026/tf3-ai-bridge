@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from test_ui_consolidated import Channel
-from tf3_mcp.headless_client import HeadlessClient
+from tf3_mcp.no_gui_client import NoGuiClient
 from tf3_mcp.ui_log import validate_build_arguments
-from tf3_mcp.headless import TAG
-from test_headless import host, GEN
+from tf3_mcp.no_gui import TAG
+from test_no_gui import host, GEN
 
 FIXTURE = r'''
 local C=api.type.ComponentType
@@ -240,7 +240,7 @@ def test_protocol_validation_and_legacy_stays_disabled():
                          ('get_depot_removal_operation',{'operation_id':'x'})]:
         assert validate_build_arguments(command,args)==args
     with pytest.raises(ValueError):validate_build_arguments('commit_depot_removal',{'preview_token':'x'})
-    client=HeadlessClient(Mock());client.status=AsyncMock(return_value={'receiver':{'session':'test'}})
+    client=NoGuiClient(Mock());client.status=AsyncMock(return_value={'receiver':{'session':'test'}})
     with pytest.raises(ValueError,match='not implemented'):asyncio.run(client.call('bulldoze',{'entity':300}))
     client.requests.send.assert_not_called()
 
@@ -254,7 +254,7 @@ def test_old_receiver_rejected_without_publication(host, command, args):
     with pytest.raises(ValueError, match='lacks depot removal'):
         host.send(command, args, kind='build', expected_session='session')
     assert not host.ledger.exists()
-    assert (host.mod/'headless'/GEN/'1.lua').read_bytes()==b'return ""\n'
+    assert (host.mod/'no_gui'/GEN/'1.lua').read_bytes()==b'return ""\n'
 
 
 @pytest.mark.parametrize('fault',[None,'missing','unverified','session','generation','changed','stale','future','proof_missing','wrong_kind'])
@@ -280,7 +280,7 @@ def test_backup_proof_required_before_publication(host, fault):
     if fault:
         with pytest.raises(ValueError):host.send('commit_depot_removal',args,kind='build',expected_session='session')
         assert host._load().get('pending') is None
-        assert (host.mod/'headless'/GEN/'1.lua').read_bytes()==b'return ""\n'
+        assert (host.mod/'no_gui'/GEN/'1.lua').read_bytes()==b'return ""\n'
     else:
         assert host.send('commit_depot_removal',args,kind='build',expected_session='session')['status']=='published'
 
@@ -289,8 +289,8 @@ def test_backup_proof_required_before_publication(host, fault):
 def test_public_tool_backup_then_single_commit(monkeypatch,fault):
     from tf3_mcp import server
     client=Mock();client.status=AsyncMock(return_value={'receiver':{'depotRemovalVersion':0 if fault=='old_receiver' else 1},'pending':'x' if fault=='pending' else None})
-    monkeypatch.setattr(server,'transport_mode',lambda:'headless')
-    monkeypatch.setattr(server,'headless_client',lambda:client)
+    monkeypatch.setattr(server,'transport_mode',lambda:'no_gui')
+    monkeypatch.setattr(server,'no_gui_client',lambda:client)
     calls=[]
     async def call(cmd,**kwargs):
         calls.append((cmd,kwargs))

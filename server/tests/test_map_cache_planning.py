@@ -68,7 +68,7 @@ def test_staged_building_detour():
 
 def test_two_clients_serialize(bridge_dir):
     from test_e2e import FakeGame
-    from tf3_mcp.bridge import Bridge
+    from legacy_file_transport_fixture import Bridge
     async def run():
         a,b=Bridge(bridge_dir,timeout=5),Bridge(bridge_dir,timeout=5)
         responses=await asyncio.gather(a.call('ping',{'echo':'first'}),b.call('ping',{'echo':'second'}))
@@ -77,7 +77,7 @@ def test_two_clients_serialize(bridge_dir):
 
 def test_lua_snapshot_full_then_delta(bridge_dir):
     from test_e2e import FakeGame, run
-    from tf3_mcp.bridge import Bridge
+    from legacy_file_transport_fixture import Bridge
     with FakeGame(bridge_dir) as game:
         game.lua.execute('''
         local CT=api.type.ComponentType

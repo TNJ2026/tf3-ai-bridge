@@ -18,7 +18,7 @@ def check_package(root: Path, *, require_receiver=False):
     if not (root / "_metadata/0.png").is_file():
         problems.append("Missing cover: _metadata/0.png")
     files = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
-    runtime = [p for p in files if p.startswith("content/tf3_mcp_bridge/headless/")]
+    runtime = [p for p in files if p.startswith("content/tf3_mcp_bridge/no_gui/")]
     uppercase = [p for p in files if p != p.lower()]
     if runtime:
         problems.append(f"Runtime request files must not be published: {len(runtime)}")
@@ -27,14 +27,14 @@ def check_package(root: Path, *, require_receiver=False):
     if require_receiver:
         script = root / 'content/tf3_mcp_bridge/bridge.script.lua'
         text = script.read_text(encoding='utf-8') if script.is_file() else ''
-        if not re.search(r'^local HEADLESS_GENERATION = "[0-9a-f]{32}"$', text, re.M):
+        if not re.search(r'^local NO_GUI_GENERATION = "[0-9a-f]{32}"$', text, re.M):
             problems.append('Release receiver generation is disabled or invalid')
-        for setting in ('HEADLESS_ON_DEMAND', 'HEADLESS_USERDATA'):
+        for setting in ('NO_GUI_ON_DEMAND', 'NO_GUI_USERDATA'):
             if not re.search(r'^local ' + setting + r' = true$', text, re.M):
                 problems.append('Release must enable ' + setting)
         for setting in ('ENABLE_FIRST_READ_PROBE', 'ENABLE_RESOURCE_INGRESS_PROBE'):
-            if not re.search(r'^local ' + setting + r' = false$', text, re.M):
-                problems.append('Release must disable ' + setting)
+            if setting in text:
+                problems.append('Release must not contain retired experiment: ' + setting)
         forbidden = [p for p in files if 'ingress_probe' in p or 'ingress_first_read' in p
                      or p.endswith(('.tmp', '.sav', '.log')) or p == '.mcp.json']
         if forbidden:

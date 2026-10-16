@@ -5,7 +5,7 @@
 ## 接口
 
 - `preview_station_removal(entity)`：接受独立模块化公路货站的 construction 或 station ID。
-- `commit_station_removal(preview_token)`：公开 MCP 工具先保存并验证独立备份，再提交一次。原始 headless 命令另需 `backup_save`，主机检查同会话、generation、120秒内的保存凭据以及磁盘签名和 SHA-256。
+- `commit_station_removal(preview_token)`：公开 MCP 工具先保存并验证独立备份，再提交一次。原始 no_gui 命令另需 `backup_save`，主机检查同会话、generation、120秒内的保存凭据以及磁盘签名和 SHA-256。
 - `get_station_removal_operation(operation_id)`：使用预览令牌查询、独立读回，绝不重新派发拆除。
 
 仅支持 `::/stations/street/modular_street_station/modular_terminal.con` 的纯货运终端。拒绝客运或混合站、共享站组、线路仍引用、车辆仍使用站内网络、等候人员、非空自有库存、附属车库/产业/城市建筑和未知读取结果。库存检查针对拆除对象自身，不清空或删除其配送覆盖的城市/产业库存。
@@ -22,7 +22,7 @@
 
 当前 Wareham 两个旧货站仍保留，未通过本接口执行拆除。首次实机验收应独立备份后单站提交、独立读回，不以离线测试代替原生验收。
 
-测试：`server/tests/test_station_removal.py`；与车库拆除、headless 和 UI 通道相关回归共214项通过。覆盖原生 userdata 指纹、未使用站点成功拆除、依赖拒绝、预览后变化、外部道路越界、备份/能力门槛、重复提交、延迟回调、失败及部分结果。
+测试：`server/tests/test_station_removal.py`；与车库拆除、no_gui 和 UI 通道相关回归共214项通过。覆盖原生 userdata 指纹、未使用站点成功拆除、依赖拒绝、预览后变化、外部道路越界、备份/能力门槛、重复提交、延迟回调、失败及部分结果。
 
 ## 首次实机预览与兼容修正
 

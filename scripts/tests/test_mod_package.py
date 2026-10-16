@@ -19,9 +19,9 @@ def test_clean_enabled_reproducible_release(tmp_path):
     with zipfile.ZipFile(first['archive']) as archive:
         assert set(archive.namelist()) == set(RELEASE_FILES)
         text = archive.read(SCRIPT).decode()
-        assert 'local HEADLESS_USERDATA = true' in text
-        assert 'local HEADLESS_ON_DEMAND = true' in text
-        assert f'local HEADLESS_GENERATION = "{first["generation"]}"' in text
+        assert 'local NO_GUI_USERDATA = true' in text
+        assert 'local NO_GUI_ON_DEMAND = true' in text
+        assert f'local NO_GUI_GENERATION = "{first["generation"]}"' in text
         assert all(hashlib.sha256(archive.read(n)).hexdigest() == h for n, h in first['files'].items())
     with pytest.raises(FileExistsError):
         build_package(SOURCE, tmp_path / 'first')
@@ -40,3 +40,12 @@ def test_release_checker_rejects_runtime_files(tmp_path):
     result = check_package(root, require_receiver=True)
     assert not result['passed']
     assert any('Diagnostic' in p for p in result['problems'])
+
+
+def test_mod_source_has_no_retired_ingress_experiments():
+    text = (SOURCE / SCRIPT).read_text(encoding='utf-8')
+    for marker in ('ENABLE_FIRST_READ_PROBE', 'ENABLE_RESOURCE_INGRESS_PROBE',
+                   'probeResourceIngress', 'probeFirstReadIngress',
+                   'ingress_probe.lua', 'ingress_first_read_v1_'):
+        assert marker not in text
+    assert not list(SOURCE.rglob('ingress*.lua'))

@@ -4,13 +4,13 @@ import copy
 import pytest
 
 from test_recovery_runtime import Adapter, run
-from tf3_mcp.headless_client import HeadlessClient
+from tf3_mcp.no_gui_client import NoGuiClient
 from tf3_mcp.recovery_runtime import RecoveryBlocked, RecoveryRuntime
 from tf3_mcp.recovery_workflows import execute_vehicle_batch
 
 
 class Client:
-    map_digest = staticmethod(HeadlessClient.map_digest)
+    map_digest = staticmethod(NoGuiClient.map_digest)
     def __init__(self):
         self.lock = asyncio.Lock()
         self.session = 'first'

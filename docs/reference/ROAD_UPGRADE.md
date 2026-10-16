@@ -1,6 +1,6 @@
 # 既有道路电车轨道与公交车道升级
 
-当前 headless 入口：`preview_road_upgrade(edge, street_type)` → `commit_edge_edit(preview_token)`。使用当前真实道路模板替换整段道路，保留几何与端点；不是任意逐车道编辑。提交前备份，预览令牌单次使用，建后须独立读取新边ID与配置。
+当前 no_gui 入口：`preview_road_upgrade(edge, street_type)` → `commit_edge_edit(preview_token)`。使用当前真实道路模板替换整段道路，保留几何与端点；不是任意逐车道编辑。提交前备份，预览令牌单次使用，建后须独立读取新边ID与配置。
 
 ## 已验证范围
 

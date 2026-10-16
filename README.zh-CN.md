@@ -21,7 +21,7 @@
 
 ## 工作原理
 
-使用 `headless` 通道，通过一次性 Lua 资源文件传入请求，通过游戏日志返回结果与接收器状态。
+推荐使用 `no_gui` 通道，按接收器模式通过 Lua 资源文件或原生 userdata 邮箱传入请求，通过游戏日志返回结果与接收器状态。旧 `file` 通道已在只读实测失败后移除，请使用 `no_gui`。详见[通信方式、接收器模式及 request.lua 边界](docs/reference/TRANSPORT_CHANNELS.md)。
 
 ```text
 AI 客户端 → MCP（标准输入输出）→ Python 服务 → 一次性请求资源 → 游戏模组 → 游戏引擎
@@ -29,13 +29,13 @@ AI 客户端 → MCP（标准输入输出）→ Python 服务 → 一次性请�
                                       └────── 游戏日志中的响应 ────┘
 ```
 
-请求资源位于已安装模组的 `content/tf3_mcp_bridge/headless/`；本地请求账本和协调文件默认位于：
+`demand` / `indexed` 模式的请求资源位于已安装模组的 `content/tf3_mcp_bridge/no_gui/`；本地请求账本和协调文件默认位于：
 
 ```text
 <Steam>/userdata/<Steam ID>/3493540/local/tf3_mcp/
 ```
 
-新版发布包已内置默认启用的接收器。加载模组后，在 MCP 服务中设置 `TF3_MCP_TRANSPORT=headless`，并将 `TF3_MCP_HEADLESS_MOD` 指向已安装模组的 `content/tf3_mcp_bridge` 目录。本地 MCP 服务仍需另行配置；旧下载版接收器修复见下文。mod.io 下载版无法发现运行中新增的请求文件，请先阅读[下载版 userdata 配置与验收状态](docs/reference/MODIO_CONNECTION.md)。配置流程见[headless 通道说明](docs/HEADLESS_TRANSPORT_20261009.md)。
+新版发布包已内置默认启用的接收器。加载模组后，在 MCP 服务中设置 `TF3_MCP_TRANSPORT=no_gui`，并将 `TF3_MCP_NO_GUI_MOD` 指向已安装模组的 `content/tf3_mcp_bridge` 目录。`no_gui` 表示无需手动操作桥接 GUI 面板，游戏窗口仍正常运行。本地 MCP 服务仍需另行配置；旧下载版接收器修复见下文。mod.io 下载版无法发现运行中新增的请求文件，请先阅读[下载版 userdata 配置与验收状态](docs/reference/MODIO_CONNECTION.md)。配置流程见[no_gui 通道说明](docs/NO_GUI_TRANSPORT_20261009.md)。
 
 ## 环境要求
 
@@ -74,7 +74,7 @@ AI 客户端 → MCP（标准输入输出）→ Python 服务 → 一次性请�
 
 ### 4. 配置并连接游戏
 
-> 我已下载并激活游戏模组。阅读本项目文档，帮我安装并配置本地 MCP 服务及 headless 通道，检查本地依赖、接收器和 MCP 连接。游戏载入后，验证连接是否正常。
+> 我已下载并激活游戏模组。阅读本项目文档，帮我安装并配置本地 MCP 服务及 no_gui 通道，检查本地依赖、接收器和 MCP 连接。游戏载入后，验证连接是否正常。
 
 ### 5. 了解当前地图
 
@@ -127,9 +127,11 @@ server/.venv/Scripts/python.exe -m pytest server/tests scripts/tests -q
 
 ## 发布与文档
 
+更新模组信息、准备或清理发布副本、校验或上传前，先阅读[模组发布流程](docs/guides/PUBLISHING.md)。发布副本须排除 `content/tf3_mcp_bridge/no_gui/` 运行时文件，清理时在模组外保留请求证据，之后重新进行游戏原生校验。
+
 发布源文件位于 `mod/tf3_mcp_bridge/`，游戏本地发布副本位于用户目录的 `staging_area/tnj_tf3_ai_bridge/`。通过游戏主菜单 **Mod Hub → My Mods** 校验和上传；按当前发布约定，不生成或上传 ZIP。
 
-**每次升级同时递增 `mod.json` 的整数修订号 `revision` 和脚本中的桥接版本 `BRIDGE_VERSION`。** 模组介绍显示桥接版本号，更新说明标题也按桥接版本号组织，不按日期。同步源码和本地发布副本；两种版本号不要求数值相同。当前基线为修订号 `3`、桥接版本 `0.12.20`。
+**每次升级同时递增 `mod.json` 的整数修订号 `revision` 和脚本中的桥接版本 `BRIDGE_VERSION`。** 模组介绍显示桥接版本号，更新说明标题也按桥接版本号组织，不按日期。同步源码和本地发布副本；两种版本号不要求数值相同。实际基线以源码、发布副本及上一版发布记录为准。
 
 完整版本同步、更新说明和上传检查规则见[模组发布流程](docs/guides/PUBLISHING.md)。更新说明简洁描述修复的问题或新增功能。
 

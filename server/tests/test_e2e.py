@@ -1,5 +1,5 @@
 """Runs the real bridge.script.lua inside lupa against a mocked game API, and talks to it
-through the real file transport. Verifies JSON, the request/response protocol and commands
+through a retired test-only wire harness. Preserves historical command coverage
 without starting the game."""
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover
     import lupa as lupa_mod
 
-from tf3_mcp.bridge import Bridge, BridgeError
+from legacy_file_transport_fixture import Bridge, BridgeError
 
 MOCK_CONSTRUCTION = Path(__file__).resolve().parent / "mock_construction.lua"
 SCRIPT = Path(__file__).resolve().parents[2] / "mod" / "tf3_mcp_bridge" / "content" / "tf3_mcp_bridge" / "bridge.script.lua"
@@ -257,7 +257,14 @@ class FakeGame:
         g.py_list = self._list
         self.lua.execute(MOCK_USERDATA)
         self.lua.execute(MOCK_CONSTRUCTION.read_text(encoding="utf-8"))
-        self.script = self.lua.execute(SCRIPT.read_text(encoding="utf-8"))
+        source = 'local USERDATA_DIR="tf3_mcp";local POLL_INTERVAL=.1;local HEARTBEAT_INTERVAL=1;local ENGINE_EVENT="tf3_mcp_request";local ENGINE_EVENT_ID="tf3_mcp";local pendingEngine={};local ENGINE_TIMEOUT=25\n' + SCRIPT.read_text(encoding="utf-8")
+        for marker, body in json.loads(Path(__file__).with_name('legacy_file_receiver_fixture.json').read_text(encoding='utf-8')):
+            source = source.replace(marker, body)
+        source = source.replace('state:subscribeToEvent("tnj_bridge_readonly.request")', 'state:subscribeToEvent(ENGINE_EVENT);state:subscribeToEvent("tnj_bridge_readonly.request")')
+        source = source.replace('update = function(_userParams, state, dt)', 'update = function(_userParams, state, dt)\n bridgeTick(dt, "engine", state)')
+        source = source.replace('guiUpdate = function(_userParams, state, _guiState)', 'guiUpdate = function(_userParams, state, _guiState)\n bridgeTick(nil, "gui", state)')
+        source = source.replace('handleEvent = function(_userParams, state, _src, id, name, param)', 'handleEvent = function(_userParams, state, _src, id, name, param)\n if id == ENGINE_EVENT_ID and name == ENGINE_EVENT then handleEngineEvent(state,param);return end')
+        self.script = self.lua.execute(source)
         g.bridge_script = self.script
         self.state = g.engineState
         self._stop = threading.Event()
@@ -595,7 +602,7 @@ def test_engine_state_never_serves_requests(bridge_dir):
     b = Bridge(bridge_dir, timeout=0.5)
     game = FakeGame(bridge_dir)
     update = game.script["update"]
-    from tf3_mcp.bridge import encode_message
+    from legacy_file_transport_fixture import encode_message
     (bridge_dir).mkdir(parents=True, exist_ok=True)
     b.request_path.write_text(encode_message({"id": "x", "cmd": "ping", "args": {}}), encoding="utf-8")
     for _ in range(20):
@@ -605,7 +612,7 @@ def test_engine_state_never_serves_requests(bridge_dir):
 
 
 def test_message_encoding_roundtrip():
-    from tf3_mcp.bridge import decode_message, encode_message
+    from legacy_file_transport_fixture import decode_message, encode_message
     data = {"id": "1", "s": 'quote " backslash \\ newline \n 中文', "n": [1, 2.5]}
     assert decode_message(encode_message(data)) == data
     # tolerate whatever layout the game's serializer uses around the hex field

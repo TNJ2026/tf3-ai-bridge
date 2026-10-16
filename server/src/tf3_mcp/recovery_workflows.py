@@ -1,5 +1,5 @@
 """Concrete opt-in integration with the existing vehicle batch executor."""
-from .headless_workflows import VehicleBatches
+from .no_gui_workflows import VehicleBatches
 from .recovery_runtime import RecoveryBlocked
 
 

@@ -1,11 +1,11 @@
-"""Explicit native save loading through the headless bridge; no computer-use."""
+"""Explicit native save loading through the no_gui bridge; no computer-use."""
 import argparse
 import asyncio
 import json
 from pathlib import Path
 
-from tf3_mcp.headless import HeadlessRequests
-from tf3_mcp.headless_client import HeadlessClient
+from tf3_mcp.no_gui import NoGuiRequests
+from tf3_mcp.no_gui_client import NoGuiClient
 
 
 async def main():
@@ -20,7 +20,7 @@ async def main():
     verify.add_argument('--request-id', required=True)
     verify.add_argument('--deployment-evidence', type=Path, help='Explicit pre-load bridge deployment receipt for an interrupted upgrade load')
     args = parser.parse_args()
-    client = HeadlessClient(HeadlessRequests(args.bridge_dir, args.mod_content))
+    client = NoGuiClient(NoGuiRequests(args.bridge_dir, args.mod_content))
     if args.action == 'load':
         result = await client.load_game(args.slot, args.session)
     else:

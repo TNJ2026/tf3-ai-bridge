@@ -12,9 +12,9 @@ SOURCE = Path(__file__).resolve().parents[2] / 'mod/tf3_mcp_bridge/content/tf3_m
 def test_bridge_compiles_with_loader_headroom(demand):
     text = SOURCE.read_text(encoding='utf-8')
     if demand:
-        text = text.replace('local HEADLESS_GENERATION = "disabled"',
-                            'local HEADLESS_GENERATION = "' + 'a' * 32 + '"')
-        text = text.replace('local HEADLESS_ON_DEMAND = false', 'local HEADLESS_ON_DEMAND = true')
+        text = text.replace('local NO_GUI_GENERATION = "disabled"',
+                            'local NO_GUI_GENERATION = "' + 'a' * 32 + '"')
+        text = text.replace('local NO_GUI_ON_DEMAND = false', 'local NO_GUI_ON_DEMAND = true')
     result = check_bridge_compile(text)
     assert len(result['checks']) == 12 and not result['executed']
 
