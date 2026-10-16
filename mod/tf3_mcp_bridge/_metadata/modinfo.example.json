@@ -1,0 +1,15 @@
+{
+  "name": "Transport Fever 3 AI Bridge",
+  "summary": "Connect a local MCP client to Transport Fever 3.",
+  "description": "Configure your local MCP server and compatible AI client before use. Replace this example with your own release description.",
+  "authors": [
+    {
+      "name": "YOUR_AUTHOR_NAME",
+      "role": "CREATOR"
+    }
+  ],
+  "tags": [
+    "Script Mod"
+  ],
+  "url": ""
+}
