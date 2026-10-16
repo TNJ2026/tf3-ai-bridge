@@ -4,36 +4,33 @@
 <title>TF3 规划图</title>
 <style>
 *{box-sizing:border-box}[hidden]{display:none!important}
-html,body{margin:0;width:100%;height:var(--card-height,800px);overflow:hidden;font:14px system-ui,"Microsoft YaHei",sans-serif;color:var(--color-text-primary,#e5edf2);background:transparent}
-body{display:flex;flex-direction:column}#viewport{position:relative;margin:0;width:100%;flex:1;min-height:0;overflow:hidden;background:transparent;touch-action:none;cursor:default;outline-offset:-3px}#viewport.pannable{cursor:grab}#viewport.dragging{cursor:grabbing}
-#image{position:absolute;left:0;top:0;display:block;max-width:none;user-select:none;pointer-events:none}
+html,body{margin:0;width:100%;height:var(--card-height,800px);min-height:var(--card-height,800px);max-height:var(--card-height,800px);overflow:hidden;font:14px system-ui,"Microsoft YaHei",sans-serif;color:var(--color-text-primary,#e5edf2);background:transparent}
+body{display:flex;flex-direction:column}#viewport{contain:strict;position:relative;margin:0;width:100%;flex:1;min-height:0;overflow:hidden;background:transparent;touch-action:none;cursor:default;outline-offset:-3px}#viewport.pannable{cursor:grab}#viewport.dragging{cursor:grabbing}
+#image{position:absolute;inset:0;background-repeat:no-repeat;user-select:none;pointer-events:none}
 .overlay{position:absolute;z-index:1;background:transparent;border:1px solid #607988;border-radius:8px;text-shadow:0 1px 2px #101e28}
-header{padding:12px;text-align:left}h1{font-size:14px;margin:0;overflow-wrap:anywhere}
-nav{right:12px;bottom:12px;display:flex;gap:6px;align-items:center;padding:6px;max-width:calc(100% - 24px)}
-button,a{font:inherit;color:inherit;background:transparent;border:1px solid #607988;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}button:disabled{opacity:.4;cursor:default}a{text-decoration:none}a[aria-disabled=true]{opacity:.4;pointer-events:none}button:focus-visible,a:focus-visible{outline:2px solid #79c7ff;outline-offset:2px}
-#status{left:12px;bottom:66px;max-width:calc(100% - 24px);padding:8px 12px;line-height:1.5;font-size:12px;overflow-wrap:anywhere}#zoom{min-width:45px;text-align:center}
+nav.overlay{right:12px;top:12px;display:flex;gap:2px;align-items:center;padding:3px 5px;max-width:calc(100% - 24px);border:0;border-radius:999px;background:rgba(0,0,0,.28);color:#fff;text-shadow:none}
+button{font:inherit;font-size:14px;line-height:1;color:inherit;background:transparent;border:0;border-radius:50%;width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;white-space:nowrap}button:hover:not(:disabled){background:rgba(255,255,255,.12)}button:disabled{opacity:.4;cursor:default}button:focus-visible{outline:2px solid #79c7ff;outline-offset:2px}
+#status{left:12px;bottom:66px;max-width:calc(100% - 24px);padding:8px 12px;line-height:1.5;font-size:12px;overflow-wrap:anywhere}#zoom{min-width:38px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
 </style></head>
 <body>
-<header><h1 id="title">规划结果</h1></header>
-<div id="viewport" tabindex="0" aria-label="规划图片；放大后可拖动或使用方向键查看"><img id="image" alt="规划图片" draggable="false" hidden>
-<nav class="overlay" aria-label="规划图操作"><button id="minus" aria-label="缩小" disabled>−</button><span id="zoom">100%</span><button id="plus" aria-label="放大" disabled>＋</button><a id="html" href="#" aria-disabled="true">打开 HTML ↗</a></nav>
+<div id="viewport" tabindex="0" aria-label="规划图片；放大后可拖动或使用方向键查看"><div id="image" role="img" aria-label="规划图片" hidden></div>
+<nav class="overlay" aria-label="规划图操作"><button id="minus" aria-label="缩小" disabled>−</button><span id="zoom">100%</span><button id="plus" aria-label="放大" disabled>＋</button></nav>
 <div id="status" class="overlay" role="status" hidden></div>
 </div>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), image=$('image'), viewport=$('viewport');
-let scale=1, data=null, nextId=1, ready=false, hostOrigin='*', panX=0, panY=0, drag=null, lastHeight=0, loaded=false, minScale=1;
+let sourceImage=new Image();
+let scale=1, data=null, nextId=1, ready=false, hostOrigin='*', panX=0, panY=0, drag=null, lastHeight=0, loaded=false, minScale=1, cardHeight=800, sizeLocked=false;
 let uiLanguage = navigator.language || 'en';
 function t(zh,en){return /^zh(?:[-_]|$)/i.test(uiLanguage)?zh:en;}
 function localize(value){
  if(typeof value==='string'&&value)uiLanguage=value;
  document.documentElement.lang=t('zh-CN','en');document.title=t('TF3 规划图','TF3 Planning');
- if(!data)$('title').textContent=t('规划结果','Planning result');
  viewport.setAttribute('aria-label',t('规划图片；放大后可拖动或使用方向键查看','Planning image; drag or use arrow keys after zooming'));
  document.querySelector('nav').setAttribute('aria-label',t('规划图操作','Planning image controls'));
  $('minus').setAttribute('aria-label',t('缩小','Zoom out'));$('plus').setAttribute('aria-label',t('放大','Zoom in'));
- $('html').textContent=t('打开 HTML ↗','Open HTML ↗');
- if(!data)image.alt=t('规划图片','Planning image');
+ if(!data)image.setAttribute('aria-label',t('规划图片','Planning image'));
 }
 localize(uiLanguage);
 const pending=new Map();
@@ -41,33 +38,29 @@ function post(message){window.parent.postMessage({jsonrpc:'2.0',...message},host
 function notify(method,params={}){post({method,params});}
 function request(method,params){return new Promise((resolve,reject)=>{const id=nextId++;const timeout=setTimeout(()=>{pending.delete(id);reject(new Error(t('宿主响应超时', 'Host response timed out')));},10000);pending.set(id,{resolve,reject,timeout});post({id,method,params});});}
 function status(message){$('status').textContent=message;$('status').hidden=!message;}
-function resize(){const height=document.documentElement.getBoundingClientRect().height;if(ready&&height!==lastHeight){lastHeight=height;notify('ui/notifications/size-changed',{height});}}
-function hostContext(context){if(!data)localize(context?.locale);const dims=context?.containerDimensions;if(!dims)return;const height=dims.height??dims.maxHeight;if(Number.isFinite(height)&&height>0)document.documentElement.style.setProperty('--card-height',height+'px');zoom(scale);resize();}
+function resize(){if(ready&&lastHeight===0){lastHeight=cardHeight;notify('ui/notifications/size-changed',{height:cardHeight});}}
+function hostContext(context){if(!data)localize(context?.locale);if(!sizeLocked){const dims=context?.containerDimensions;const height=dims?.maxHeight??dims?.height;if(Number.isFinite(height)&&height>0)cardHeight=Math.min(800,height);document.documentElement.style.setProperty('--card-height',cardHeight+'px');sizeLocked=true;}zoom(scale);}
 function zoom(value){
  if(!loaded)return;
- const w=viewport.clientWidth,h=viewport.clientHeight,iw=image.naturalWidth,ih=image.naturalHeight;
- const fit=Math.max(w/iw,h/ih);minScale=Math.min(w/iw,h/ih)/fit;
+ const w=viewport.clientWidth,h=viewport.clientHeight,iw=sourceImage.naturalWidth,ih=sourceImage.naturalHeight;
+ const fit=data?.imageFit==='contain'?Math.min(w/iw,h/ih):Math.max(w/iw,h/ih);minScale=Math.min(w/iw,h/ih)/fit;
  scale=Math.max(minScale,Math.min(5,value));
  const width=iw*fit*scale,height=ih*fit*scale;
  const maxX=Math.max(0,width-w),maxY=Math.max(0,height-h);
  panX=Math.max(-maxX,Math.min(0,panX));panY=Math.max(-maxY,Math.min(0,panY));
- image.style.width=width+'px';image.style.height=height+'px';image.style.transform=`translate(${panX}px,${panY}px)`;
+ // Keep every DOM box fixed: host auto-sizing may measure clipped descendant bounds.
+ image.style.backgroundSize=`${width}px ${height}px`;image.style.backgroundPosition=`${panX}px ${panY}px`;
  $('zoom').textContent=Math.round(scale*100)+'%';$('minus').disabled=scale<=minScale;$('plus').disabled=scale>=5;
  viewport.classList.toggle('pannable',maxX>0||maxY>0);
- const controls=document.querySelector('nav');controls.style.right=controls.style.bottom='auto';
- controls.style.left=Math.max(0,Math.min(width,w)-controls.offsetWidth-12)+'px';
- controls.style.top=Math.max(0,Math.min(height,h)-controls.offsetHeight-12)+'px';
 }
 function show(result){
  if(result.isError){status(t('规划失败，请查看工具返回的错误。', 'Planning failed. See the tool error.'));return;}
  const card=result._meta?.planningCard;if(!card){status(t('未收到规划图片，请重新调用规划或报告工具。', 'No planning image received. Run the planning or report tool again.'));return;}
- if(typeof card.image!=='string'||!card.image.startsWith('data:image/png;base64,')){status(t('规划图片格式无效', 'Invalid planning image format'));return;}
+ if(typeof card.image!=='string'||!/^data:image\/(?:png|svg\+xml);base64,/.test(card.image)){status(t('规划图片格式无效', 'Invalid planning image format'));return;}
  localize(card.language);data=card;loaded=false;panX=panY=0;scale=1;image.hidden=true;$('minus').disabled=$('plus').disabled=true;
- $('title').textContent=card.title;
- image.onload=()=>{loaded=true;image.hidden=false;zoom(1);status('');resize();};image.onerror=()=>{status(t('图片加载失败，请通过 HTML 查看报告。', 'Image failed to load. Open the HTML report.'));};image.src=card.image;image.alt=card.title;
- $('html').href='#';$('html').setAttribute('aria-disabled','true');
- let url;try{url=new URL(card.htmlUrl);}catch{}
- if(url&&url.protocol==='http:'&&url.hostname==='127.0.0.1'){$('html').href=url.href;$('html').setAttribute('aria-disabled','false');}
+ const source=new Image();sourceImage=source;
+ source.onload=()=>{if(source!==sourceImage)return;loaded=true;image.style.backgroundImage=`url("${card.image}")`;image.hidden=false;zoom(1);status('');resize();};
+ source.onerror=()=>{if(source!==sourceImage)return;status(t('图片加载失败，请重新显示卡片。', 'Image failed to load. Display the card again.'));};source.src=card.image;image.setAttribute('aria-label',card.title||t('规划图片','Planning image'));
 }
 $('plus').onclick=()=>zoom(scale+.25);$('minus').onclick=()=>zoom(scale-.25);
 viewport.addEventListener('wheel',e=>{if(loaded&&e.ctrlKey){e.preventDefault();zoom(scale+(e.deltaY<0?.1:-.1));}},{passive:false});
@@ -76,8 +69,7 @@ viewport.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)retu
 function endDrag(){drag=null;viewport.classList.remove('dragging');}
 viewport.addEventListener('pointerup',endDrag);viewport.addEventListener('pointercancel',endDrag);viewport.addEventListener('lostpointercapture',endDrag);
 viewport.addEventListener('keydown',e=>{if(!loaded)return;const offsets={ArrowLeft:[40,0],ArrowRight:[-40,0],ArrowUp:[0,40],ArrowDown:[0,-40]};if(offsets[e.key]){e.preventDefault();panX+=offsets[e.key][0];panY+=offsets[e.key][1];zoom(scale);}else if(e.key==='+'||e.key==='='){e.preventDefault();zoom(scale+.25);}else if(e.key==='-'){e.preventDefault();zoom(scale-.25);}});
-new ResizeObserver(()=>{zoom(scale);resize();}).observe(viewport);
-$('html').onclick=async e=>{e.preventDefault();if(!data||$('html').getAttribute('aria-disabled')==='true')return;try{const r=await request('ui/open-link',{url:$('html').href});if(r.isError)throw new Error(t('宿主拒绝打开链接', 'Host refused to open the link'));}catch(err){status(err.message+t('。可复制链接手动打开：', '. Copy this link to open manually: ')+$('html').href+t('；本地文件：', '; local file: ')+data.htmlPath);}};
+new ResizeObserver(()=>zoom(scale)).observe(viewport);
 window.addEventListener('message',e=>{
  if(e.source!==window.parent||!e.data||e.data.jsonrpc!=='2.0')return;
  if(hostOrigin!=='*'&&e.origin!==hostOrigin)return;
@@ -89,6 +81,6 @@ window.addEventListener('message',e=>{
  else if(m.method==='ping'&&m.id!=null)post({id:m.id,result:{}});
  else if(m.method==='ui/resource-teardown'&&m.id!=null){post({id:m.id,result:{}});for(const p of pending.values())clearTimeout(p.timeout);pending.clear();}
 });
-request('ui/initialize',{appInfo:{name:'TF3 Planning Card',version:'1.3.0'},appCapabilities:{},protocolVersion:'2026-01-26'}).then(result=>{ready=true;hostContext(result.hostContext);notify('ui/notifications/initialized');resize();}).catch(err=>{status(t('卡片连接失败：', 'Card connection failed: ')+err.message);});
+request('ui/initialize',{appInfo:{name:'TF3 Planning Card',version:'1.6.0'},appCapabilities:{},protocolVersion:'2026-01-26'}).then(result=>{ready=true;hostContext(result.hostContext);notify('ui/notifications/initialized');resize();}).catch(err=>{status(t('卡片连接失败：', 'Card connection failed: ')+err.message);});
 })();
 </script></body></html>
