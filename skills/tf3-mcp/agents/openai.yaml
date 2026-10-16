@@ -1,0 +1,4 @@
+interface:
+  display_name: "Transport Fever 3 MCP"
+  short_description: "TF3 MCP 首次连接、地图查询、运输规划、施工验收与故障恢复"
+  default_prompt: "使用 $tf3-mcp 检查当前连接，并按我的目标查询、规划或操作 Transport Fever 3。"

@@ -96,6 +96,12 @@ For a follow-up operating check:
 
 > Check the new routes for supply shortages, congestion, cargo expiry, and financial risks, and suggest improvements.
 
+## Optional: install the Agent skill
+
+The repository includes the [tf3-mcp skill](skills/tf3-mcp/SKILL.md) for first connection, queries, planning, authorized construction, acceptance, and recovery. Copy the entire `skills/tf3-mcp/` folder into your client's skills directory. For Codex, use `$CODEX_HOME/skills/`, or `~/.codex/skills/` when unset. Back up any existing local customization before updating. After the client discovers the skill, invoke it with `$tf3-mcp`.
+
+The skill does not install the MCP server or grant game-operation permissions. Follow the first-connection guide and keep the project documentation accessible to the Agent. The repository contains the shared skill; changes to a locally installed copy do not automatically sync back. Keep personal paths and actual MCP configuration out of the skill.
+
 ## Operating workflow and current limitations
 
 Check connectivity and the current map before resolving target entities. For world changes, follow **survey → backup → fresh preview → single submission → independent readback**. Reconcile timeouts or unknown outcomes before retrying.
