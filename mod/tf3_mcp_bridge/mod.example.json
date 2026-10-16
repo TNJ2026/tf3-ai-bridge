@@ -1,0 +1,26 @@
+{
+  "dependencies": null,
+  "incompatibilities": [
+    {
+      "mod": {
+        "modId": "tf3_mcp_bridge_1"
+      }
+    }
+  ],
+  "modId": "tnj_tf3_ai_bridge",
+  "options": null,
+  "params": null,
+  "postRunScript": {
+    "fileName": ""
+  },
+  "preRunScript": {
+    "fileName": ""
+  },
+  "revision": 8,
+  "runScript": {
+    "fileName": ""
+  },
+  "severityAdd": "None",
+  "severityRemove": "Warning",
+  "cosmetic": false
+}
