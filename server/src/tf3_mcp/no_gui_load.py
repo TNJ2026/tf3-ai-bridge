@@ -163,3 +163,63 @@ def verify(host, ledger, request_id):
     ledger['loadVerification'] = None
     host._save(ledger)
     return row['response']['result']
+
+
+def reconcile_manual_resume(host, request_id, expected_session, *, user_confirmed_resume=False):
+    """Explicit human-confirmed progress after an observed load; never load again.
+
+    Normal verify remains exact/paused. This recovery instead requires unchanged
+    pre-load map identity, both verified save files and fresh native reads. It
+    records that checkpoint time was NOT verified, without rewriting evidence.
+    """
+    from .no_gui import public_lock
+    from .no_gui_client import NoGuiClient
+    if user_confirmed_resume is not True:
+        raise ValueError('Explicit human confirmation of manual resume required')
+    with public_lock(host.directory):
+        ledger = host._load()
+        row = ledger['requests'].get(request_id, {})
+        result = row.get('response', {}).get('result', {})
+        if (row.get('kind') != 'load' or ledger.get('loadVerification') != request_id
+                or ledger.get('pending') or ledger.get('sessionTransition')
+                or row.get('response', {}).get('ok') is not True
+                or result.get('reloadObserved') is not True
+                or result.get('newSession') != expected_session):
+            raise ValueError('Original acknowledged load and exact observed session required')
+        after = max(row['loadObservedAt'], time.time()-10)
+        _, state = latest_read(ledger, 'get_game_state', expected_session, after=after)
+        _, world = latest_read(ledger, 'get_map_info', expected_session, after=after)
+        _, validation = latest_read(ledger, 'get_validation_state', expected_session, after=after)
+        prior = [r for r in ledger['requests'].values()
+                 if r.get('command') == 'get_map_info' and r.get('session') == row['session']
+                 and r.get('created', 0) <= row['created']
+                 and r.get('response', {}).get('ok') is True]
+        if not prior:
+            raise ValueError('Pre-load native map identity unavailable')
+        before = max(prior, key=lambda r:r['created'])['response']['result']
+        live = host.status()
+        expected = row['loadExpected']
+        tick = state.get('gameTime')
+        if (not {'gameTime','player','world'} <= expected.keys()
+                or type(tick) not in (int,float) or not expected['gameTime'] < tick < float('inf')
+                or any(state.get(k) != expected[k] for k in ('player','world'))
+                or NoGuiClient.map_digest(before) != NoGuiClient.map_digest(world)
+                or live['receiver']['session'] != expected_session
+                or live['receiver']['generation'] != row.get('loadReceiverUpgrade', {}).get('generation',row['generation'])
+                or live['receiver']['status'] != 'ready' or live['ageSeconds'] > 5
+                or validation.get('session') != expected_session or validation.get('pending')):
+            raise ValueError('Progressed-load identity mismatch; writes remain blocked')
+        verify_file(host, row['loadSlot'], row['loadFile'])
+        verify_file(host, row['loadBackupSlot'], row['loadBackup'])
+        proof = dict(userConfirmedManualResume=True, checkpointTimeMatched=False,
+                     savedGameTime=expected['gameTime'], observedGameTime=tick,
+                     preLoadMapDigest=NoGuiClient.map_digest(before), verifiedAt=time.time())
+        identity = dict(session=expected_session, player=state['player'], world=state['world'],
+                        mapDigest=NoGuiClient.map_digest(world))
+        row['manualResumeReconciliation'] = proof
+        row['response']['result'] = dict(result, verified=True,
+            verification='observed_load_manual_resume_identity_reconciled', identity=identity,
+            state=state, checkpointFieldsVerified=['player','world'], manualResume=proof)
+        ledger['loadVerification'] = None
+        host._save(ledger)
+        return row['response']['result']

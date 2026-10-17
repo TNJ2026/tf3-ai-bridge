@@ -1,0 +1,117 @@
+function data()
+return {
+		__version = "",
+		order = 1,
+		params = {
+			albedo_scale = { fragmentProperties = { { albedoScale = { 0.12, 1.0, 0.16 }, }, }, },
+			fade_out_range = {
+				fadeOutEndDist = 0,
+				fadeOutStartDist = 0,
+			},
+			alpha_test = {
+				fragmentProperties = {
+					{
+						cutout = false,
+						sorted = false,
+					},
+				},
+			},
+			light_receiver = {
+				fragmentProperties = {
+					{
+						isLegacyMaterial = false,
+						lightMask = 2,
+					},
+				},
+			},
+			map_albedo_opacity = {
+				fragmentSamplers = {
+					albedoOpacityTex = {
+						fileName = "::/infrastructure/street/town/mat/tex/town_old_streetlane_albo.dds",
+						type = "TWOD",
+						wrapS = "REPEAT",
+						wrapT = "REPEAT",
+					},
+				},
+			},
+			map_metal_gloss_ao = {
+				fragmentSamplers = {
+					metalGlossAoTex = {
+						fileName = "::/infrastructure/street/town/mat/tex/town_old_streetlane_mga.dds",
+						type = "TWOD",
+						wrapS = "REPEAT",
+						wrapT = "REPEAT",
+					},
+				},
+			},
+			map_normal = {
+				fragmentSamplers = {
+					normalTex = {
+						fileName = "::/infrastructure/street/town/mat/tex/town_old_streetlane_nrm.dds",
+						type = "TWOD",
+						wrapS = "REPEAT",
+						wrapT = "REPEAT",
+					},
+				},
+			},
+			map_op_1 = {
+				fragmentSamplers = {
+					opTex1 = {
+						fileName = "::/infrastructure/street/shared/mat/tex/overlays/overlay_0.dds",
+						textureLodOffset = -2,
+						type = "TWOD",
+						wrapS = "REPEAT",
+						wrapT = "REPEAT",
+					},
+				},
+			},
+			map_op_2 = {
+				fragmentSamplers = {
+					opTex2 = {
+						fileName = "::/infrastructure/street/shared/mat/tex/overlays/big_02.dds",
+						textureLodOffset = -2,
+						type = "TWOD",
+						wrapS = "REPEAT",
+						wrapT = "REPEAT",
+					},
+				},
+			},
+			operation_1 = {
+				fragmentProperties = {
+					{
+						mode = "WORLD_XY",
+						op = "MULTIPLICATION",
+						opacity = 0.35,
+						scale = { 0.0025, 0.0025, },
+					},
+				},
+			},
+			operation_2 = {
+				fragmentProperties = {
+					{
+						mode = "WORLD_XY",
+						op = "OVERLAY",
+						opacity = 0.35,
+						scale = { 0.005, 0.005, },
+					},
+				},
+			},
+			polygon_offset = {
+				fragmentProperties = {
+					{
+						factor = -2,
+						units = -1,
+					},
+				},
+			},
+			two_sided = {
+				fragmentProperties = {
+					{
+						flipNormal = false,
+					},
+				},
+			},
+		},
+		type = "PHYS_TRANSPARENT_NRML_MAP_OP",
+	}
+end

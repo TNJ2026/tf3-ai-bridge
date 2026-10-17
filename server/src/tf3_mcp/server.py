@@ -1059,6 +1059,60 @@ async def list_vehicle_liveries(vehicle: int, part: int = 0) -> dict:
 
 
 @mcp.tool()
+async def get_vehicle_modifiers(vehicle: int) -> dict:
+    """Read native speed/noise/pollution/comfort scales and all modifier sources."""
+    return await _call('get_vehicle_modifiers', _engine=True, vehicle=vehicle)
+
+
+@mcp.tool()
+async def preview_vehicle_modifiers(vehicle: int, top_speed: float | None = None,
+                                    noise: float | None = None, pollution: float | None = None,
+                                    comfort: float | None = None, reset: bool = False) -> dict:
+    """Preview per-vehicle bridge-source scales, NOT km/h. Unspecified fields persist.
+
+    1 is neutral. Native sources add relative increments: 1+sum(scale-1).
+    Speed policy (0,10], others [0,10]; reset removes only this bridge source.
+    Returns a 60-second single-use token. Does not change model resources.
+    """
+    args = dict(vehicle=vehicle)
+    args.update({k:v for k,v in dict(top_speed=top_speed, noise=noise,
+                                    pollution=pollution, comfort=comfort).items() if v is not None})
+    if reset: args['reset'] = True
+    return await _call('preview_vehicle_modifiers', _engine=True, **args)
+
+
+@mcp.tool()
+async def commit_vehicle_modifiers(preview_token: str) -> dict:
+    """Back up, consume preview once, send native ChangeModifier, then independently read.
+
+    Nested native events may finish later: verified=false retains pending. Query
+    get_vehicle_modifier_operation with returned operation_id; NEVER resubmit.
+    """
+    import uuid
+    from .no_gui import workflow_lock
+    if transport_mode() != 'no_gui':
+        raise ToolError('Vehicle modifiers require no_gui transport')
+    client = no_gui_client()
+    with workflow_lock(client.requests.directory):
+        from .ui_log import validate_build_arguments
+        validate_build_arguments('commit_vehicle_modifiers', dict(preview_token=preview_token, backup_save='preflight'))
+        status = await client.status()
+        if status.get('receiver', {}).get('vehicleModifiersVersion') != 1 or status.get('pending'):
+            raise ToolError('Ready vehicleModifiersVersion=1 receiver without pending required')
+        slot = 'modifiers_' + uuid.uuid4().hex
+        saved = await client.call('save_game', {'slot': slot, 'overwrite': False})
+        if not saved.get('verified'): raise ToolError('Backup not verified')
+        result = await client.call('commit_vehicle_modifiers', dict(preview_token=preview_token, backup_save=slot))
+        return await client.call('get_vehicle_modifier_operation', {'operation_id': result['operation_id']})
+
+
+@mcp.tool()
+async def get_vehicle_modifier_operation(operation_id: str) -> dict:
+    """Reconcile source AND effective scales without resending a vehicle change."""
+    return await _call('get_vehicle_modifier_operation', _engine=True, operation_id=operation_id)
+
+
+@mcp.tool()
 async def preview_vehicle_appearance(vehicle: int, part: int = 0, model: str | None = None,
                                      r: float | None = None, g: float | None = None,
                                      b: float | None = None, reset: bool = False) -> dict:
@@ -1926,6 +1980,12 @@ async def commit_road_graph(preview_token: str, backup_save: str) -> dict:
 async def get_road_graph_operation(operation_id: str) -> dict:
     """Read stored graph operation result using its preview token; never resubmit."""
     return await _call("get_road_graph_operation", operation_id=operation_id)
+
+
+from .native_extras import register as register_native_extras
+register_native_extras(mcp, _call)
+from .world_commands import register as register_world_commands
+register_world_commands(mcp, _call, no_gui_client)
 
 
 def main() -> None:

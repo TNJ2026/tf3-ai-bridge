@@ -99,6 +99,36 @@ def test_current_save_does_not_scan_unrelated_history(host):
     assert publish(host)['status']=='published'
 
 
+@pytest.mark.parametrize('fault',[None,'not_confirmed','wrong_session','wrong_player','changed_map','changed_backup','pending','time_backwards','stale'])
+def test_manual_resume_recovery_preserves_original_checkpoint(host,fault):
+    from tf3_mcp.no_gui_load import reconcile_manual_resume
+    setup_host(host)
+    world=dict(towns=[{'id':10}],industries=[],width=10,height=10)
+    ledger=host._load();add_read(ledger,'get_map_info',world)
+    ledger['requests']['preload_map']=ledger['requests'].pop('get_map_info');host._save(ledger)
+    ticket=publish(host);ack(host,ticket);transition(host);host.read(ticket['id'])
+    ledger=host._load()
+    state=dict(speedup=1,gameTime=11,player=1,world=2)
+    if fault=='wrong_player':state['player']=3
+    if fault=='time_backwards':state['gameTime']=9
+    if fault=='changed_map':world=dict(world,towns=[])
+    created=1 if fault=='stale' else 100.3
+    add_read(ledger,'get_game_state',state,'new',created)
+    add_read(ledger,'get_map_info',world,'new',created)
+    add_read(ledger,'get_validation_state',dict(session='new',pending='x' if fault=='pending' else None),'new',created)
+    host._save(ledger)
+    if fault=='changed_backup':host._save_path('backup').write_bytes(b'changed')
+    if fault:
+        with pytest.raises(ValueError):
+            reconcile_manual_resume(host,ticket['id'],'other' if fault=='wrong_session' else 'new',user_confirmed_resume=fault!='not_confirmed')
+        assert host._load()['loadVerification']==ticket['id']
+    else:
+        result=reconcile_manual_resume(host,ticket['id'],'new',user_confirmed_resume=True)
+        assert result['verified'] and not result['manualResume']['checkpointTimeMatched']
+        assert host._load()['requests'][ticket['id']]['loadExpected']['gameTime']==10
+        assert host._load()['loadVerification'] is None
+
+
 @pytest.mark.parametrize('fault', [None, 'hash', 'late', 'wrong_generation', 'changed_save'])
 def test_explicit_preload_deployment_resumes_only_original_verification(host, fault):
     import os

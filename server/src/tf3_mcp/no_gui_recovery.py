@@ -141,3 +141,37 @@ def legacy_input_rejection(host, row, source):
                 publishedPayloadSha256=hashlib.sha256(payload).hexdigest(),
                 logWindowSha256=hashlib.sha256(data).hexdigest(), nativeStop=stopped[0],
                 recoverySession=current['session'], requiresFreshMapVerification=True)
+
+
+WORLD_MODULE_SOURCE_SHA256 = '15d4c243d2c9528894f59d0858596a56c6b38b91a0e452efdff20c23d7d24c4c'
+
+
+def world_module_load_rejection(host, row, source):
+    """Audit only the v0.12.65 argument-free catalog load failure before engine dispatch."""
+    from .bridge import encode_message
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    if source_hash != WORLD_MODULE_SOURCE_SHA256:
+        raise ValueError('Source is not the audited world-module receiver image')
+    if (row.get('kind') != 'build' or row.get('command') != 'list_world_actions'
+            or row.get('input') != row.get('id', '') + ' list_world_actions'
+            or row.get('status') != 'published' or row.get('transport') != 'userdata'):
+        raise ValueError('Only the original argument-free userdata catalog request is eligible')
+    envelope = {k: row[k] for k in ('session', 'generation', 'slot', 'expires', 'kind', 'input')}
+    payload_hash = hashlib.sha256(encode_message(envelope).encode('utf-8')).hexdigest()
+    if payload_hash != row.get('publicationSha256'):
+        raise ValueError('Durable envelope differs from the publication digest')
+    data, lines = request_window(host, row)
+    events = [e for e in matching_rows(lines, row) if e.get('status') != 'ready']
+    if [e.get('status') for e in events] != ['consumed', 'dispatched', 'stopped']:
+        raise ValueError('Missing or conflicting module failure sequence')
+    reason = "module 'tnj_tf3_ai_bridge::/tf3_mcp_bridge/world_actions' not found:"
+    if (any(e.get('id') != row['id'] for e in events[:2])
+            or not events[1].get('detail', '').endswith(reason)
+            or ':10012: Dispatch failed or unknown: ' not in events[2].get('error', '')
+            or not events[2].get('error', '').endswith(reason)
+            or any('[TNJ_UI_READ_V1] id=' + row['id'] in line for line in lines)):
+        raise ValueError('Module failure identity or pre-dispatch evidence mismatch')
+    return dict(kind='audited_world_module_load_rejection', requestId=row['id'],
+                engineDispatchAttempted=False, retryAllowed=False, sourceSha256=source_hash,
+                publishedPayloadSha256=payload_hash, logWindowSha256=hashlib.sha256(data).hexdigest(),
+                nativeEvents=events, requiresFreshMapVerification=True)

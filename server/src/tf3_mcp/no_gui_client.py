@@ -176,6 +176,12 @@ class NoGuiClient:
     async def request(self, command, args, *, on_ticket=None):
         """Caller holds client lock; the host also enforces the public process lock."""
         status = await self.status()
+        from .native_extras import SCHEMAS as EXTRAS_SCHEMAS
+        from .world_commands import COMMANDS as WORLD_ACTION_COMMANDS
+        if command in WORLD_ACTION_COMMANDS and status['receiver'].get('worldActionsVersion') != 1:
+            raise ValueError('Loaded receiver requires worldActionsVersion=1; nothing dispatched')
+        if command in EXTRAS_SCHEMAS and status['receiver'].get('nativeExtrasVersion') != 1:
+            raise ValueError('Loaded receiver requires nativeExtrasVersion=1; nothing dispatched')
         if self.session is None:
             self.session = status['receiver']['session']
         if command == 'build_water_facility' and status['receiver'].get('waterFacilityVersion') != 1:

@@ -2,7 +2,7 @@
 -- the native mod_presets mailbox; responses and heartbeat use structured logs.
 -- The retired fixed request.lua/response.lua transport is not polled.
 
-local BRIDGE_VERSION = "0.12.32"
+local BRIDGE_VERSION = "0.12.71"
 local NO_GUI_GENERATION = "disabled"
 local MAX_LIST = 2000
 -- Diagnostic installer may pin one audited legacy rejection; never caller supplied.
@@ -6861,11 +6861,265 @@ end
 
 -- Engine-side UI construction transport. Deliberately separate from read queries.
 local uiBuild = {}
+local worldActionCommands={list_world_actions=true,preview_world_action=true,commit_world_action=true,get_world_action_operation=true}
+function uiBuild.worldActions()
+ if not uiBuild.worldActionAdapter then
+  uiBuild.worldActionAdapter=ug_require("tnj_tf3_ai_bridge::/tf3_mcp_bridge/world_actions.lua").create({json=json,isCallable=isCallable,
+   commands=commands,getComponent=getComponent,ownerOf=ownerOf,toPlain=toPlain,signature=stableDataSignature,wallClock=wallClock})
+ end
+ return uiBuild.worldActionAdapter
+end
+-- Native extras v1: GUI-only presentation and bounded engine diagnostics.
+-- No string-to-function dispatch, simulation writes, or automatic retry.
+do
+ local e={schemas={},gui={},reads={},dependencies={},handlers={}}
+ uiBuild.extras=e
+ -- Resolve only fixed native paths at call time; never traverse a captured API root.
+ local nativeAccessors={
+  ["engine.system.emissionGridSystem.getInterpolatedEmission"]=function()return api.engine.system.emissionGridSystem.getInterpolatedEmission end,
+  ["engine.system.landVehicleMoveSystem.getBlockedTrains"]=function()return api.engine.system.landVehicleMoveSystem.getBlockedTrains end,
+  ["engine.system.lineSystem.getBestLineAssignment"]=function()return api.engine.system.lineSystem.getBestLineAssignment end,
+  ["engine.system.simPersonSystem.getSimPersonsForDestination"]=function()return api.engine.system.simPersonSystem.getSimPersonsForDestination end,
+  ["gui.HighlightStyle.Circle"]=function()return api.gui.HighlightStyle.Circle end,
+  ["gui.HighlightStyle.Mask"]=function()return api.gui.HighlightStyle.Mask end,
+  ["gui.HighlightStyle.Square"]=function()return api.gui.HighlightStyle.Square end,
+  ["gui.benchMark.getBeginFrameTimes"]=function()return api.gui.benchMark.getBeginFrameTimes end,
+  ["gui.benchMark.getCommandTimes"]=function()return api.gui.benchMark.getCommandTimes end,
+  ["gui.benchMark.getCoreStepTimes"]=function()return api.gui.benchMark.getCoreStepTimes end,
+  ["gui.benchMark.getEventTimes"]=function()return api.gui.benchMark.getEventTimes end,
+  ["gui.benchMark.getGameStepTimes"]=function()return api.gui.benchMark.getGameStepTimes end,
+  ["gui.benchMark.getRenderTimes"]=function()return api.gui.benchMark.getRenderTimes end,
+  ["gui.benchMark.getReplicateTimes"]=function()return api.gui.benchMark.getReplicateTimes end,
+  ["gui.benchMark.getSwapTimes"]=function()return api.gui.benchMark.getSwapTimes end,
+  ["gui.byId.setHighlighted"]=function()return api.gui.byId.setHighlighted end,
+  ["gui.camera.enterFollowCameraCockpit"]=function()return api.gui.camera.enterFollowCameraCockpit end,
+  ["gui.camera.focusEntity"]=function()return api.gui.camera.focusEntity end,
+  ["gui.camera.focusPosition"]=function()return api.gui.camera.focusPosition end,
+  ["gui.camera.followEntity"]=function()return api.gui.camera.followEntity end,
+  ["gui.camera.getCenter"]=function()return api.gui.camera.getCenter end,
+  ["gui.camera.getEye"]=function()return api.gui.camera.getEye end,
+  ["gui.camera.getFollowEntity"]=function()return api.gui.camera.getFollowEntity end,
+  ["gui.camera.leaveFollowCameraCockpit"]=function()return api.gui.camera.leaveFollowCameraCockpit end,
+  ["gui.camera.takeScreenshot"]=function()return api.gui.camera.takeScreenshot end,
+  ["gui.guide.GuideTarget.new"]=function()return api.gui.guide.GuideTarget.new end,
+  ["gui.guide.resetGuide"]=function()return api.gui.guide.resetGuide end,
+  ["gui.guide.trySpawnGuideById"]=function()return api.gui.guide.trySpawnGuideById end,
+  ["gui.mission.getCutsceneElapsedTime"]=function()return api.gui.mission.getCutsceneElapsedTime end,
+  ["gui.mission.isCutscenePlaying"]=function()return api.gui.mission.isCutscenePlaying end,
+  ["gui.mission.playCutscene"]=function()return api.gui.mission.playCutscene end,
+  ["gui.mission.removeMarker"]=function()return api.gui.mission.removeMarker end,
+  ["gui.mission.removeMovePathVisualization"]=function()return api.gui.mission.removeMovePathVisualization end,
+  ["gui.mission.removeZone"]=function()return api.gui.mission.removeZone end,
+  ["gui.mission.setMarkerAtPosition"]=function()return api.gui.mission.setMarkerAtPosition end,
+  ["gui.mission.setMovePathVisualizationAtEntity"]=function()return api.gui.mission.setMovePathVisualizationAtEntity end,
+  ["gui.mission.setZoneCircle"]=function()return api.gui.mission.setZoneCircle end,
+  ["gui.sound.letVehicleHorn"]=function()return api.gui.sound.letVehicleHorn end,
+  ["gui.sound.playRandomSoundEffect"]=function()return api.gui.sound.playRandomSoundEffect end,
+  ["gui.spawnEphemeralHudImage"]=function()return api.gui.spawnEphemeralHudImage end,
+  ["gui.voiceOverManager.getPlaying"]=function()return api.gui.voiceOverManager.getPlaying end,
+  ["gui.voiceOverManager.isPlayingAny"]=function()return api.gui.voiceOverManager.isPlayingAny end,
+  ["gui.voiceOverManager.play"]=function()return api.gui.voiceOverManager.play end,
+  ["gui.voiceOverManager.stop"]=function()return api.gui.voiceOverManager.stop end,
+  ["type.EmissionGrid.Type.Noise"]=function()return api.type.EmissionGrid.Type.Noise end,
+  ["type.EmissionGrid.Type.Pollution"]=function()return api.type.EmissionGrid.Type.Pollution end,
+  ["type.Vec2f.new"]=function()return api.type.Vec2f.new end,
+  ["type.Vec3f.new"]=function()return api.type.Vec3f.new end,
+  ["type.Vec4f.new"]=function()return api.type.Vec4f.new end,
+ }
+ local function resolve(path)
+  local getter=nativeAccessors[path]
+  if not getter then return nil,"unregistered_native_path" end
+  local ok,value=pcall(getter)
+  if not ok then return nil,tostring(value):sub(1,256) end
+  return value
+ end
+ local function invoke(path,...)
+  local fn=resolve(path)
+  assert(isCallable(fn),"Native API unavailable: "..path)
+  return fn(...)
+ end
+ local function entity(id,component)
+  assert(api.engine.entityExists(id),"Entity no longer exists")
+  if component then requireEntity({entity=id},"entity",component) end
+  return id
+ end
+ local function v3(x,y,z)return invoke("type.Vec3f.new",x,y,z)end
+ local function color(a)return v3(a.r,a.g,a.b)end
+ local function key(a)return "tnj_mcp_extras_"..a.key end
+ local function receipt()return {requested=true,executionState="gui",worldMutation=false,visualVerified=false}end
+ local function nativeList(value)
+  assert(type(value)=="table" or type(value)=="userdata","Native list unavailable")
+  local out,count={},0
+  for k,v in pairs(value)do
+   count=count+1
+   assert(count<=200000 and type(k)=="number" and k%1==0 and k>=1 and k<=200000,"Native list exceeds bound or has unsupported indices")
+   out[k]=v
+  end
+  for i=1,count do assert(out[i]~=nil,"Native list is sparse")end
+  return out
+ end
+ local function add(name,schema,scope,dependencies,fn)
+  e.schemas[name]=schema;e.dependencies[name]=dependencies;e.handlers[name]=fn
+  if scope=="engine" then
+   e.reads[name]=true;commands[name]=fn;ENGINE_COMMANDS[name]=true
+  else e.gui[name]=true;if scope=="read" then e.reads[name]=true end end
+ end
+ local function valid(kind,v)
+  if kind=="bool" then return type(v)=="boolean" end
+  if kind=="text" or kind=="key" or kind=="resource" or kind=="style" then
+   if type(v)~="string" or #v<1 or #v>512 or v:find("[%z\1-\31]") then return false end
+   if kind=="key" then return #v<=48 and v:match("^[a-zA-Z0-9_-]+$")~=nil end
+   if kind=="style" then return v=="Circle" or v=="Square" or v=="Mask" end
+   if kind=="resource" then
+    local prefix,path=v:match("^(.-)::/(.+)$")
+    if not prefix or (prefix~="" and not prefix:match("^[a-zA-Z0-9_-]+$")) or path:find("\\",1,true) or path:find("//",1,true) or path:sub(-1)=="/" then return false end
+    for part in path:gmatch("[^/]+")do if part=="." or part==".." then return false end end
+   end
+   return true
+  end
+  if type(v)~="number" or v~=v or math.abs(v)==math.huge then return false end
+  local ranges={entity={0,2147483646},offset={0,10000000},limit={1,200},scale={1,4},ratio={0,1},distance={0.01,100000},scaling={0.01,100},duration={0.1,60},delay={0,60},number={-10000000,10000000}}
+  local r=ranges[kind]
+  if not r or v<r[1] or v>r[2] then return false end
+  return not ({entity=true,offset=true,limit=true,scale=true})[kind] or v%1==0
+ end
+ e.validate=function(cmd,a)
+  local schema=assert(e.schemas[cmd],"Unknown extras command")
+  assert(type(a)=="table","Expected extras arguments")
+  for k,v in pairs(a)do assert(schema[k] and valid(schema[k],v),"Invalid extras argument: "..tostring(k)) end
+  for k in pairs(schema)do assert(a[k]~=nil,"Missing extras argument: "..k)end
+ end
+ local function readFields(fields)
+  local out={complete=true,fields={}}
+  for name,fn in pairs(fields)do
+   local ok,value=pcall(fn)
+   out.fields[name]={available=ok and value~=nil}
+   if ok and value~=nil then out.fields[name].value=value
+   else out.complete=false;out.fields[name].error=ok and "native_value_unavailable" or tostring(value):sub(1,256) end
+  end
+  return out
+ end
+ local function vector(v)return {x=v.x,y=v.y,z=v.z}end
+ add("get_native_extras_capabilities",{},"read",{},function()
+  local out={nativeExtrasVersion=1,tools={},liveValidated=false}
+  for name,deps in pairs(e.dependencies)do
+   local row={available=true,executionState=e.gui[name] and "gui" or "engine",readOnly=e.reads[name]==true,missing={},diagnostics={}}
+   for _,path in ipairs(deps)do
+    local value,err=resolve(path)
+    if not isCallable(value) then row.available=false;row.missing[#row.missing+1]=path;row.diagnostics[path]={valueType=type(value),error=err} end
+   end
+   out.tools[name]=row
+  end
+  return out
+ end)
+ add("focus_game_entity",{entity="entity"},"gui",{"gui.camera.focusEntity"},function(a)invoke("gui.camera.focusEntity",entity(a.entity));return receipt()end)
+ add("focus_game_position",{x="number",y="number",z="number",distance="distance"},"gui",{"gui.camera.focusPosition","type.Vec3f.new"},function(a)invoke("gui.camera.focusPosition",v3(a.x,a.y,a.z),a.distance);return receipt()end)
+ add("follow_game_entity",{entity="entity",jump="bool"},"gui",{"gui.camera.followEntity"},function(a)invoke("gui.camera.followEntity",entity(a.entity),a.jump);return receipt()end)
+ add("enter_vehicle_cockpit",{vehicle="entity"},"gui",{"gui.camera.enterFollowCameraCockpit"},function(a)invoke("gui.camera.enterFollowCameraCockpit",entity(a.vehicle,"TRANSPORT_VEHICLE"));return receipt()end)
+ add("leave_vehicle_cockpit",{},"gui",{"gui.camera.leaveFollowCameraCockpit"},function()invoke("gui.camera.leaveFollowCameraCockpit");return receipt()end)
+ add("take_game_screenshot",{scale="scale"},"gui",{"gui.camera.takeScreenshot"},function(a)invoke("gui.camera.takeScreenshot",a.scale);local r=receipt();r.fileVerified=false;return r end)
+ add("get_game_camera",{},"read",{"gui.camera.getEye","gui.camera.getCenter","gui.camera.getFollowEntity"},function()
+  return readFields({eye=function()return vector(invoke("gui.camera.getEye"))end,center=function()return vector(invoke("gui.camera.getCenter"))end,
+   follow=function()local v=invoke("gui.camera.getFollowEntity");return {entity=v[1],revision=v[2]}end})
+ end)
+ add("set_map_marker",{key="key",x="number",y="number",z="number",marker_type="text",scaling="scaling"},"gui",{"gui.mission.setMarkerAtPosition","type.Vec3f.new"},function(a)
+  invoke("gui.mission.setMarkerAtPosition",key(a),v3(a.x,a.y,a.z),a.marker_type,a.scaling,false,false);return receipt()
+ end)
+ add("remove_map_marker",{key="key"},"gui",{"gui.mission.removeMarker"},function(a)invoke("gui.mission.removeMarker",key(a));return receipt()end)
+ add("set_map_circle",{key="key",x="number",y="number",radius="distance",r="ratio",g="ratio",b="ratio",alpha="ratio"},"gui",{"gui.mission.setZoneCircle","type.Vec2f.new","type.Vec4f.new"},function(a)
+  invoke("gui.mission.setZoneCircle",key(a),invoke("type.Vec2f.new",a.x,a.y),a.radius,true,invoke("type.Vec4f.new",a.r,a.g,a.b,a.alpha),false,false,0)
+  local r=receipt();r.prohibitBuilding=false;r.coverageVerified=false;return r
+ end)
+ add("remove_map_circle",{key="key"},"gui",{"gui.mission.removeZone"},function(a)invoke("gui.mission.removeZone",key(a));return receipt()end)
+ add("show_vehicle_path",{key="key",vehicle="entity",r="ratio",g="ratio",b="ratio"},"gui",{"gui.mission.setMovePathVisualizationAtEntity","type.Vec3f.new"},function(a)
+  invoke("gui.mission.setMovePathVisualizationAtEntity",key(a),entity(a.vehicle,"TRANSPORT_VEHICLE"),color(a));return receipt()
+ end)
+ add("remove_vehicle_path",{key="key"},"gui",{"gui.mission.removeMovePathVisualization"},function(a)invoke("gui.mission.removeMovePathVisualization",key(a));return receipt()end)
+ add("highlight_game_ui",{target="text",highlighted="bool",style="style",r="ratio",g="ratio",b="ratio"},"gui",{"gui.byId.setHighlighted","type.Vec3f.new"},function(a)
+  local style=assert(resolve("gui.HighlightStyle."..a.style),"Native highlight style unavailable")
+  invoke("gui.byId.setHighlighted",a.target,a.highlighted,style,color(a),true);return receipt()
+ end)
+ add("show_game_guide",{target="text",tooltip="text",caption="text"},"gui",{"gui.guide.trySpawnGuideById","gui.guide.GuideTarget.new"},function(a)
+  local shown=invoke("gui.guide.trySpawnGuideById",{invoke("gui.guide.GuideTarget.new",a.target)},a.tooltip,a.caption)
+  assert(type(shown)=="boolean","Native guide result unavailable");local r=receipt();r.shown=shown;return r
+ end)
+ add("reset_game_guide",{},"gui",{"gui.guide.resetGuide"},function()invoke("gui.guide.resetGuide");return receipt()end)
+ add("show_entity_hud_icon",{entity="entity",icon="resource",duration="duration"},"gui",{"gui.spawnEphemeralHudImage","type.Vec4f.new"},function(a)
+  invoke("gui.spawnEphemeralHudImage",a.icon,entity(a.entity),invoke("type.Vec4f.new",1,1,1,1),nil,a.duration,true,true);return receipt()
+ end)
+ add("sound_vehicle_horn",{vehicle="entity"},"gui",{"gui.sound.letVehicleHorn"},function(a)invoke("gui.sound.letVehicleHorn",entity(a.vehicle,"TRANSPORT_VEHICLE"));return receipt()end)
+ add("play_game_sound",{resource="resource"},"gui",{"gui.sound.playRandomSoundEffect"},function(a)invoke("gui.sound.playRandomSoundEffect",{a.resource});return receipt()end)
+ add("play_game_voiceover",{resource="resource",delay="delay"},"gui",{"gui.voiceOverManager.play"},function(a)invoke("gui.voiceOverManager.play",a.resource,a.delay);return receipt()end)
+ add("stop_game_voiceover",{},"gui",{"gui.voiceOverManager.stop"},function()invoke("gui.voiceOverManager.stop");return receipt()end)
+ add("get_game_voiceover",{},"read",{"gui.voiceOverManager.isPlayingAny","gui.voiceOverManager.getPlaying"},function()
+  return readFields({playing=function()return invoke("gui.voiceOverManager.isPlayingAny")end,resource=function()return invoke("gui.voiceOverManager.getPlaying")end})
+ end)
+ add("play_game_cutscene",{resource="resource",resolve_language="bool"},"gui",{"gui.mission.playCutscene"},function(a)invoke("gui.mission.playCutscene",a.resource,a.resolve_language);return receipt()end)
+ add("get_game_cutscene",{},"read",{"gui.mission.isCutscenePlaying","gui.mission.getCutsceneElapsedTime"},function()
+  return readFields({playing=function()return invoke("gui.mission.isCutscenePlaying")end,elapsed=function()return invoke("gui.mission.getCutsceneElapsedTime")end})
+ end)
+ add("get_game_performance",{limit="limit"},"read",{"gui.benchMark.getBeginFrameTimes","gui.benchMark.getEventTimes","gui.benchMark.getCoreStepTimes","gui.benchMark.getRenderTimes","gui.benchMark.getSwapTimes","gui.benchMark.getReplicateTimes","gui.benchMark.getCommandTimes","gui.benchMark.getGameStepTimes"},function(a)
+  local fields={};local series={beginFrame="getBeginFrameTimes",events="getEventTimes",guiUpdate="getCoreStepTimes",render="getRenderTimes",swap="getSwapTimes",replicate="getReplicateTimes",commands="getCommandTimes",simulation="getGameStepTimes"}
+  for name,method in pairs(series)do
+   local field,fn=name,method
+   fields[field]=function()
+    local values=nativeList(invoke("gui.benchMark."..fn));local out={samples={},total=#values,units="native_unspecified",order="native",complete=#values<=a.limit}
+    for i=1,math.min(#values,a.limit)do
+     local value=values[i]
+     if field=="replicate" or field=="commands" or field=="simulation" then value={frameTime=value.frameTime,gameTime=value.gameTime} end
+     out.samples[#out.samples+1]=value
+    end
+    return out
+   end
+  end
+  return readFields(fields)
+ end)
+ local function page(values,a)
+  local out={items={},total=#values,offset=a.offset,limit=a.limit,complete=a.offset+a.limit>=#values,snapshot=false}
+  for i=a.offset+1,math.min(#values,a.offset+a.limit)do out.items[#out.items+1]=values[i]end
+  if not out.complete then out.nextOffset=a.offset+#out.items end
+  return out
+ end
+ add("get_blocked_trains",{offset="offset",limit="limit"},"engine",{"engine.system.landVehicleMoveSystem.getBlockedTrains"},function(a)
+  local pairsOut={}
+  for _,v in ipairs(nativeList(invoke("engine.system.landVehicleMoveSystem.getBlockedTrains")))do
+   assert(valid("entity",v[1]) and valid("entity",v[2]),"Invalid native train pair")
+   pairsOut[#pairsOut+1]={first=v[1],second=v[2]}
+  end
+  table.sort(pairsOut,function(x,y)return x.first==y.first and x.second<y.second or x.first<y.first end)
+  local out=page(pairsOut,a);out.pairDirection="native_undocumented";return out
+ end)
+ add("get_line_terminal_suggestions",{line="entity",allow_terminal_changes="bool"},"engine",{"engine.system.lineSystem.getBestLineAssignment"},function(a)
+  entity(a.line,"LINE");local line=getComponent(a.line,"LINE")
+  assert(#nativeList(line.stops)<=128,"Line exceeds diagnostic bound")
+  local values=nativeList(invoke("engine.system.lineSystem.getBestLineAssignment",a.line,line,a.allow_terminal_changes))
+  assert(#values<=128,"Native assignments exceed diagnostic bound")
+  local out={line=a.line,assignments={},applied=false}
+  for i,v in ipairs(values)do out.assignments[#out.assignments+1]={stopIndex=i-1,station=v.station,terminal=v.terminal}end
+  return out
+ end)
+ add("get_destination_persons",{destination="entity",offset="offset",limit="limit"},"engine",{"engine.system.simPersonSystem.getSimPersonsForDestination"},function(a)
+  entity(a.destination);local values=nativeList(invoke("engine.system.simPersonSystem.getSimPersonsForDestination",a.destination))
+  for _,id in ipairs(values)do assert(valid("entity",id),"Invalid native person ID")end
+  table.sort(values)
+  local out=page(values,a);out.destination=a.destination;out.meaning="home_work_or_shopping_destination_not_current_trip";return out
+ end)
+ add("sample_environment",{x="number",y="number",use_average="bool"},"engine",{"engine.system.emissionGridSystem.getInterpolatedEmission","type.Vec2f.new"},function(a)
+  local function sample(kind)
+   local enum=assert(resolve("type.EmissionGrid.Type."..kind),"Emission grid enum unavailable")
+   local value=invoke("engine.system.emissionGridSystem.getInterpolatedEmission",invoke("type.Vec2f.new",a.x,a.y),a.use_average,enum)
+   assert(type(value)=="number" and value==value and math.abs(value)<math.huge,"Native emission unavailable")
+   return value
+  end
+  local out=readFields({noise=function()return sample("Noise")end,pollution=function()return sample("Pollution")end})
+  out.x=a.x;out.y=a.y;out.useAverage=a.use_average;out.units="native_grid_not_model_score";return out
+ end)
+end
 do
  local SAVED_MUTATION_LIMIT=1024 -- active receipts; reset retires terminal IDs without forgetting them
  local QUOTA_LIMIT=256
  local REPLAY_ID_LIMIT=65536 -- finite storage guard, never reset or silently evict
- local schemas={execute_project={},resume_project={},get_project={},cancel_project={},list_vehicle_liveries={vehicle="entity",part="offset"},reset_vehicle_color={vehicle="entity"},get_line_appearance={line="entity"},preview_vehicle_appearance={vehicle="entity",part="offset",model="text",r="ratio",g="ratio",b="ratio",reset="bool"},commit_vehicle_appearance={preview_token="token",backup_save="save_slot",max_cost="number",cash_floor="number"},get_vehicle_appearance={vehicle="entity"},set_vehicle_color={vehicle="entity",r="ratio",g="ratio",b="ratio",expected_line="entity"},read_batch={requests="read_requests"},get_town_overview={town="entity"},get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
+ local schemas={get_vehicle_modifiers={vehicle="entity"},preview_vehicle_modifiers={vehicle="entity",top_speed="number",noise="number",pollution="number",comfort="number",reset="bool"},commit_vehicle_modifiers={preview_token="token",backup_save="save_slot"},get_vehicle_modifier_operation={operation_id="token"},execute_project={},resume_project={},get_project={},cancel_project={},list_vehicle_liveries={vehicle="entity",part="offset"},reset_vehicle_color={vehicle="entity"},get_line_appearance={line="entity"},preview_vehicle_appearance={vehicle="entity",part="offset",model="text",r="ratio",g="ratio",b="ratio",reset="bool"},commit_vehicle_appearance={preview_token="token",backup_save="save_slot",max_cost="number",cash_floor="number"},get_vehicle_appearance={vehicle="entity"},set_vehicle_color={vehicle="entity",r="ratio",g="ratio",b="ratio",expected_line="entity"},read_batch={requests="read_requests"},get_town_overview={town="entity"},get_town_cargo_supply={town="entity",include_passengers="bool"},get_industry_bonuses={industry="entity"},get_town_population={town="entity"},get_town_building_stats={ids="entity_ids"},
   get_component_collection={id="entity",component="text",field="text",offset="offset",limit="page_limit"},
   begin_snapshot={snapshot_kind="snapshot_kind",bounds="bounds",spacing="snapshot_spacing",start_construction="entity",end_construction="entity",whole_map="bool"},
   read_snapshot_page={snapshot="token",offset="byte_offset"},release_snapshot={snapshot="token"},
@@ -6932,15 +7186,19 @@ do
   commit_facility={preview_token="token"},get_facility_config={entity="entity",offset="offset",limit="page_limit"},get_facility_access={entity="entity",person_graph="bool",person_geometry="bool"},check_road_junction_path={node="entity",from_edge="entity",to_edge="entity",mode="text"},
   check_network_junction_path={node="entity",from_edge="entity",to_edge="entity",mode="text"},
  }
+ for name,schema in pairs(uiBuild.extras.schemas)do schemas[name]=schema end
+ for name in pairs(worldActionCommands)do schemas[name]={};ENGINE_COMMANDS[name]=true end
  -- Only audited world-read commands may release incorrectly charged legacy slots.
  -- Previews, mutations, unknown commands and unresolved non-read requests stay protected.
- local pureEngineReads={get_project=true,list_vehicle_liveries=true,get_line_appearance=true,get_vehicle_appearance=true,read_batch=true,get_town_overview=true,get_station_removal_operation=true,get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
+ local pureEngineReads={get_vehicle_modifiers=true,get_vehicle_modifier_operation=true,get_project=true,list_vehicle_liveries=true,get_line_appearance=true,get_vehicle_appearance=true,read_batch=true,get_town_overview=true,get_station_removal_operation=true,get_town_cargo_supply=true,get_notifications=true,get_industry_bonuses=true,get_depot_removal_operation=true,get_network_template=true,list_road_structures=true,get_road_graph_operation=true,get_town_population=true,get_town_building_stats=true,get_component_collection=true,begin_snapshot=true,read_snapshot_page=true,release_snapshot=true,preview_headquarters_access=true,get_subvention_operation=true,get_facility_layout=true,get_validation_state=true,get_terrain_operation=true,get_stock_activity=true,get_town_deliveries=true,get_industry_operation=true,get_town_cargo_operation=true,get_prospection_operation=true,get_loan_operation=true,list_network_templates=true,list_multiple_units=true,get_vehicle_cargo=true,get_sim_entity=true,get_stop_cargo=true,get_stock_cargo=true,get_vehicle_motion=true,get_entity=true,list_street_types=true,survey_build_site=true,
   list_facilities=true,get_facility_config=true,get_facility_access=true,get_facility_inventory=true,check_road_junction_path=true,check_network_junction_path=true,
   list_cargo_types=true,get_terrain=true,find_nearby=true,list_facility_resources=true,
   list_industry_resources=true,list_prospections=true,get_prospections=true,get_loans=true,
   get_subventions=true,get_town_cargo_needs=true,get_terrain_operation_capabilities=true,
   list_map_entities=true,release_map_snapshot=true,get_terrain_grid=true,get_map_data=true,get_terrain_tile=true}
- local sent={};local sentReadOrder={}
+ for name in pairs(uiBuild.extras.reads)do pureEngineReads[name]=true end
+ pureEngineReads.list_world_actions=true;pureEngineReads.get_world_action_operation=true
+ local sent={};local sentReadOrder={};local extrasGuiEffects=0
  local function endpoint(value)
   if type(value)~="table" then return false end
   if value.node~=nil then
@@ -6985,6 +7243,8 @@ do
  end
  local batchReads={get_town_overview=true,get_town_cargo_supply=true,get_industry_bonuses=true,get_entity=true,get_terrain=true,get_vehicle_motion=true}
  local function validate(cmd,args)
+  if worldActionCommands[cmd] then return uiBuild.worldActions().validate(cmd,args)end
+  if uiBuild.extras.schemas[cmd] then return uiBuild.extras.validate(cmd,args) end
   if cmd=="execute_project" or cmd=="resume_project" or cmd=="get_project" or cmd=="cancel_project" then return uiBuild.validateProject(cmd,args) end
   if cmd=="read_batch" then
    assert(type(args)=="table" and type(args.requests)=="table","Expected requests")
@@ -7112,7 +7372,7 @@ do
    or (cmd=="reconcile_road_rejection" or cmd=="reconcile_network_rejection" or cmd=="reconcile_depot_rejection" or cmd=="reconcile_town_cargo_rejection" or cmd=="reconcile_subvention_rejection" or cmd=="reconcile_facility_rejection") and {"request_id"}
    or cmd=="preview_road" and {"start","end","street_type"} or cmd=="get_entity" and {"id"}
    or cmd=="survey_build_site" and {"x","y"} or (cmd=="list_facilities" or cmd=="list_street_types") and {} or {"entity"}
-  local extraRequired={list_vehicle_liveries={"vehicle","part"},reset_vehicle_color={"vehicle"},get_line_appearance={"line"},preview_vehicle_appearance={"vehicle","part"},commit_vehicle_appearance={"preview_token","backup_save","max_cost","cash_floor"},get_vehicle_appearance={"vehicle"},set_vehicle_color={"vehicle","r","g","b"},get_town_overview={"town"},preview_station_removal={"entity"},commit_station_removal={"preview_token","backup_save"},get_station_removal_operation={"operation_id"},get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
+  local extraRequired={get_vehicle_modifiers={"vehicle"},preview_vehicle_modifiers={"vehicle"},commit_vehicle_modifiers={"preview_token","backup_save"},get_vehicle_modifier_operation={"operation_id"},list_vehicle_liveries={"vehicle","part"},reset_vehicle_color={"vehicle"},get_line_appearance={"line"},preview_vehicle_appearance={"vehicle","part"},commit_vehicle_appearance={"preview_token","backup_save","max_cost","cash_floor"},get_vehicle_appearance={"vehicle"},set_vehicle_color={"vehicle","r","g","b"},get_town_overview={"town"},preview_station_removal={"entity"},commit_station_removal={"preview_token","backup_save"},get_station_removal_operation={"operation_id"},get_town_cargo_supply={"town"},reconcile_assignment_rejection={"request_id","vehicle","line"},get_industry_bonuses={"industry"},preview_depot_removal={"entity"},commit_depot_removal={"preview_token","backup_save"},get_depot_removal_operation={"operation_id"},get_town_population={"town"},get_town_building_stats={"ids"},get_component_collection={"id","component","field","offset","limit"},begin_snapshot={"snapshot_kind"},read_snapshot_page={"snapshot","offset"},release_snapshot={"snapshot"},preview_line_edit={"line","stops"},set_game_speed={"speed","expected_speed"},preview_headquarters_access={"town","road","x","y","z"},preview_line_terminal={"line","stop_index","station_index","terminal"},preview_subvention={"uid"},commit_subvention={"preview_token"},get_subvention_operation={"operation_id"},get_facility_layout={"entity"},preview_test_removal={"entity"},commit_test_removal={"preview_token"},get_validation_state={},reset_operation_quota={"expected_round","expected_used","expected_count"},preview_flatten_terrain={"bounds","target_height"},commit_flatten_terrain={"preview_token","backup_save"},get_terrain_operation={"operation_id"},get_stock_activity={"stock_list","cargo"},get_town_deliveries={"town"},
    check_network_junction_path={"node","from_edge","to_edge","mode"},
    preview_road_upgrade={"edge","street_type"},preview_street_stop={"edge","param","side","two_sided"},commit_edge_edit={"preview_token"},
    preview_facility_module={"entity","slot","resource"},preview_facility_parameter={"entity","key","value"},build_headquarters={"town","x","y","z"},
@@ -7184,7 +7444,10 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   local ok,args=pcall(json.decode,raw)
   if not ok then return "Invalid construction JSON" end
   local valid,err=pcall(validate,cmd,args)
-  if not valid then return tostring(err) end
+  if not valid then
+   if worldActionCommands[cmd] then emit({id=id,cmd=cmd},false,{rejectedBeforeDispatch=true,code="world_action_preflight_rejected",message=tostring(err)});return "Result logged" end
+   return tostring(err)
+  end
   if sent[id] then return "Duplicate request; inspect existing log" end
   local rollingRead=continualRead==true and pureEngineReads[cmd]==true
   -- The engine owns the durable round quota. GUI admission must not stop
@@ -7195,6 +7458,15 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   end
   sent[id]=true -- reserve before dispatch; mutation IDs are never evicted
   local req={id=id,cmd=cmd,args=args,facilityEpoch=terrainEpoch}
+  if uiBuild.extras.gui[cmd] then
+   if not uiBuild.extras.reads[cmd] then
+    if extrasGuiEffects>=256 then emit(req,false,"GUI effect session limit reached; nothing executed");return "Result logged" end
+    extrasGuiEffects=extrasGuiEffects+1
+   end
+   local good,value=pcall(uiBuild.extras.handlers[cmd],args)
+   emit(req,good,value)
+   return "Result logged"
+  end
   if cmd:find("terrain",1,true) then req.terrainEpoch=terrainEpoch end
   local good,why=pcall(function()
    api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("tf3_mcp_bridge","tnj_bridge_build","tnj_bridge_build.request",json.encode(req)))
@@ -8181,13 +8453,132 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
  end
 
 
+ -- Keep the bridge contribution separate from native landmark/other sources.
+ uiBuild.modifierSource="tnj_tf3_ai_bridge.vehicle_modifiers"
+ uiBuild.modifierFields={top_speed="TopSpeed",noise="Noise",pollution="Pollution",comfort="Comfort"}
+ uiBuild.modifierNative={TopSpeed="topSpeedScale",Noise="noiseScale",Pollution="pollutionScale",Comfort="comfortScale"}
+ uiBuild.modifierSum=function(sources)
+  local out={TopSpeed=1,Noise=1,Pollution=1,Comfort=1}
+  for _,mods in pairs(sources) do
+   for k,v in pairs(mods) do
+    assert(out[k]~=nil and type(v)=="number" and v==v and math.abs(v)<math.huge,"Unknown/nonfinite native modifier")
+    out[k]=out[k]+v-1
+   end
+  end
+  return out
+ end
+ uiBuild.modifierRead=function(args)
+  local id=requireEntity(args,"vehicle","TRANSPORT_VEHICLE")
+  local v=getComponent(id,"TRANSPORT_VEHICLE")
+  local e=api.engine.system.gameScriptSystem.getEntityForGameScript("::/vehicle/vehicle_modifier.gs")
+  local gs=getComponent(e,"GAME_SCRIPT")
+  assert(gs and type(gs.state)=="table" and (gs.state.modificationMap==nil or type(gs.state.modificationMap)=="table"),"Native modifier source state unavailable")
+  local sources={}
+  for source,mods in pairs((gs.state.modificationMap or {})[id] or {}) do
+   assert(type(source)=="string" and type(mods)=="table","Unknown source format")
+   sources[source]={};for k,value in pairs(mods) do sources[source][k]=value end
+  end
+  local total=uiBuild.modifierSum(sources);local effective={};local consistent=true
+  for k,field in pairs(uiBuild.modifierNative) do
+   local value=v.modifiers[field]
+   assert(type(value)=="number" and value==value and math.abs(value)<math.huge,"Effective modifiers unavailable")
+   effective[k]=value
+   if math.abs(value-total[k])>0.00001*math.max(1,math.abs(total[k])) then consistent=false end
+  end
+  return {vehicle=id,owner=ownerOf(id),sources=sources,effective=effective,calculated=total,
+   source=uiBuild.modifierSource,own=sources[uiBuild.modifierSource] or {},consistent=consistent,
+   configSignature=stableDataSignature(toPlain(v.transportVehicleConfig,0,nil,"TransportVehicleConfig")),vehicleModifiersVersion=1,readOnly=true}
+ end
+ uiBuild.modifierPlan=function(args)
+  assert(commands.get_game_state({}).speedup==0,"Pause before modifier preview/commit")
+  local before=uiBuild.modifierRead(args)
+  assert(before.owner==api.engine.util.getPlayer(),"Vehicle not owned")
+  assert(before.consistent,"Native source/effective mismatch; wait or diagnose without writing")
+  local desired={};local supplied=false
+  if not args.reset then for k,v in pairs(before.own) do desired[k]=v end end
+  for arg,k in pairs(uiBuild.modifierFields) do
+   local value=args[arg]
+   if value~=nil then
+    assert(not args.reset,"Reset cannot include scales")
+    assert(type(value)=="number" and value==value and value>=0 and value<=10 and (k~="TopSpeed" or value>0),"Scale outside bridge policy")
+    desired[k]=value;supplied=true
+   end
+  end
+  assert(args.reset==true or supplied,"Choose scales or reset=true")
+  local sources={};for k,v in pairs(before.sources)do sources[k]=v end
+  sources[uiBuild.modifierSource]=next(desired) and desired or nil
+  local expected=uiBuild.modifierSum(sources)
+  for k,v in pairs(expected) do assert(v>=0 and v<=10 and (k~="TopSpeed" or v>0),"Combined scale outside bridge policy") end
+  return {vehicle=args.vehicle,before=before,desired=desired,expected=expected,
+   noChange=stableDataSignature(before.own)==stableDataSignature(desired)},stableDataSignature(before)
+ end
+ commands.get_vehicle_modifiers=uiBuild.modifierRead
+ ENGINE_COMMANDS.get_vehicle_modifiers=true
+ ENGINE_COMMANDS.preview_vehicle_modifiers=true
+ ENGINE_COMMANDS.commit_vehicle_modifiers=true
+ ENGINE_COMMANDS.get_vehicle_modifier_operation=true
+ uiBuild.modifierWorkflow=function(state,root,ledger,req)
+  ledger.modifierPreviews=ledger.modifierPreviews or {}
+  ledger.modifierOperations=ledger.modifierOperations or {}
+  if req.cmd=="get_vehicle_modifier_operation" then
+   local op=assert(ledger.modifierOperations[req.args.operation_id],"Unknown modifier operation")
+   assert(op.epoch==req.facilityEpoch,"Operation session changed")
+   if not op.verified then
+    local good,current=pcall(uiBuild.modifierRead,{vehicle=op.vehicle})
+    if good then
+     op.observed=current
+     local matches=current.owner==op.before.owner and current.configSignature==op.before.configSignature
+      and current.consistent and stableDataSignature(current.own)==stableDataSignature(op.desired)
+     -- A concurrent external source change needs explicit diagnosis, not silent acceptance.
+     for k,v in pairs(op.expected) do if math.abs(current.effective[k]-v)>0.00001*math.max(1,math.abs(v)) then matches=false end end
+     local others={};for k,v in pairs(current.sources) do if k~=uiBuild.modifierSource then others[k]=v end end
+     local old={};for k,v in pairs(op.before.sources) do if k~=uiBuild.modifierSource then old[k]=v end end
+     matches=matches and stableDataSignature(others)==stableDataSignature(old)
+     if matches then
+      op.verified=true;op.status="verified"
+      if ledger.pending==op.request_id then ledger.pending=nil end
+      local receipt=ledger.requests[op.request_id]
+      if receipt then receipt.status="returned";receipt.ok=true end
+     end
+    else op.readError=tostring(current) end
+   end
+   state:set(root);return op
+  end
+  assert(not ledger.pending and not ledger.pendingWorkflow,"Previous mutation unresolved")
+  if req.cmd=="preview_vehicle_modifiers" then
+   local plan,signature=uiBuild.modifierPlan(req.args)
+   local token=req.id.."_modifiers"
+   ledger.modifierPreviews[token]={args=req.args,signature=signature,created=assert(wallClock()),epoch=req.facilityEpoch}
+   plan.preview_token=token;plan.previewKind="calculated-native-source-change";plan.cost=0
+   state:set(root);return plan
+  end
+  local t=ledger.modifierPreviews[req.args.preview_token]
+  ledger.modifierPreviews[req.args.preview_token]=nil;state:set(root)
+  assert(t and t.epoch==req.facilityEpoch,"Unknown or stale modifier preview")
+  local age=assert(wallClock())-t.created;assert(age>=0 and age<=60,"Modifier preview expired")
+  local plan,signature=uiBuild.modifierPlan(t.args)
+  assert(signature==t.signature,"Vehicle/modifier state changed; preview again")
+  local op={operation_id=req.args.preview_token,request_id=req.id,epoch=req.facilityEpoch,
+   vehicle=plan.vehicle,before=plan.before,desired=plan.desired,expected=plan.expected,
+   backup_save=req.args.backup_save,verified=plan.noChange,status=plan.noChange and "verified" or "pending"}
+  ledger.modifierOperations[op.operation_id]=op
+  if plan.noChange then state:set(root);return op end
+  local cmd=api.cmd.makeScriptingSendEventCmd("","VehicleModifier","ChangeModifier",
+   {entity=plan.vehicle,id=uiBuild.modifierSource,modifications=plan.desired})
+  ledger.pending=req.id;state:set(root)
+  -- Nested event completion is NOT proof of effective modifier application.
+  local ok,err=pcall(function() api.cmd.sendCommand(cmd,function()end) end)
+  if not ok then op.status="unknown";op.dispatchError=tostring(err) end
+  state:set(root);return op
+ end
+
  -- Appearance-only native reads. No model replacement, cargo or age mutation.
  uiBuild.appearance=function(args)
   local id=requireEntity(args,"vehicle","TRANSPORT_VEHICLE")
   local v=getComponent(id,"TRANSPORT_VEHICLE")
   local parts=listOf(v.transportVehicleConfig.vehicles)
   assert(#parts>0 and #parts<=128,"Unsupported vehicle part count")
-  local out={vehicle=id,owner=ownerOf(id),line=v.line,parts={},readOnly=true,vehicleAppearanceVersion=2,canColor=false,complete=true}
+  local out={vehicle=id,owner=ownerOf(id),line=v.line,parts={},readOnly=true,vehicleModifiersVersion=1,vehicleAppearanceVersion=2,canColor=false,complete=true}
   for i,part in ipairs(parts) do
    local p=part.part;local model=api.res.modelRep.get(p.modelId)
    local mask=tryField(function()return model.metadata.transportVehicle.noCblendMask end)
@@ -8788,7 +9179,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     ledger.requests={};ledger.count=0
     -- No preview from an earlier round may be committed after resetting.
     ledger.tokens={};ledger.linePreviews={};ledger.edgePreviews={};ledger.workflowTokens={}
-    ledger.stationRemovalPreviews={};ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.appearancePreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
+    ledger.stationRemovalPreviews={};ledger.depotRemovalPreviews={};ledger.structurePreviews={};ledger.consistPreviews={};ledger.appearancePreviews={};ledger.modifierPreviews={};ledger.worldActionPreviews={};ledger.removalPreviews={};ledger.snapshotBuffer=nil
     quota.round=quota.round+1;quota.used=0
     return {reset=true,previous=previous,round=quota.round,used=0,limit=QUOTA_LIMIT,
      remaining=QUOTA_LIMIT,retiredRequestCount=ledger.retiredCount,session=req.facilityEpoch,
@@ -8942,7 +9333,7 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
   if req.cmd=="get_validation_state" then
    local names={};for cmd in pairs(schemas) do names[#names+1]=cmd end;table.sort(names)
    ledger.requests[req.id]={status="returned",cmd=req.cmd,ok=true};state:set(root)
-   emit(req,true,{vehicleAppearanceVersion=2,projectBatchVersion=2,readBatchVersion=1,townOverviewVersion=1,townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,stationRemovalFingerprintVersion=2,stationRemovalVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
+   emit(req,true,{vehicleModifiersVersion=1,vehicleAppearanceVersion=2,projectBatchVersion=2,readBatchVersion=1,townOverviewVersion=1,townPassengerSupplyVersion=1,townCargoSupplyVersion=2,notificationsVersion=1,capabilityRevision="consolidated-20261011-v40",subventionReconciliationVersion=1,assignmentReconciliationVersion=1,stationRemovalFingerprintVersion=2,stationRemovalVersion=1,depotRemovalVersion=1,depotRemovalFingerprintVersion=5,edgeEditSignaturePolicy="crosswalk-membership-v1",frontageDiscoveryPolicy="displaced-discovery-node-v5",frontageHeightPolicy="native-foundation-alignment-v1",roadGradePolicy="native-preview-v1",commands=names,
     roadGraph={command="preview_road_graph",isolatedTestRequired=false,mapUsePolicy="current-map-authorized-v1",
      nodeLimit=32,edgeLimit=48,splitPreview="structural_only",pairedHighway="host_compiler",
      specialCases="v37_candidate_pending_native_acceptance",unsupported={"frozen_internal_nodes","construction_owned_splits","rail_signal_object_splits","custom_rail_switches"}},
@@ -8999,6 +9390,16 @@ get_network_template={"template"},list_road_structures={},preview_road_graph={"g
     result.externalConnectionsBuilt=false;ledger.pending=nil;rememberBuilt(result)
     return result
    end)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
+   state:set(root);emit(req,ok,value);return
+  end
+  if worldActionCommands[req.cmd] then
+   local ok,value=pcall(function()return uiBuild.worldActions().workflow(state,root,ledger,req,native)end)
+   ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
+   state:set(root);emit(req,ok,value);return
+  end
+  if req.cmd=="preview_vehicle_modifiers" or req.cmd=="commit_vehicle_modifiers" or req.cmd=="get_vehicle_modifier_operation" then
+   local ok,value=pcall(uiBuild.modifierWorkflow,state,root,ledger,req)
    ledger.requests[req.id]={status=ok and "returned" or "error",cmd=req.cmd,ok=ok,result=value}
    state:set(root);emit(req,ok,value);return
   end
@@ -9486,6 +9887,9 @@ local NO_GUI_ON_DEMAND = false
 local NO_GUI_USERDATA = false
 -- Same command-specific limit in the ingress and the construction dispatcher.
 function uiBuild.inputLimit(text)
+	local command=type(text)=="string" and text:match("^[0-9a-f]+ ([a-z_]+)")
+	if command and uiBuild.extras.schemas[command] then return 4096 end
+	if command and worldActionCommands[command] then return 8192 end
 	return type(text)=="string" and (text:match("^[0-9a-f]+ preview_line_edit ") or text:match("^[0-9a-f]+ preview_road_graph ") or text:match("^[0-9a-f]+ read_batch ") or text:match("^[0-9a-f]+ execute_project ")) and 8192 or 512
 end
 local no_gui = {slot=1,due=nil,stopped=false,seen={},order={},saveIds={},saveCount=0}
@@ -9574,10 +9978,12 @@ local function no_guiTick()
 		end
 		row.saveGameAvailable=no_gui.canSave()
 		row.loadGameVersion=1;row.loadGameAvailable=no_gui.canLoad()
+		row.nativeExtrasVersion=1
+		row.worldActionsVersion=1
 		row.saveApiType=type(app)=="table" and type(app.saveGame) or "nil"
 		row.saveRequestCount=no_gui.saveCount;row.saveRequestLimit=256
 		row.operationQuotaVersion=1
-		row.vehicleAppearanceVersion=2
+		row.vehicleModifiersVersion=1;row.vehicleAppearanceVersion=2
 		row.projectBatchVersion=2;row.readBatchVersion=1
 		row.townOverviewVersion=1
 		row.stationRemovalFingerprintVersion=2
@@ -9592,6 +9998,8 @@ local function no_guiTick()
 		row.notificationsVersion=1
 		row.waterFacilityFingerprintVersion=2
 		row.inputLimits={default=512,preview_line_edit=8192,preview_road_graph=8192,read_batch=8192,execute_project=8192};row.roadGraphVersion=40
+		for name in pairs(uiBuild.extras.schemas)do row.inputLimits[name]=4096 end
+		for name in pairs(worldActionCommands)do row.inputLimits[name]=8192 end
 		if NO_GUI_ON_DEMAND and not NO_GUI_USERDATA then row.filename="s"..terrainEpoch:gsub("[^a-zA-Z0-9]","_").."_"..no_gui.slot..".lua" end
 		row.utc=os.time();row.clock=wallClock()
 		log("[TNJ_NO_GUI_V1]",json.encode(row))

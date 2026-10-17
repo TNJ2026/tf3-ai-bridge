@@ -24,6 +24,25 @@ uv sync
 
 普通连接无需 `--extra test`。若 Python/uv 未安装，按用户环境完成必要依赖安装；下载或执行安装程序前核实来源。Windows/Steam 是当前安装流程的验证环境，其他系统的路径与流程需现场确认。
 
+### 本地使用与模组中心入口（2026-10-17）
+
+部署前先按用户要使用的入口选择位置，不能把“本地文件已安装”直接报告为“模组中心已显示”。以下 `local/` 指现场发现的游戏 userdata 目录，不是项目源码目录。
+
+| 目标 | 目录或配置 | 验收入口 |
+|---|---|---|
+| 手动安装并用于游戏 | `local/mods/<模组目录>/` | 新游戏或存档设置的“添加模组”页，确认可见并启用 |
+| 在模组中心查看本地开发／发布副本 | `local/staging_area/<模组目录>/` | Mod Hub → My Mods 页签；官方说明至少存在一个 staging 模组时才出现该页签 |
+| 配置自定义内置模组目录 | `settings.lua` 的 `externalModPath` | 仅按自定义目录需求设置，不作为每个本地模组的必填注册项 |
+
+官方依据：[模组定义](https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition)、[发布入口](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)、[新游戏与存档模组启用](https://wiki.transportfever3.com/doku.php?id=gamemanual:gamemodes:freegame)、[externalModPath 与设置文件](https://wiki.transportfever3.com/doku.php?id=gamemanual:ui:settings)。核对日期：2026-10-17。
+
+- 模组技术定义是根目录 `mod.json`，显示名称等元数据是 `_metadata/modinfo.json`。官方说明 `visible` 未设置时默认可见；不因缺少显式 `visible: true` 就断定被隐藏，也不随意改 `modId`。
+- 同 `modId` 的官方优先级为 **staging_area > 手动安装目录 > 订阅模组**。切换来源时同时核对三个位置及当前日志，不自动删除冲突副本；MCP 应指向实际加载副本的 `content/tf3_mcp_bridge`。
+- 模组中心中的在线“我的上传”列表与本地开发的 My Mods 页签分开核实。用户明确说“模组中心看不到”时，应检查当前界面和 staging 入口，不能只让用户反复重启，或把在线同名条目当作本地副本。
+- `settings.lua` 中已有 `activeModsState` 记录不能代替当前存档启用和实际加载验收。若确需编辑该文件，按官方要求先退出游戏，并备份后只改目标配置；不要猜测新增注册字段。
+- 安装目录存在、日志发现 `UserMods`、界面可见、存档启用、接收器加载和只读往返成功是不同证据。逐项报告已验证与待验证状态；发现文件不等于当前地图已运行模组。
+- staging 部署按[发布流程](PUBLISHING.md)保护已有副本、启用接收器并排除运行时残留；准备本地副本不等于上传授权。只更新文档不部署、不重载、不恢复监控。
+
 ## 3. 自动找到实际加载的模组
 
 用户通常无需手工提供下载目录。Agent 按下面顺序发现候选并验证，避免全盘扫描。

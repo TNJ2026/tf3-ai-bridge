@@ -1,0 +1,97 @@
+function data()
+return {
+		availability = {
+			yearFrom = 1940,
+			yearTo = 0,
+			notificationGroup = "townNew",
+			notificationSortKey = 170,
+			notifyWhenAvailable = false,
+		},
+		borderGroundTex = "::/infrastructure/street/shared/town_street_border.gtex",
+		cost = 360,
+		description = {
+			description = _("STREET_TOWN_NEW_MEDIUM_DESC"),
+			icon = "::/infrastructure/street/town/town_new_medium.tga",
+			name = "中型城市道路（绿色 · 500 km/h）",
+			previewIcon = "::/infrastructure/street/town/town_new_medium_preview.tga",
+		},
+		emissions = {
+			noise = 0,
+			pollution = 0,
+			pollutionRadius = 0,
+			radius = 0,
+		},
+		fillGroundTex = "::/infrastructure/street/shared/town_street_fill.gtex",
+		laneConfigs = {
+			{
+				forward = false,
+				height = 0.15,
+				offset = 0.15,
+				speed = 13.89,
+				transportModes = { "PERSON", "CARGO", },
+				width = 3,
+			},
+			{
+				forward = false,
+				height = 0,
+				offset = -0.5,
+				speed = 500 / 3.6,
+				transportModes = { "CAR", "BUS", "TRUCK", },
+				width = 5,
+			},
+			{
+				forward = false,
+				height = 0,
+				offset = 0,
+				speed = 500 / 3.6,
+				transportModes = { "CAR", "BUS", "TRUCK", },
+				width = 4,
+			},
+			{
+				forward = true,
+				height = 0,
+				offset = 0,
+				speed = 500 / 3.6,
+				transportModes = { "CAR", "BUS", "TRUCK", },
+				width = 4,
+			},
+			{
+				forward = true,
+				height = 0,
+				offset = 0.5,
+				speed = 500 / 3.6,
+				transportModes = { "CAR", "BUS", "TRUCK", },
+				width = 5,
+			},
+			{
+				forward = true,
+				height = 0.15,
+				offset = -0.15,
+				speed = 13.89,
+				transportModes = { "PERSON", "CARGO", },
+				width = 3,
+			},
+		},
+		maintenanceCost = 60,
+		menuCategory = {
+			categories = {
+				{
+					category = "roads_medium",
+					filterCategories = { },
+					order = 190,
+				},
+			},
+		},
+		modifiers = {
+			maxSpeedModifier = 0,
+			noiseModifier = 0,
+			pollutionModifier = 0,
+		},
+		priority = 630,
+		roadType = "STREET",
+		sidewalkFillGroundTex = "::/infrastructure/street/shared/street_sidewalk_fill.gtex",
+		simBuildable = true,
+		streetStyle = "tnj_tf3_ai_bridge::/roads/town_medium_500_green.street",
+		builderAudioRes = "::/gui/construction/sound/buildoze_street.builder_audio",
+	}
+end

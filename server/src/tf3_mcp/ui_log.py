@@ -81,6 +81,10 @@ def validate_read_batch(arguments):
 
 
 BUILD_SCHEMAS = {
+    "get_vehicle_modifiers": {"vehicle": "entity"},
+    "preview_vehicle_modifiers": {"vehicle": "entity", "top_speed": "number", "noise": "number", "pollution": "number", "comfort": "number", "reset": "bool"},
+    "commit_vehicle_modifiers": {"preview_token": "token", "backup_save": "save_slot"},
+    "get_vehicle_modifier_operation": {"operation_id": "token"},
     "execute_project": {}, "resume_project": {}, "get_project": {}, "cancel_project": {},
     "list_vehicle_liveries": {"vehicle":"entity", "part":"offset"},
     "reset_vehicle_color": {"vehicle":"entity"},
@@ -204,7 +208,19 @@ BUILD_SCHEMAS = {
 }
 
 
+from .native_extras import SCHEMAS as NATIVE_EXTRAS_SCHEMAS
+BUILD_SCHEMAS.update(NATIVE_EXTRAS_SCHEMAS)
+from .world_commands import COMMANDS as WORLD_ACTION_COMMANDS
+BUILD_SCHEMAS.update(WORLD_ACTION_COMMANDS)
+
+
 def validate_build_arguments(command, arguments):
+    if command in WORLD_ACTION_COMMANDS:
+        from .world_commands import validate as validate_world_action
+        return validate_world_action(command, arguments)
+    from .native_extras import SCHEMAS as EXTRAS_SCHEMAS, validate as validate_extras
+    if command in EXTRAS_SCHEMAS:
+        return validate_extras(command, arguments)
     if command in ("execute_project", "resume_project", "get_project", "cancel_project"):
         from .construction_project import validate_project
         return validate_project(command, arguments)
@@ -214,6 +230,15 @@ def validate_build_arguments(command, arguments):
         raise ValueError("Unsupported UI construction command or arguments")
     schema = BUILD_SCHEMAS[command]
     required = ({"x", "y", "z"} if command.startswith("build_") else set(schema))
+    if command == "preview_vehicle_modifiers":
+        required = {"vehicle"}
+        fields = {"top_speed", "noise", "pollution", "comfort"} & arguments.keys()
+        if (arguments.get("reset") is True) == bool(fields):
+            raise ValueError("Choose modifier fields or reset=true")
+        for key in fields:
+            value = arguments[key]
+            if type(value) not in (int, float) or not 0 <= value <= 10 or (key == "top_speed" and value == 0):
+                raise ValueError("Modifier policy: speed (0,10], other scales [0,10]")
     if command == "set_vehicle_color":
         required.discard("expected_line")
     if command == "preview_vehicle_appearance":
@@ -367,7 +392,9 @@ class UiLogRequests:
             anchor = f.read(stat.st_size - f.tell())
         request_id = uuid.uuid4().hex
         suffix = " " + json.dumps(arguments, separators=(",", ":"), sort_keys=True) if arguments else ""
-        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > (8192 if command in ("preview_line_edit", "preview_road_graph", "read_batch", "execute_project") else 512):
+        from .native_extras import SCHEMAS as EXTRAS_SCHEMAS
+        byte_limit = 8192 if command in WORLD_ACTION_COMMANDS else 4096 if command in EXTRAS_SCHEMAS else (8192 if command in ("preview_line_edit", "preview_road_graph", "read_batch", "execute_project") else 512)
+        if len(f"{request_id} {command}{suffix}".encode("utf-8")) > byte_limit:
             raise ValueError("UI request exceeds command byte limit")
         self.pending[request_id] = (path, stat.st_ino, stat.st_size, command, anchor, self.clock())
         return {"id": request_id, "input": f"{request_id} {command}{suffix}",

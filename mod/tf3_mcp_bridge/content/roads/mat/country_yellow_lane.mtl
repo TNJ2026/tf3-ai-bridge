@@ -1,0 +1,47 @@
+function data()
+return {
+	order = 1,
+	params = {
+			albedo_scale = { fragmentProperties = { { albedoScale = { 1.0, 0.85, 0.06 }, }, }, },
+		alpha_scale = {
+			alphaScale = 1,
+		},
+		alpha_test = {
+			alphaThreshold = 0.5,
+			cutout = true,
+		},
+		fade_out_range = {
+			fadeOutEndDist = 0,
+			fadeOutStartDist = 0,
+		},
+		map_albedo_opacity = {
+			fileName = "::/infrastructure/street/town/mat/tex/town_new_streetlane_albo.dds",
+			type = "TWOD",
+			wrapS = "REPEAT",
+		},
+		map_metal_gloss_ao = {
+			fileName = "::/infrastructure/street/town/mat/tex/town_new_streetlane_mga.dds",
+			type = "TWOD",
+			wrapS = "REPEAT",
+		},
+		map_normal = {
+			fileName = "::/infrastructure/street/town/mat/tex/town_new_streetlane_nrm.dds",
+			redGreen = true,
+			type = "TWOD",
+			wrapS = "REPEAT",
+		},
+		normal_scale = {
+			normalScale = 1,
+		},
+		polygon_offset = {
+			factor = -8.0,
+			units = -5.0,
+		},
+		two_sided = {
+			flipNormal = false,
+			twoSided = false,
+		},
+	},
+	type = "PHYS_TRANSPARENT_NRML_MAP",
+}
+end

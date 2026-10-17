@@ -1,0 +1,972 @@
+function data()
+return {
+		boundingInfo = {
+			bbMax = { 12, 3.24414, 3.67666, },
+			bbMin = { -5.24908, -3.24414, -2.55, },
+		},
+		collider = {
+			params = {
+				halfExtents = { 5.24908, 1.61587, 1.83833, },
+			},
+			transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1.83833, 1, },
+			type = "BOX",
+		},
+		lods = {
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/body_lod0.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_int_glass.mtl", "::/vehicle/truck/urban_etruck/mat/urban_etruck_glass.mtl", },
+									mesh = "::/vehicle/truck/urban_etruck/msh/glass1_left_frt_lod0.msh",
+									name = "glass1_left_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.74392, 0.533026, 2.25612, 1, },
+								},
+								{
+									materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_int_glass.mtl", "::/vehicle/truck/urban_etruck/mat/urban_etruck_glass.mtl", },
+									mesh = "::/vehicle/truck/urban_etruck/msh/glass1_right_frt_lod0.msh",
+									name = "glass1_right_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.74392, -0.521803, 2.25612, 1, },
+								},
+								{
+									materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_int_glass.mtl", "::/vehicle/truck/urban_etruck/mat/urban_etruck_glass.mtl", },
+									mesh = "::/vehicle/truck/urban_etruck/msh/glass1_lft_lod0.msh",
+									name = "glass1_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.1747, 1.1023, 2.21713, 1, },
+								},
+								{
+									materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_int_glass.mtl", "::/vehicle/truck/urban_etruck/mat/urban_etruck_glass.mtl", },
+									mesh = "::/vehicle/truck/urban_etruck/msh/glass1_rgt_lod0.msh",
+									name = "glass1_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.1747, -1.1023, 2.21713, 1, },
+								},
+							},
+							name = "glass_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_int.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/interior_lod0.msh",
+							name = "interior",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w1_lft_lod0.msh",
+							name = "w1_lft",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.67402, 0.990186, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w1_lft_lod0.msh",
+							name = "w1_rgt",
+							transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 3.67402, -0.990187, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w2_lod0.msh",
+							name = "w2",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.3696, -0.000185013, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w2_lod0.msh",
+							name = "w3",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.57564, -0.000185013, 0.500142, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_rgt_lod0.msh",
+							name = "d1_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.592279, -1.26678, 2.1776, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_bck_lod0.msh",
+							name = "d1_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 3.11415, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c1_bck_lod0.msh",
+							name = "d1_c1_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 2.63767, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c2_bck_lod0.msh",
+							name = "d1_c2_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 2.16118, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c3_bck_lod0.msh",
+							name = "d1_c3_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 1.68469, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c4_bck_lod0.msh",
+							name = "d1_c4_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 1.20821, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/emissive/truck_all_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/headlights_lod0.msh",
+							name = "headlights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								brake_lights_off = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								brake_lights_on = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_brake_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/brakelights_lod0.msh",
+							name = "brakelights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_left_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_left_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_blink_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/blinklights_lft_lod0.msh",
+							name = "blinklights_lft",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_right_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_right_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_blink_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/blinklights_rgt_lod0.msh",
+							name = "blinklights_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							name = "comp_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 0,
+				visibleTo = 100,
+			},
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/body_lod1.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w1_lft_lod1.msh",
+							name = "w1_lft",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.67402, 0.990186, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w1_lft_lod1.msh",
+							name = "w1_rgt",
+							transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 3.67402, -0.990187, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w2_lod1.msh",
+							name = "w2",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.3696, -0.000185013, 0.500142, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/w2_lod1.msh",
+							name = "w3",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.57564, -0.000185013, 0.500142, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_rgt_lod1.msh",
+							name = "d1_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.592279, -1.26678, 2.1776, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_bck_lod1.msh",
+							name = "d1_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 3.11415, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c1_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c1_bck_lod1.msh",
+							name = "d1_c1_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 2.63767, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c2_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c2_bck_lod1.msh",
+							name = "d1_c2_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 2.16118, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c3_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c3_bck_lod1.msh",
+							name = "d1_c3_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 1.68469, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_all_doors/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_left/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								close_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/close_doors_right/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_all_doors/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_left = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_left/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_doors_right = {
+									params = {
+										id = "::/vehicle/truck/urban_etruck/ani/open_doors_right/d1_c4_bck.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/d1_c4_bck_lod1.msh",
+							name = "d1_c4_bck",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.05607, 0, 1.20821, 1, },
+						},
+						{
+							materials = { "::/vehicle/truck/emissive/truck_all_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/headlights_lod1.msh",
+							name = "headlights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								brake_lights_off = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								brake_lights_on = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_brake_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/brakelights_lod1.msh",
+							name = "brakelights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_left_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_left_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_blink_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/blinklights_lft_lod1.msh",
+							name = "blinklights_lft",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_right_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_right_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/truck/emissive/truck_blink_lights.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/blinklights_rgt_lod1.msh",
+							name = "blinklights_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 100,
+				visibleTo = 400,
+			},
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/truck/urban_etruck/mat/urban_etruck_lod.mtl", },
+							mesh = "::/vehicle/truck/urban_etruck/msh/body_lod2.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 400,
+				visibleTo = 1600,
+			},
+		},
+		metadata = {
+			availability = {
+				yearFrom = 1850,
+				yearTo = 0,
+			},
+			cost = {
+				price = 1000,
+				priceScale = 1,
+			},
+			description = {
+				description = "独立强化电动卡车：800 km/h、100容量、快速装卸及低运营成本。",
+				name = "奔驰 Urban eTruck（100容量 · 全面强化）",
+			},
+			emissions = {
+				noise = {
+					idle = 0, speed = 0, power = 0,
+				},
+				pollution = {
+					idle = 0, speed = 0, power = 0,
+				},
+			},
+			extent = {
+				bbMax = { 5.24908, 1.61587, 3.67666, },
+				bbMin = { -5.24908, -1.61587, 0, },
+			},
+			landVehicle = {
+				engines = {
+					{
+						power = 20000,
+						tractiveEffort = 4000,
+						type = "ELECTRIC",
+					},
+				},
+				topSpeed = 800 / 3.6,
+                curveSpeedScale = 100,
+                friction = 0.001,
+                brakeDeceleration = 25,
+				weightEmpty = 1000,
+				weightMaxPayload = 2400,
+			},
+			lightSourceList = {
+				lights = {
+					{
+						color = { 1, 1, 1, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "headlights",
+						mode = "LIGHT",
+						radius = 7,
+						strength = 3,
+						transf = { 0.984807, 0, -0.173648, 0, 0, 1, 0, 0, 0.173648, 0, 0.984807, 0, 5, 0.85, 0.95, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						color = { 1, 1, 1, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "headlights",
+						mode = "LIGHT",
+						radius = 7,
+						strength = 3,
+						transf = { 0.984807, 0, -0.173648, 0, 0, 1, 0, 0, 0.173648, 0, 0.984807, 0, 5, -0.85, 0.95, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+				},
+			},
+			loadIndicator = {
+				configs = {
+					bay_0 = {
+						cargoBay = {
+							bbMax = { 2.4956, 1.2109, 3.5, },
+							bbMin = { -5, -1.2109, 1.2082, },
+							capacity = 72,
+							cargoFormats = { "SMALL", },
+							childId = "body",
+							gridSize = { 6, 2, },
+							sizePolicy = "STRETCH",
+							type = "DISCRETE",
+						},
+					},
+				},
+				slots = { },
+			},
+			maintenance = {
+				lifespan = 365000,
+				runningCosts = 100,
+			},
+			roadVehicle = {
+				config = {
+					axles = { "w2", "w3", },
+					fakeBogies = {
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+						},
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+						},
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+							{
+								group = "RootNode",
+								offset = 0,
+								position = -2,
+							},
+						},
+					},
+					steeringParts = { },
+					wheels = { "w1_lft", "w1_rgt", },
+				},
+			},
+			seatProvider = {
+				crewModels = { },
+				drivingLicense = "TRUCK",
+				seats = {
+					{
+						animation = "driving_upright",
+						crew = true,
+						group = "comp_grp",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.9, 0.71, 1.206, 1, },
+					},
+				},
+			},
+			soundConfig = {
+				soundSet = {
+					name = "::/vehicle/truck/shared/sound/truck_electric.snd",
+				},
+			},
+			transformatorConfig = {
+				skipFromLod = 2,
+				transformator = {
+					name = "::/vehicle/shared/default_road.trf",
+				},
+			},
+			transportVehicle = {
+				carrier = "ROAD",
+				compartments = {
+					{
+						loadConfigs = {
+							{
+								cargoEntry = {
+									capacity = 400,
+									cargoTypeSet = {
+										cargoClassesExcluded = { },
+										cargoClassesIncluded = { "UNIVERSAL", },
+										cargoTypesExcluded = { },
+										cargoTypesIncluded = { },
+									},
+									loadIndicator = "bay_0",
+									seats = { },
+								},
+								toHide = { },
+							},
+						},
+					},
+				},
+				engineTransportModes = { "TRUCK", },
+				filterTags = { "default", },
+				loadSpeed = 500,
+				transportModes = { "TRUCK", },
+			},
+			versioning = {
+				__version = "_v05",
+			},
+		},
+		version = 2,
+	}
+end

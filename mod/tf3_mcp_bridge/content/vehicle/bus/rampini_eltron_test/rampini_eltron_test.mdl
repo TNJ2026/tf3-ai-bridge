@@ -1,0 +1,797 @@
+function data()
+return {
+		boundingInfo = {
+			bbMax = { 10.5, 4.97812, 6, },
+			bbMin = { -7, -4.97812, -4.62916, },
+		},
+		collider = {
+			params = {
+				halfExtents = { 3.95858, 1.22697, 1.57411, },
+			},
+			transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.132935, 0, 1.57157, 1, },
+			type = "BOX",
+		},
+		lods = {
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/body_lod0.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_int.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_int_glass.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/interior_lod0.msh",
+							name = "interior",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w1_lod0.msh",
+							name = "w1",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.20315, 0.968481, 0.386712, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w1_lod0.msh",
+							name = "w2",
+							transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 2.20315, -0.968481, 0.386712, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w3_lod0.msh",
+							name = "w3",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.52551, 0, 0.396712, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d2_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d2_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d2_rgt_g_lod0.msh",
+							name = "d2_rgt_g",
+							transf = { 1, 0, 0, 0, 0, 0.999903, -0.0139622, 0, 0, 0.0139622, 0.999903, 0, -0.03, -0.948, 0.336, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d2_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d2_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							children = {
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/d2_glass_rgt_lod0.msh",
+									name = "d2_glass_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.507279, -0.0614266, 1.33353, 1, },
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d2_rgt_lod0.msh",
+							name = "d2_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.18, -1.01, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d3_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d3_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d3_rgt_g_lod0.msh",
+							name = "d3_rgt_g",
+							transf = { 1, 0, 0, 0, 0, 0.999048, -0.0436194, 0, 0, 0.0436194, 0.999048, 0, -2.03475, -0.871744, 2.4633, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d3_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d3_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							children = {
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/d3_glass_rgt_lod0.msh",
+									name = "d3_glass_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.4073, -0.200655, 1.34395, 1, },
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d3_rgt_lod0.msh",
+							name = "d3_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.87, -0.855, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d1_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d1_rgt_g.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d1_rgt_g_lod0.msh",
+							name = "d1_rgt_g",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.62042, -0.933089, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							children = {
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/d1_glass_rgt_lod0.msh",
+									name = "d1_glass_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.338377, -0.202971, 1.35539, 1, },
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d1_rgt_lod0.msh",
+							name = "d1_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.9, -0.86, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/headlights_lod0.msh",
+							name = "headlights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								brake_lights_off = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								brake_lights_on = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_brake_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/brakelights_lod0.msh",
+							name = "brakelights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_right_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_right_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/rgt_blinklights_lod0.msh",
+							name = "rgt_blinklights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_left_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_left_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/lft_blinklights_lod0.msh",
+							name = "lft_blinklights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							name = "comp_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_int_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/interior_glass_outer_lod0.msh",
+									name = "interior_glass_outer",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1.78, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/glass1_frt_lod0.msh",
+									name = "glass1_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.915, 0, 2.435, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/glass1_bck_lod0.msh",
+									name = "glass1_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.74853, -0.429236, 2.12225, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/glass1_lft_lod0.msh",
+									name = "glass1_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.389337, 1.10924, 1.71021, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/glass1_rgt_lod0.msh",
+									name = "glass1_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.11787, -1.10235, 1.78972, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/glass2_rgt_lod0.msh",
+									name = "glass2_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -0.895, -1.105, 1.78972, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/lft_blinklights_glass_lod0.msh",
+									name = "lft_blinklights_glass",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -0.553408, 1.0206, 0.954758, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/brakelights_glass_lod0.msh",
+									name = "brakelights_glass",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.79501, 0, 0.954663, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_glass.mtl", },
+									mesh = "::/vehicle/bus/rampini_2025/msh/rgt_blinklights_glass_lod0.msh",
+									name = "rgt_blinklights_glass",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -0.553408, -1.0206, 0.954758, 1, },
+								},
+							},
+							name = "glass_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 0,
+				visibleTo = 104.832,
+			},
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_lod.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/body_lod1.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025_int.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_lod.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/interior_lod1.msh",
+							name = "interior",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d1_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_lod.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d1_rgt_lod1.msh",
+							name = "d1_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.9, -0.86, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d2_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d2_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_lod.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d2_rgt_lod1.msh",
+							name = "d2_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.18, -1.01, 0, 1, },
+						},
+						{
+							animations = {
+								close_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/close_all_doors/d3_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+								open_all_doors = {
+									params = {
+										id = "::/vehicle/bus/rampini_2025/ani/open_all_doors/d3_rgt.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", "::/vehicle/bus/rampini_2025/mat/rampini_2025_lod.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/d3_rgt_lod1.msh",
+							name = "d3_rgt",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.87, -0.855, 0, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w1_lod1.msh",
+							name = "w1",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.20315, 0.97719, 0.386712, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w1_lod1.msh",
+							name = "w2",
+							transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 2.20315, -0.97719, 0.386712, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/w3_lod1.msh",
+							name = "w3",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.52551, 0, 0.396712, 1, },
+						},
+						{
+							materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/headlights_lod1.msh",
+							name = "headlights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								brake_lights_off = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								brake_lights_on = {
+									params = {
+										id = "::/vehicle/shared/ani/brake_lights_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_brake_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/brakelights_lod1.msh",
+							name = "brakelights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_right_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_right_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/rgt_blinklights_lod1.msh",
+							name = "rgt_blinklights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+						{
+							animations = {
+								blink_lights_left_off = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+									},
+									type = "FILE_REF",
+								},
+								blink_lights_left_on = {
+									params = {
+										id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+									},
+									type = "FILE_REF",
+								},
+							},
+							materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/lft_blinklights_lod1.msh",
+							name = "lft_blinklights",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 104.832,
+				visibleTo = 314.495,
+			},
+			{
+				node = {
+					children = {
+						{
+							materials = { "::/vehicle/bus/rampini_2025/mat/rampini_2025.mtl", },
+							mesh = "::/vehicle/bus/rampini_2025/msh/body_lod2.msh",
+							name = "body",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 314.495,
+				visibleTo = 943.484,
+			},
+		},
+		metadata = {
+			availability = {
+				yearFrom = 1850,
+				yearTo = 0,
+			},
+			cost = {
+				price = 1000,
+				priceScale = 1,
+			},
+			description = {
+				description = "独立强化电动巴士：320 km/h、36人容量、高动力、快速上下客及低运营成本。",
+				name = "Rampini Eltron（320 km/h · 36人 · 强化版）",
+			},
+			emissions = {
+				noise = {
+					idle = 0, speed = 0, power = 0,
+				},
+				pollution = {
+					idle = 0, speed = 0, power = 0,
+				},
+			},
+			extent = {
+				bbMax = { 4.09151, 1.22697, 3.14568, },
+				bbMin = { -3.82564, -1.22697, -0.00253329, },
+			},
+			labelList = {
+				labels = {
+					{
+						alignment = "CENTER",
+						childId = "body",
+						color = { 0.929314, 1, 0.192157, },
+						renderMode = "EMISSIVE",
+						size = { 112.5, 20.9, },
+						transf = { 0, 0.01, 0, 0, 0, 0, 0.01, 0, 0.01, 0, 0, 0, 3.724, -0.56, 2.4, 1, },
+						type = "LINE_NAME",
+					},
+					{
+						alignment = "CENTER",
+						childId = "body",
+						color = { 0.929314, 1, 0.192157, },
+						filter = "NUMBER",
+						renderMode = "EMISSIVE",
+						size = { 32.5, 20.8, },
+						transf = { 0, -0.01, 0, 0, 0, 0, 0.01, 0, -0.01, 0, 0, 0, -3.694, -0.25, 2.332, 1, },
+						type = "LINE_NAME",
+					},
+				},
+			},
+			landVehicle = {
+				engines = {
+					{
+						power = 21000,
+						tractiveEffort = 3000,
+						type = "ELECTRIC",
+					},
+				},
+				topSpeed = 320 / 3.6,
+                curveSpeedScale = 100,
+                friction = 0.001,
+                brakeDeceleration = 25,
+				weightEmpty = 1200,
+				weightMaxPayload = 1440,
+			},
+			lightSourceList = {
+				lights = {
+					{
+						angleMax = 40,
+						angleMin = 5,
+						color = { 0.964706, 0.921466, 0.713126, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "headlights",
+						mode = "LIGHT",
+						radius = 6.5,
+						strength = 3,
+						transf = { 0.939693, 0, -0.34202, 0, 0, 1, 0, 0, 0.34202, 0, 0.939693, 0, 4, 0.8, 1, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						angleMax = 40,
+						angleMin = 5,
+						color = { 0.964706, 0.921466, 0.713126, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "headlights",
+						mode = "LIGHT",
+						radius = 6.5,
+						strength = 3,
+						transf = { 0.939693, 0, -0.34202, 0, 0, 1, 0, 0, 0.34202, 0, 0.939693, 0, 4, -0.8, 1, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						angleMax = 80,
+						angleMin = 9,
+						backFaceLit = true,
+						color = { 1, 0.926131, 0.580392, },
+						invertMask = false,
+						length = 4,
+						lightId = "",
+						mask = 32,
+						meshId = "interior",
+						mode = "LIGHT",
+						radius = 3,
+						strength = 2,
+						transf = { 1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 3, 1, },
+						type = "CYLINDRICAL",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+				},
+			},
+			maintenance = {
+				lifespan = 365000,
+				runningCosts = 100,
+			},
+			roadVehicle = {
+				config = {
+					axles = { "w3", },
+					fakeBogies = {
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+						},
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+						},
+						{
+							{
+								group = "RootNode",
+								offset = 0,
+								position = 0,
+							},
+						},
+					},
+					steeringParts = { },
+					wheels = { "w2", "w1", },
+				},
+			},
+			seatProvider = {
+				crewModels = { },
+				drivingLicense = "BUS",
+				seats = {
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { -0.965926, -0.258819, 0, 0, 0.258819, -0.965926, 0, 0, 0, 0, 1, 0, 1.96, -0.681, 0.73, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -0.3, 0.744, 0.36, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -1.15, 0.744, 0.51, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -2.97, 0.744, 0.62, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { -1, -2.38419e-07, 0, 0, 2.38419e-07, -1, 0, 0, 0, 0, 1, 0, -1.99, 0.2275, 0.62, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -0.3, 0.279, 0.36, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -1.15, 0.279, 0.51, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -0.91, -0.68, 0.35, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, -2.97, 0.279, 0.62, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp",
+						transf = { -1, -2.38419e-07, 0, 0, 2.38419e-07, -1, 0, 0, 0, 0, 1, 0, -1.99, 0.6925, 0.62, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp",
+						transf = { -0.174507, 0.984656, 0, 0, -0.984656, -0.174507, 0, 0, 0, 0, 1, 0, 0.6, 0.8, 0.341, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp",
+						transf = { 0.899176, -0.437587, 0, 0, 0.437587, 0.899176, 0, 0, 0, 0, 1, 0, 1.2425, 0.7, 0.341, 1, },
+					},
+					{
+						animation = "driving_upright",
+						crew = true,
+						group = "comp_grp",
+						transf = { 1, 2.38419e-07, 0, 0, -2.38419e-07, 1, 0, 0, 0, 0, 1, 0, 2.9, 0.681001, 0.72, 1, },
+					},
+				},
+			},
+			soundConfig = {
+				soundSet = {
+					name = "::/vehicle/bus/shared/sound/bus_electric.snd",
+				},
+			},
+			transformatorConfig = {
+				skipFromLod = 2,
+				transformator = {
+					name = "::/vehicle/shared/default_road.trf",
+				},
+			},
+			transportVehicle = {
+                comfortFactor = 1,
+				carrier = "ROAD",
+				compartments = {
+					{
+						loadConfigs = {
+							{
+								cargoEntry = {
+									capacity = 144,
+									cargoTypeSet = {
+										cargoClassesExcluded = { },
+										cargoClassesIncluded = { "PASSENGERS", },
+										cargoTypesExcluded = { },
+										cargoTypesIncluded = { },
+									},
+									loadIndicator = "",
+									seats = { },
+								},
+								toHide = { },
+							},
+						},
+					},
+				},
+				engineTransportModes = { "BUS", },
+				entrances = {
+					{
+						path = {
+							{ -2.5, -3, 0.3, },
+							{ -2.5, 0.0, 0.35, },
+						},
+					},
+					{
+						path = {
+							{ 0.8, -3, 0.3, },
+							{ 0.8, 0.0, 0.35, },
+						},
+					},
+					{
+						path = {
+							{ 3.2, -3, 0.3, },
+							{ 3.2, 0.0, 0.35, },
+						},
+					},
+				},
+				filterTags = { "default", },
+				loadSpeed = 300,
+				transportModes = { "BUS", },
+			},
+		},
+		version = 2,
+	}
+end

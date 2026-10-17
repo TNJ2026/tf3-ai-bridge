@@ -1,0 +1,1816 @@
+function data()
+return {
+		boundingInfo = {
+			bbMax = { 16, 3, 3.30485, },
+			bbMin = { -9.40754, -3, -0.0013383, },
+		},
+		collider = {
+			params = {
+				halfExtents = { 9.14172, 1.49535, 1.65309, },
+			},
+			transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -0.265818, -0.0333535, 1.65175, 1, },
+			type = "BOX",
+		},
+		lods = {
+			{
+				node = {
+					children = {
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_underglass.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_body_lod0.msh",
+									name = "front_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_w1_lft_lod0.msh",
+									name = "front_w1_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.30343, 0.901141, 0.478015, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_w1_lft_lod0.msh",
+									name = "front_w1_rgt",
+									transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 2.30343, -0.900937, 0.478015, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_w3_lod0.msh",
+									name = "front_w2",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.503, -8.33097e-05, 0.47865, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d1.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d1.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_glass1_rgt_lod0.msh",
+											name = "front_d1_glass1_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.62939e-06, -0.0420978, 0.0430641, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_tr_rgt_lod0.msh",
+											name = "front_d1_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.62939e-06, -0.0403244, 0.0430641, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_lod0.msh",
+									name = "front_d1",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.25428, -1.22615, 1.33475, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d2.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d2.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_glass_rgt_lod0.msh",
+											name = "front_d2_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5.72205e-06, -0.0420978, 0.0430641, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_tr_rgt_lod0.msh",
+											name = "front_d2_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.67572e-06, -0.0403246, 0.0430641, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_lod0.msh",
+									name = "front_d2",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.56677, -1.22615, 1.33475, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d3.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d3.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_glass_rgt_lod0.msh",
+											name = "front_d3_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.14577e-05, -0.0420976, 0.0429883, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_tr_rgt_lod0.msh",
+											name = "front_d3_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.38419e-07, -0.0406636, 0.0426044, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_lod0.msh",
+									name = "front_d3",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.55242, -1.22615, 1.3344, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d4.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d4.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_glass_rgt_lod0.msh",
+											name = "front_d4_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.29561e-05, -0.0420977, 0.0429883, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_tr_rgt_lod0.msh",
+											name = "front_d4_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -4.76837e-07, -0.0406632, 0.0426044, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_lod0.msh",
+									name = "front_d4",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.23987, -1.22615, 1.3344, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/front_fan1.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_fan1_lod0.msh",
+									name = "front_fan1",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.91638, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/front_fan2.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_fan2_lod0.msh",
+									name = "front_fan2",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.4049, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/front_fan3.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_fan3_lod0.msh",
+									name = "front_fan3",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.89444, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/front_fan4.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_fan4_lod0.msh",
+									name = "front_fan4",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.38358, 0, 2.96487, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_interior_frt_lod0.msh",
+									name = "front_interior_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, -2.47732e-06, 1.66893e-06, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_headlights_lod0.msh",
+									name = "front_headlights",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									animations = {
+										blink_lights_left_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_left_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_blinklights_lft_lod0.msh",
+									name = "front_blinklights_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									animations = {
+										blink_lights_right_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_right_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_blinklights_rgt_lod0.msh",
+									name = "front_blinklights_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									name = "comp_grp_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 0, 1, },
+								},
+								{
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass1_lft_lod0.msh",
+											name = "front_glass1_lft",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7.65091, 1.2143, 1.64788, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass3_lft_lod0.msh",
+											name = "front_glass3_lft",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.93836, 1.269, 1.80173, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass8_lft_lod0.msh",
+											name = "front_glass8_lft",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.53959, 1.26715, 2.00631, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass1_rgt_lod0.msh",
+											name = "front_glass1_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 8.28513, -1.21387, 1.65346, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass2_rgt_lod0.msh",
+											name = "front_glass2_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.51585, -1.2685, 1.80123, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass5_rgt_lod0.msh",
+											name = "front_glass5_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.034753, -1.2685, 1.80123, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass7_rgt_lod0.msh",
+											name = "front_glass7_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.53958, -1.26665, 2.0058, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass2_frt_lod0.msh",
+											name = "front_glass2_frt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 8.43621, -2.5034e-06, 1.88222, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass4_frt_lod0.msh",
+											name = "front_glass4_frt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 8.38459, -2.45869e-06, 0.577813, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass1_int_lod0.msh",
+											name = "front_glass1_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.81159, 0.770307, 1.78538, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass2_int_lod0.msh",
+											name = "front_glass2_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.69851, -0.798655, 1.5225, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass3_int_lod0.msh",
+											name = "front_glass3_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.35932, -0.798655, 1.5225, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass4_int_lod0.msh",
+											name = "front_glass4_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.862554, -0.798655, 1.5225, 1, },
+										},
+									},
+									name = "glass_grp_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 0, 1, },
+								},
+							},
+							name = "front_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.50868, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_underglass.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_body_lod0.msh",
+									name = "back_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_w3_lod0.msh",
+									name = "back_w3",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -4.19028, -8.33097e-05, 0.47865, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/back_d5.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/back_d5.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_glass_rgt_lod0.msh",
+											name = "back_d5_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7.20024e-05, -0.0420973, 0.044214, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_tr_rgt_lod0.msh",
+											name = "back_d5_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.76837e-07, -0.0406638, 0.0425538, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_lod0.msh",
+									name = "back_d5",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.20378, -1.22615, 1.33738, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/back_d6.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/back_d6.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_glass_rgt_lod0.msh",
+											name = "back_d6_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.09808e-05, -0.0420973, 0.044214, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_tr_rgt_lod0.msh",
+											name = "back_d6_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.76837e-07, -0.0406635, 0.0356394, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_lod0.msh",
+									name = "back_d6",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.89123, -1.22615, 1.33738, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_interior_lod0.msh",
+									name = "back_interior",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1.81168, -2.47778e-06, 1.72821e-06, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/back_fan5.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_fan5_lod0.msh",
+									name = "back_fan5",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.62302, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/back_fan6.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_fan6_lod0.msh",
+									name = "back_fan6",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.11144, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/back_fan7.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_fan7_lod0.msh",
+									name = "back_fan7",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.60207, 0, 2.96487, 1, },
+								},
+								{
+									animations = {
+										forever = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/forever/back_fan8.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_fan8_lod0.msh",
+									name = "back_fan8",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -4.09337, 0, 2.96487, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_headlights_bck_lod0.msh",
+									name = "back_headlights_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										brake_lights_off = {
+											params = {
+												id = "::/vehicle/shared/ani/brake_lights_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										brake_lights_on = {
+											params = {
+												id = "::/vehicle/shared/ani/brake_lights_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_brake_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_brakelights_lod0.msh",
+									name = "back_brakelights",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										blink_lights_left_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_left_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_blinklights_back_lft_lod0.msh",
+									name = "back_blinklights_back_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										blink_lights_right_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_right_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_blinklights_back_rgt_lod0.msh",
+									name = "back_blinklights_back_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass2_lft_lod0.msh",
+											name = "back_glass2_lft",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.94173, 1.2685, 1.80159, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass11_lft_lod0.msh",
+											name = "back_glass11_lft",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.86002, 1.26665, 2.00659, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass1_rgt_lod0.msh",
+											name = "back_glass1_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.86002, -1.26665, 2.00659, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass2_rgt_lod0.msh",
+											name = "back_glass2_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.21731, -1.2685, 1.8021, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass3_rgt_lod0.msh",
+											name = "back_glass3_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.08361, -1.2685, 1.80159, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass2_bck_lod0.msh",
+											name = "back_glass2_bck",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -9.33042, -1.3411e-06, 2.23996, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass1_int_lod0.msh",
+											name = "back_glass1_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.10266, -0.798655, 1.5225, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass2_int_lod0.msh",
+											name = "back_glass2_int",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.65255, -0.884795, 1.42087, 1, },
+										},
+									},
+									name = "glass_grp_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1.81168, 0, 0, 1, },
+								},
+								{
+									name = "comp_grp_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1.81168, 0, 0, 1, },
+								},
+							},
+							name = "back_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.81168, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									name = "front_connector",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.50868, 0, 0, 1, },
+								},
+								{
+									name = "back_connector",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.81168, 0, 0, 1, },
+								},
+							},
+							name = "connector_grp",
+							skin = "::/vehicle/bus/mb_citaro_g1/msh/connector_lod0.msh",
+							skinMaterials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_connector.mtl", },
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 0,
+				visibleTo = 163.327,
+			},
+			{
+				node = {
+					children = {
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_underglass.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_body_lod1.msh",
+									name = "front_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_w1_lft_lod1.msh",
+									name = "front_w1_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.30343, 0.901141, 0.478015, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_w1_lft_lod1.msh",
+									name = "front_w1_rgt",
+									transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 2.30343, -0.900937, 0.478015, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_w3_lod1.msh",
+									name = "front_w2",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.503, -8.33097e-05, 0.47865, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d1.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d1.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_glass1_rgt_lod1.msh",
+											name = "front_d1_glass1_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.62939e-06, -0.0420978, 0.0430641, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_tr_rgt_lod1.msh",
+											name = "front_d1_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.62939e-06, -0.0403244, 0.0430641, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d1_lod1.msh",
+									name = "front_d1",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.25428, -1.22615, 1.33475, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d2.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d2.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_glass_rgt_lod1.msh",
+											name = "front_d2_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5.72205e-06, -0.0420978, 0.0430641, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_tr_rgt_lod1.msh",
+											name = "front_d2_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.67572e-06, -0.0403246, 0.0430641, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d2_lod1.msh",
+									name = "front_d2",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.56677, -1.22615, 1.33475, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d3.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d3.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_glass_rgt_lod1.msh",
+											name = "front_d3_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.14577e-05, -0.0420976, 0.0429883, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_tr_rgt_lod1.msh",
+											name = "front_d3_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.38419e-07, -0.0406636, 0.0426044, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d3_lod1.msh",
+									name = "front_d3",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.55242, -1.22615, 1.3344, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/front_d4.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/front_d4.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_glass_rgt_lod1.msh",
+											name = "front_d4_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -7.29561e-05, -0.0420977, 0.0429883, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_tr_rgt_lod1.msh",
+											name = "front_d4_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -4.76837e-07, -0.0406632, 0.0426044, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_d4_lod1.msh",
+									name = "front_d4",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.23987, -1.22615, 1.3344, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_interior_frt_lod1.msh",
+									name = "front_interior_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, -2.47732e-06, 1.66893e-06, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_headlights_lod1.msh",
+									name = "front_headlights",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									animations = {
+										blink_lights_left_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_left_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_blinklights_lft_lod1.msh",
+									name = "front_blinklights_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									animations = {
+										blink_lights_right_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_right_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_blinklights_rgt_lod1.msh",
+									name = "front_blinklights_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 1.72821e-06, 1, },
+								},
+								{
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_glass_lod1.msh",
+											name = "front_glass",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7.94138, 1.2143, 1.64788, 1, },
+										},
+									},
+									name = "glass_grp_frt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.50868, 0, 0, 1, },
+								},
+							},
+							name = "front_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.50868, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_underglass.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_body_lod1.msh",
+									name = "back_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_w3_lod1.msh",
+									name = "back_w3",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -4.19028, -8.33097e-05, 0.47865, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/back_d5.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/back_d5.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_glass_rgt_lod1.msh",
+											name = "back_d5_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7.20024e-05, -0.0420973, 0.044214, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_tr_rgt_lod1.msh",
+											name = "back_d5_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.76837e-07, -0.0406638, 0.0425538, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d5_lod1.msh",
+									name = "back_d5",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.20378, -1.22615, 1.33738, 1, },
+								},
+								{
+									animations = {
+										close_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/close_doors_right/back_d6.ani",
+											},
+											type = "FILE_REF",
+										},
+										open_doors_right = {
+											params = {
+												id = "::/vehicle/bus/mb_citaro_g1/ani/open_doors_right/back_d6.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_glass_rgt_lod1.msh",
+											name = "back_d6_glass_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.09808e-05, -0.0420973, 0.044214, 1, },
+										},
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_tr_rgt_lod1.msh",
+											name = "back_d6_tr_rgt",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4.76837e-07, -0.0406635, 0.0356394, 1, },
+										},
+									},
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_d6_lod1.msh",
+									name = "back_d6",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.89123, -1.22615, 1.33738, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_int.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_interior_lod1.msh",
+									name = "back_interior",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1.81168, -2.47778e-06, 1.72821e-06, 1, },
+								},
+								{
+									materials = { "::/vehicle/bus/emissive/bus_all_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_headlights_bck_lod1.msh",
+									name = "back_headlights_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										brake_lights_off = {
+											params = {
+												id = "::/vehicle/shared/ani/brake_lights_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										brake_lights_on = {
+											params = {
+												id = "::/vehicle/shared/ani/brake_lights_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_brake_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_brakelights_lod1.msh",
+									name = "back_brakelights",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										blink_lights_left_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_left_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_left_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_blinklights_back_lft_lod1.msh",
+									name = "back_blinklights_back_lft",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									animations = {
+										blink_lights_right_off = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_off.ani",
+											},
+											type = "FILE_REF",
+										},
+										blink_lights_right_on = {
+											params = {
+												id = "::/vehicle/shared/ani/blink_lights_right_on.ani",
+											},
+											type = "FILE_REF",
+										},
+									},
+									materials = { "::/vehicle/bus/emissive/bus_blink_lights.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_blinklights_back_rgt_lod1.msh",
+									name = "back_blinklights_back_rgt",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+								{
+									children = {
+										{
+											materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+											mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_glass_lod1.msh",
+											name = "back_glass",
+											transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2.6815, 1.26665, 2.00658, 1, },
+										},
+									},
+									name = "glass_grp_bck",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1.81168, 0, 0, 1, },
+								},
+							},
+							name = "back_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.81168, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									name = "front_connector",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.50868, 0, 0, 1, },
+								},
+								{
+									name = "back_connector",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.81168, 0, 0, 1, },
+								},
+							},
+							name = "connector_grp",
+							skin = "::/vehicle/bus/mb_citaro_g1/msh/connector_lod1.msh",
+							skinMaterials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_connector.mtl", },
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 163.327,
+				visibleTo = 489.982,
+			},
+			{
+				node = {
+					children = {
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/front_body_lod2.msh",
+									name = "front_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+							},
+							name = "front_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.50868, 0, 0, 1, },
+						},
+						{
+							children = {
+								{
+									materials = { "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1.mtl", "::/vehicle/bus/mb_citaro_g1/mat/mb_citaro_g1_glass_lod.mtl", },
+									mesh = "::/vehicle/bus/mb_citaro_g1/msh/back_body_lod2.msh",
+									name = "back_body",
+									transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+								},
+							},
+							name = "back_grp",
+							transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1.81168, 0, 0, 1, },
+						},
+					},
+					name = "RootNode",
+					transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, },
+				},
+				visibleFrom = 489.982,
+				visibleTo = 2200,
+			},
+		},
+		metadata = {
+			availability = {
+				yearFrom = 1850,
+				yearTo = 0,
+			},
+			cost = {
+				price = 1000,
+			},
+			description = {
+				description = _("VEHICLE_BUS_MB_CITARO_G1_DESCRIPTION"),
+				name = "Citaro G1（800 km/h · 全面强化测试）",
+			},
+			emissions = {
+				noise = {
+					idle = 0, speed = 0, power = 0,
+				},
+				pollution = {
+					idle = 0, speed = 0, power = 0,
+				},
+			},
+			extent = {
+				bbMax = { 8.8759, 1.462, 3.30485, },
+				bbMin = { -9.40754, -1.5287, -0.0013383, },
+			},
+			labelList = {
+				labels = {
+					{
+						childId = "front_body",
+						color = { 0.748875, 0.941176, 0.415225, },
+						renderMode = "EMISSIVE",
+						size = { 188.6, 24.8, },
+						transf = { 0, 0.01, 0, 0, 0, 0, 0.01, 0, 0.01, 0, 0, 0, 4.80732, -0.948, 2.424, 1, },
+						type = "LINE_NAME",
+						verticalAlignment = "CENTER",
+					},
+					{
+						childId = "front_body",
+						color = { 0.748875, 0.941176, 0.415225, },
+						filter = "NUMBER",
+						renderMode = "EMISSIVE",
+						size = { 33.2, 23.2, },
+						transf = { -0.01, 0, 0, 0, 0, 0, 0.01, 0, 0, 0.01, 0, 0, 1.97132, 1.256, 2.404, 1, },
+						type = "LINE_NAME",
+					},
+					{
+						alignment = "CENTER",
+						childId = "front_body",
+						color = { 0.748875, 0.941176, 0.415225, },
+						fitting = "CUT",
+						renderMode = "EMISSIVE",
+						size = { 139.4, 23.9, },
+						transf = { 0.01, 0, 0, 0, 0, 0, 0.01, 0, 0, -0.01, 0, 0, 1.63732, -1.242, 2.407, 1, },
+						type = "NEXT_STOP",
+					},
+					{
+						alignment = "CENTER",
+						childId = "back_body",
+						color = { 0.748875, 0.941176, 0.415225, },
+						filter = "NUMBER",
+						renderMode = "EMISSIVE",
+						size = { 40.6, 29.7, },
+						transf = { 0, -0.01, 0, 0, 0, 0, 0.01, 0, -0.01, 0, 0, 0, -7.47032, 0.202, 2.398, 1, },
+						type = "LINE_NAME",
+					},
+				},
+			},
+			landVehicle = {
+				curveSpeedScale = 100,
+				engines = {
+					{
+						power = 22000,
+						tractiveEffort = 3000,
+						type = "DIESEL",
+					},
+				},
+				topSpeed = 800 / 3.6,
+				weightEmpty = 1500,
+				weightMaxPayload = 1980,
+				friction = 0.001,
+				brakeDeceleration = 25,
+			},
+			lightSourceList = {
+				lights = {
+					{
+						angleMax = 30,
+						angleMin = 15,
+						color = { 0.988235, 0.94483, 0.740208, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "front_headlights",
+						mode = "LIGHT",
+						radius = 7.5,
+						strength = 3,
+						transf = { 0.965926, 0, -0.258819, 0, 0, 1, 0, 0, 0.258819, 0, 0.965926, 0, 8.5, 0.9, 0.7, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						angleMax = 30,
+						angleMin = 15,
+						color = { 0.988235, 0.94483, 0.740208, },
+						invertMask = true,
+						lightId = "",
+						mask = 0,
+						meshId = "front_headlights",
+						mode = "LIGHT",
+						radius = 7.5,
+						strength = 3,
+						transf = { 0.965926, 0, -0.258819, 0, 0, 1, 0, 0, 0.258819, 0, 0.965926, 0, 8.5, -0.9, 0.7, 1, },
+						type = "SPOT",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						angleMax = 65,
+						angleMin = 9,
+						backFaceLit = true,
+						color = { 1, 0.926131, 0.580392, },
+						invertMask = false,
+						length = 5,
+						lightId = "",
+						mask = 32,
+						meshId = "front_interior_frt",
+						mode = "LIGHT",
+						radius = 5,
+						strength = 2,
+						transf = { 1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 3.5, 0, 4, 1, },
+						type = "CYLINDRICAL",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+					{
+						angleMax = 65,
+						angleMin = 9,
+						backFaceLit = true,
+						color = { 1, 0.926131, 0.580392, },
+						invertMask = false,
+						length = 4,
+						lightId = "",
+						mask = 32,
+						meshId = "back_interior",
+						mode = "LIGHT",
+						radius = 5,
+						strength = 2,
+						transf = { 1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, -5.5, 0, 4, 1, },
+						type = "CYLINDRICAL",
+						visibleFrom = -1,
+						visibleTo = -1,
+					},
+				},
+			},
+			maintenance = {
+				lifespan = 365000,
+				runningCosts = 100,
+			},
+			particleSystem = {
+				emitters = {
+					{
+						alphaOverLifeTime = {
+							curve = {
+								{
+									easing = "EaseInQuart",
+									time = 0,
+									value = 0.5,
+								},
+								{
+									easing = "EaseOutQuad",
+									time = 1,
+									value = 0,
+								},
+							},
+						},
+						child = "back_body",
+						colorOverLifeTime = {
+							curve = {
+								{
+									easing = "EaseInQuad",
+									time = 0,
+									value = { 0.264706, 0.254325, 0.254325, },
+								},
+								{
+									easing = "Linear",
+									time = 0.8,
+									value = { 0.466667, 0.466667, 0.466667, },
+								},
+							},
+						},
+						emissiveScale = {
+							curve = {
+								{
+									easing = "Linear",
+									time = 2,
+									value = 1,
+								},
+							},
+						},
+						frequency = {
+							value = 40,
+						},
+						lifeTime = {
+							value = 1,
+						},
+						noiseFactor = {
+							value = 2,
+						},
+						numFrames = { 0, 2, },
+						particleId = "emitter_smoke",
+						position = { -6.193, 1.266, 0.305, },
+						rotation = {
+							value = 10,
+						},
+						shape = {
+							point = {
+								maxDir = 0.8,
+							},
+						},
+						sizeOverLifeTime = {
+							curve = {
+								{
+									easing = "EaseInCubic",
+									time = 0,
+									value = {
+										value = 0.05,
+									},
+								},
+								{
+									easing = "Linear",
+									time = 0.08,
+									value = {
+										value = 0.2,
+									},
+								},
+								{
+									easing = "EaseOutBounce",
+									time = 1.5,
+									value = {
+										value = 0.8,
+									},
+								},
+							},
+						},
+						velocity = {
+							value = { -0.25, 0.5, 0, },
+						},
+						velocityByDirection = {
+							value = 0,
+						},
+						velocityOverLifeTime = {
+							curve = {
+								{
+									easing = "Linear",
+									time = 1,
+									value = { -0.04, 0, 0, },
+								},
+							},
+						},
+					},
+				},
+			},
+			roadVehicle = {
+				config = {
+					axles = { "front_w2", "back_w3", },
+					fakeBogies = {
+						{
+							{
+								group = "back_grp",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "front_grp",
+								offset = 0,
+								position = 4.5,
+							},
+							{
+								group = "front_grp",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "back_connector",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "back_connector",
+								offset = 0,
+								position = -6.05,
+							},
+							{
+								group = "front_connector",
+								offset = 0,
+								position = 4.5,
+							},
+							{
+								group = "front_connector",
+								offset = -1,
+								position = -1.55,
+							},
+						},
+						{
+							{
+								group = "front_grp",
+								offset = 0,
+								position = 4.5,
+							},
+							{
+								group = "front_grp",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "back_grp",
+								offset = -1,
+								position = -1.55,
+							},
+						},
+						{
+							{
+								group = "front_grp",
+								offset = 0,
+								position = 4.5,
+							},
+							{
+								group = "front_grp",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "back_grp",
+								offset = -1,
+								position = -1.55,
+							},
+							{
+								group = "back_grp",
+								offset = 0,
+								position = -6.5,
+							},
+						},
+					},
+					steeringParts = { },
+					wheels = { "front_w1_lft", "front_w1_rgt", },
+				},
+			},
+			seatProvider = {
+				crewModels = { },
+				drivingLicense = "BUS",
+				seats = {
+					{
+						animation = "driving_upright",
+						crew = true,
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7.45, 0.8, 0.58, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.05, 0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.37, 0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -0.38, 0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.05, -0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.37, -0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -0.38, -0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.58, -0.58, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 4.88, -0.58, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.73, -0.58, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.58, 0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 4.88, 0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.73, 0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.05, 0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.37, 0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -0.38, 0.58, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6.05, -0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.37, -0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -0.38, -0.91, 0.78, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.58, -0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 4.88, -0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.73, -0.91, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3.58, 0.58, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 4.88, 0.58, 0.37, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_frt",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2.73, 0.58, 0.37, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_frt",
+						transf = { -0.731354, 0.681998, 0, 0, -0.681998, -0.731354, 0, 0, 0, 0, 1, 0, 1.43, 0.687, 0.34, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_frt",
+						transf = { 0.747798, -0.663926, 0, 0, 0.663926, 0.747798, 0, 0, 0, 0, 1, 0, 1.77, 0.377, 0.34, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_frt",
+						transf = { -0.0104718, -0.999945, 0, 0, 0.999945, -0.0104718, 0, 0, 0, 0, 1, 0, 1.56, -0.743, 0.34, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_frt",
+						transf = { -0.0104718, -0.999945, 0, 0, 0.999945, -0.0104718, 0, 0, 0, 0, 1, 0, 7.32, -0.743, 0.35, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_frt",
+						transf = { 0.989776, 0.142629, 0, 0, -0.142629, 0.989776, 0, 0, 0, 0, 1, 0, -1.47, -0.108, 0.34, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.62, 0.91, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -6.36, 0.91, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.25, 0.91, 0.41, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -2.92, -0.81, 0.41, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.62, -0.91, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -6.36, -0.91, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -8.85, -0.45, 0.87, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -8.85, -0.02, 0.87, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -8.85, 0.47, 0.87, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.62, 0.58, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -6.36, 0.58, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, -8.07, 0.88, 0.71, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -8.02, -0.84, 0.69, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, -7.65, 0.88, 0.71, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -7.6, -0.84, 0.69, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, -7.24, 0.88, 0.71, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -7.19, -0.84, 0.69, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -3.25, 0.58, 0.41, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -3.38, -0.84, 0.41, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_bck",
+						transf = { -0.076719, 0.997053, 0, 0, -0.997053, -0.076719, 0, 0, 0, 0, 1, 0, -4.29, 0.827, 0.34, 1, },
+					},
+					{
+						animation = "idle",
+						group = "comp_grp_bck",
+						transf = { 0.190809, -0.981627, 0, 0, 0.981627, 0.190809, 0, 0, 0, 0, 1, 0, -4.29, -0.493, 0.34, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5.62, -0.58, 0.77, 1, },
+					},
+					{
+						animation = "sitting",
+						group = "comp_grp_bck",
+						transf = { -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, -6.36, -0.58, 0.77, 1, },
+					},
+				},
+			},
+			soundConfig = {
+				soundSet = {
+					name = "::/vehicle/bus/shared/sound/bus_modern.snd",
+				},
+			},
+			transformatorConfig = {
+				skipFromLod = 2,
+				transformator = {
+					name = "::/vehicle/shared/default_road.trf",
+				},
+			},
+			transportVehicle = {
+				carrier = "ROAD",
+				comfortFactor = 1,
+				compartments = {
+					{
+						loadConfigs = {
+							{
+								cargoEntry = {
+									capacity = 1120,
+									cargoTypeSet = {
+										cargoClassesExcluded = { },
+										cargoClassesIncluded = { "PASSENGERS", },
+										cargoTypesExcluded = { },
+										cargoTypesIncluded = { },
+									},
+									loadIndicator = "",
+									seats = { },
+								},
+								toHide = { },
+							},
+						},
+					},
+				},
+				engineTransportModes = { "BUS", },
+				entrances = {
+					{
+						path = {
+							{ -4.4, -3, 0.3, },
+							{ -4.4, 0, 0.35, },
+						},
+					},
+					{
+						path = {
+							{ 1.6, -3, 0.3, },
+							{ 1.6, 0, 0.35, },
+						},
+					},
+					{
+						path = {
+							{ 7.4, -3, 0.3, },
+							{ 7.4, 0, 0.35, },
+						},
+					},
+				},
+				filterTags = { "default", },
+				loadSpeed = 300,
+				transportModes = { "BUS", },
+			},
+		},
+		version = 2,
+	}
+end

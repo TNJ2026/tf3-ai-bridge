@@ -9,6 +9,11 @@
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 修改已有产业、车辆发车、城市建筑、日期环境和库存 | [世界操作接口](reference/WORLD_ACTIONS.md) | 47项目录、39项执行适配器、8项明确阻断；预览/备份/单次提交/读回 |
+| 镜头跟随、地图标记、界面引导、声音、性能与运输诊断 | [原生界面与诊断接口](reference/NATIVE_EXTRAS.md) | 30个工具、GUI/引擎分流、能力检测与未实机验收范围 |
+| 使用独立 Citaro G1 高速及10倍装载测试车型 | [Citaro 测试车型](reference/CITARO_TEST_MODEL.md) | 原版资源引用、自动价格及加载/购车边界 |
+| 使用独立800 km/h中型城市道路测试限速 | [高速测试道路](reference/SPEED_TEST_ROAD.md) | 资源加载、与原版差异及施工验收边界 |
+| 修改单车速度、噪音、污染、舒适度倍率，了解其他可改属性 | [载具属性接口](reference/VEHICLE_MODIFIERS.md) | 原生来源合成、备份、未决读回及尚未实机验收的边界 |
 | 首次连接 MCP、发现下载模组目录或排查连接 | [Agent 首次连接完整指南](guides/FIRST_CONNECTION.md) | [通信模式](reference/TRANSPORT_CHANNELS.md)、[下载版连接](reference/MODIO_CONNECTION.md) |
 | 一次发送工程，由接收器逐项预览、提交和验收 | [接收器工程批处理](reference/CONSTRUCTION_PROJECT.md) | 支持范围、进度续作、预算及未知结果保护 |
 | 自动线路配色、默认色、逐节涂装及图片源包 | [载具外观 v2](reference/VEHICLE_APPEARANCE_V2.md) | 启停、预算、配置保护与资源加载边界 |

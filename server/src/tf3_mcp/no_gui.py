@@ -407,6 +407,14 @@ class NoGuiRequests:
                 raise ValueError("Session changed; invalidate previous IDs and previews")
             # Old loaded receivers do not advertise limits and only accept 512.
             # Check before intent/slot publication, even if the host allows more.
+            from .native_extras import SCHEMAS as EXTRAS_SCHEMAS
+            from .world_commands import COMMANDS as WORLD_ACTION_COMMANDS
+            if command in WORLD_ACTION_COMMANDS and row.get('worldActionsVersion') != 1:
+                raise ValueError('Loaded receiver requires worldActionsVersion=1; nothing dispatched')
+            if command in EXTRAS_SCHEMAS and row.get('nativeExtrasVersion') != 1:
+                raise ValueError('Loaded receiver requires nativeExtrasVersion=1; nothing dispatched')
+            if command in ('get_vehicle_modifiers', 'preview_vehicle_modifiers', 'commit_vehicle_modifiers', 'get_vehicle_modifier_operation') and row.get('vehicleModifiersVersion') != 1:
+                raise ValueError('Receiver requires vehicleModifiersVersion=1; nothing dispatched')
             if command == 'get_town_cargo_supply' and row.get('townCargoSupplyVersion') != 2:
                 raise ValueError('Loaded receiver lacks town cargo supply v2; nothing dispatched')
             if (command == 'get_town_cargo_supply' and arguments.get('include_passengers')
@@ -436,7 +444,7 @@ class NoGuiRequests:
                 capability = 'stationRemovalVersion' if 'station_removal' in command else 'depotRemovalVersion'
                 if row.get(capability) != 1:
                     raise ValueError(f"Loaded receiver lacks {'station' if 'station_removal' in command else 'depot'} removal v1; nothing submitted")
-            if command in {'commit_depot_removal', 'commit_station_removal', 'commit_vehicle_appearance', 'execute_project', 'resume_project'}:
+            if command in {'commit_world_action', 'commit_vehicle_modifiers', 'commit_depot_removal', 'commit_station_removal', 'commit_vehicle_appearance', 'execute_project', 'resume_project'}:
                 # Require fresh, unchanged save evidence from this host/session;
                 # a user-supplied filename is not proof of a completed backup.
                 saved = [r for r in ledger['requests'].values()
@@ -649,6 +657,25 @@ class NoGuiRequests:
             if ledger.get('pending') != request_id or 'response' in row:
                 raise ValueError('Only the current unresolved request can be reconciled')
             evidence = legacy_quota_rejection(self, row, Path(receiver_source))
+            if apply:
+                row['reconciliation'] = evidence
+                row['status'] = 'rejected_before_dispatch'
+                ledger['pending'] = None
+                self._save(ledger)
+            return dict(evidence, applied=apply)
+
+
+    def reconcile_world_module_load_rejection(self, request_id, receiver_source, *, apply=False):
+        """Preserve exact audited rejection evidence; never replay or invent a response."""
+        from .no_gui_recovery import world_module_load_rejection
+        with public_lock(self.directory):
+            ledger = self._load()
+            row = ledger['requests'].get(request_id)
+            if (not row or ledger.get('pending') != request_id or 'response' in row
+                    or 'reconciliation' in row or ledger.get('sessionTransition')
+                    or ledger.get('loadVerification')):
+                raise ValueError('Only the unresolved original module-load request can be audited')
+            evidence = world_module_load_rejection(self, row, Path(receiver_source))
             if apply:
                 row['reconciliation'] = evidence
                 row['status'] = 'rejected_before_dispatch'

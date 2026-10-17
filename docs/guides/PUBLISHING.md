@@ -8,11 +8,46 @@
 
 ## 本地发布配置与 Git
 
+### 模组中心本地入口与普通安装的区别（2026-10-17）
+
+官方[发布说明](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing)要求把开发／发布副本放入实际 userdata 的 `local/staging_area/<模组目录>/`；至少有一个 staging 模组时，模组中心才出现 **My Mods** 页签。仅部署到 `local/mods/` 是普通手动安装，不能据此承诺模组中心的本地开发页已显示；普通使用应到新游戏或存档设置的“添加模组”页验收。在线“我的上传”列表也不能代替本地开发页验收。
+
+官方[模组定义](https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition)规定同 `modId` 优先级为 **staging_area > 手动安装目录 > 订阅模组**。部署 staging 副本前核对所有候选及未决请求，保留已有发布绑定和备份；加载后按实际来源更新 MCP 路径并做只读验证，不能让旧 staging 副本遮蔽新安装件而仍声称运行新版。`settings.lua` 的 `externalModPath` 是自定义内置模组目录设置，不是普通本地模组必填的注册项，详见[首次连接指南](FIRST_CONNECTION.md#本地使用与模组中心入口2026-10-17)。
+
+“已部署文件”“界面已显示”“已随地图加载”“连接已验证”和“已上传”分别报告。用户只要求本地部署时不上传；只更新说明时不部署、不修改游戏设置、不重载或恢复监控。
+
 实际 `mod/tf3_mcp_bridge/mod.json`、`_metadata/modinfo.json` 和 `_metadata/mod.io*` 发布绑定文件仅保留在本机，不提交 Git。作者、发布说明和个人发布信息写入这些本地文件；仓库仅保留 `mod.example.json` 与 `_metadata/modinfo.example.json` 示例。示例中的技术 `modId` 是脚本资源命名空间，不能单独改名。
 
 首次检出仓库时，将两个示例分别复制为同目录的 `mod.json` 与 `modinfo.json`，仅在目标不存在时创建，再填写本地作者、版本及发布说明。不要用示例覆盖现有个人配置。发布和测试仍读取实际本地文件，发布前按下文校验。
 
 更新模组信息时同步本地源码配置和游戏发布副本即可，不再将个人配置纳入 Git 提交。`.gitignore` 不会清除已提交或已推送的历史；如需清理历史，须单独确定范围后执行。
+
+## 绑定已有线上条目与更新流程（2026-10-17）
+
+依据官方 [Publish a Mod → Update](https://wiki.transportfever3.com/doku.php?id=modding:general:publishing#update)，游戏使用模组内的 **`_metadata/mod.io_fileid.txt`** 关联已发布的 mod.io 条目。该文件通常在首次上传后生成，遗失时可手动补建；内容是线上模组详情页信息框中的条目 ID。
+
+### 区分两种 ID
+
+- `mod.json` 的 `modId` 是游戏内技术 ID，用于资源命名空间和识别相同模组，保持现有值；它不能替代线上更新绑定。
+- `mod.io_fileid.txt` 保存 mod.io 的数字条目 ID。虽然文件名带 `fileid`，官方要求填写的是模组条目 ID，不填某次上传文件的 ID、游戏 `modId` 或整条 URL。
+- 实际数字仅写入本机绑定文件及本地部署记录，公共文档使用占位说明；已有 `.gitignore` 排除 `_metadata/mod.io*`。同步源码与 staging 副本时保留此文件，不因全量复制丢失绑定。
+
+### 补建绑定
+
+1. 核对要更新的线上条目、当前账号权限及本地目标，不凭同名标题判断。仅绑定文件时，不宣称账号权限或游戏界面已验收。
+2. 在模组目录外备份已有元数据，保留未决请求证据。检查源码本地配置及实际 staging 副本的 `_metadata/mod.io_fileid.txt`；存在不同数字时先查明，不直接覆盖为猜测值。
+3. 缺失时创建纯文本文件，写入已确认的数字条目 ID，并独立读回。按本机部署需要同步源码配置与 staging 绑定；不写入通用示例，不提交个人发布配置。
+4. 打开 **Mod Hub → My Mods** 中的本地副本。确认页面提示 `The existing mod on mod.io will be updated` 并显示 **Update／更新** 按钮，才可报告游戏已识别更新绑定。文件写入成功与界面确认分开记录。
+
+### 更新已有模组
+
+1. 取得更新发布授权，按下节从实际已发布基线递增 `revision` 和项目 `BRIDGE_VERSION`，同步介绍版本及中英文更新说明。只补绑定或改文档不增加版本号。
+2. 同步功能代码和元数据到已绑定的 staging 副本，保留正式 userdata 接收器、线上绑定及必要备份；不要用接收器默认关闭的源码直接覆盖正式脚本。
+3. 按本文移出运行时残留，执行 `check_mod_package.py --require-receiver` 及变更所需检查，再完成游戏原生校验。
+4. 在本地 **My Mods** 页核对线上更新提示和目标条目后，执行 **Update／更新**。若页面表现为创建新条目而非更新，停止上传并排查绑定和账号权限，不能改为新建同名模组。
+5. 核对原生校验结果、上传回执和线上对应条目的版本，记录实际发布的 revision、桥接版本及条目 ID。没有上传成功证据时，只报告本地准备状态。
+
+官方提醒：上传时会用本地 `modinfo.json` 的名称和介绍覆盖线上直接修改的相应内容；发布前先备份并协调两边文案。绑定本身不上传、不改变账号权限，也不自动授权上传、加载地图或恢复监控。
 
 ## 版本同步规则
 
