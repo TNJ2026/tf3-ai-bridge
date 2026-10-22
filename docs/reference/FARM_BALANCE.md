@@ -1,5 +1,7 @@
 # 普通农场产量与库存调整
 
+当前状态（2026-10-22，v0.12.119 / revision95）：已按用户要求撤销全部道路及附加资源属性覆盖，并从源码和 staging 移除全部新增道路、车辆、直升机与设施。本页以下配置、保留项和验收记录仅供历史追溯，不代表当前启用。详见[全部新增资源移除记录](ALL_ADDED_RESOURCES_REMOVAL.md)。
+
 2026-10-17，0.12.48 / revision 24。用户要求产量变为原来的5倍，库存容量变为原来的10倍。
 
 入口为 `mod/tf3_mcp_bridge/content/farm_balance.script.lua`，由本地 `mod.json` 的 `runScript` 注册 `loadConstruction` 修饰器，只匹配 `::/industries/farm/farm.con`。保留原版资源身份，不创建新农场类型；棉花农场、橡胶农场、畜牧场及其他模组资源不受影响。

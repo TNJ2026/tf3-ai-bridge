@@ -107,6 +107,8 @@
 
 ## 直升机场购机与维护接口（2026-10-03）
 
+2026-10-22更新：v0.12.119 / revision95已撤销直升机场3000米维护半径覆盖，桥接能力说明和建后读回验收恢复原版800米；同时维护数量4、停放容量5保持。独立强化直升机场及其他新增道具均已移除，见[完整移除记录](ALL_ADDED_RESOURCES_REMOVAL.md)。此前3000米调整见[历史说明](HELIPORT_MAINTENANCE_3000.md)，既有设施是否恢复仍需实际读回。
+
 `build_heliport(x,y,z,rotation=0,name="")` 预览原生 `::/stations/air/heliport.con`，再由 `commit_facility(preview_token)` 单次提交。与 `build_helipad` 的小型停机坪区别是原生布局包含购机机库和自动维护服务：停放容量 5，维护池 4，维护范围 800 米。首次建造使用 `seed/year/modules={}`；不修改游戏的维护规则，也不自动购买飞机。
 
 提交读回实际 `CONSTRUCTION.depots`，要求直升机运输模式、维护池 4、维护半径 800；缺失时即使 `built=true` 也返回 `verified=false`、`service_verified=false`，不得重试建造。`list_depots` 新增 construction、maintenancePool、maintenanceCatchment；购机沿用 `buy_vehicles`，传入返回的机库实体编号，不能传入机场建筑编号。维护由原生模拟处理，实际维护服务和货运仍需运行验收。

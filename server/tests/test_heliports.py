@@ -31,7 +31,7 @@ api.cmd.sendCommand=function(p,cb)
   local CT=api.type.ComponentType
   components[8001][CT.CONSTRUCTION].depots=MISSING_DEPOT and {} or {8002}
   components[8002]={[CT.VEHICLE_DEPOT]={transportModes={[WRONG_MODE and 4 or 13]=true},
-    maintenancePool=BAD_POOL and 0 or 4,catchmentArea={radius=BAD_RADIUS and 0 or 800}}}
+    maintenancePool=BAD_POOL and 0 or 4,catchmentArea={radius=BAD_RADIUS and 3000 or 800}}}
   cb(...)
  end)
 end

@@ -1,5 +1,8 @@
 # Rampini Eltron 强化版
 
+> 2026-10-20：本文为历史记录。对应加强道路/强化车辆已从当前模组移除，见[移除范围与备份](ENHANCED_ROADS_VEHICLES_REMOVAL.md)。
+
+
 2026-10-17，0.12.55 / revision 31。复制原版 `::/vehicle/bus/rampini_2025/rampini_2025.mdl`，独立资源 `tnj_tf3_ai_bridge::/vehicle/bus/rampini_eltron_test/rampini_eltron_test.mdl`，不改变原版。
 
 | 属性 | 强化配置 |

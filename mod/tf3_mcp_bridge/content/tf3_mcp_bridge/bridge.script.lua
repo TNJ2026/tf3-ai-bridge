@@ -2,7 +2,7 @@
 -- the native mod_presets mailbox; responses and heartbeat use structured logs.
 -- The retired fixed request.lua/response.lua transport is not polled.
 
-local BRIDGE_VERSION = "0.12.71"
+local BRIDGE_VERSION = "0.12.119"
 local NO_GUI_GENERATION = "disabled"
 local MAX_LIST = 2000
 -- Diagnostic installer may pin one audited legacy rejection; never caller supplied.

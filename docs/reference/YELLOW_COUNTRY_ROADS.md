@@ -1,5 +1,18 @@
 # 黄色小型乡村公路
 
+> 2026-10-20：本文为早期独立黄色道路的历史记录，移除事件见[移除范围与备份](ENHANCED_ROADS_VEHICLES_REMOVAL.md)。后续按用户要求，仅恢复本次中型道路需要的黄色样式/材质与兼容模板，并已在v0.12.94直接修改内置中型乡村道路。当前名称、限速、实现和实机边界以[内置中型乡村道路](MEDIUM_COUNTRY_800_YELLOW.md)为准；小型、大型等其他旧道路未随之恢复。
+
+
+## 大型乡村公路隔音栏版（v0.12.72 / revision 48）
+
+后续更新（v0.12.73 / revision 49）：按用户要求将同一资源改为黄色路面，复用`country_wide_yellow.street`及黄色材质，名称更新为“大型乡村公路（黄色隔音栏版 · 800 km/h）”。六条机动车道限速、双侧原生隔音栏及其他配置保持。已同步本地staging，Lua/完整结构差异和接收器目录校验通过；尚未重载或游戏内画面验收。备份：`output/country_large_barriers_yellow_20261018/`。下文原版路面为初建版本记录。
+
+2026-10-18新增独立资源`tnj_tf3_ai_bridge::/roads/country_large_barriers_800.street_template`，菜单名称“大型乡村公路（隔音栏 · 800 km/h）”。复制原版`country_new_large_barriers.street_template.lua`，只修改名称和六条机动车道速度（800/3.6 m/s）。双向各三车道，保留原版路面、两侧通行带、费用、年代和菜单分类；本版本不是黄色路面。
+
+保留两侧`::/infrastructure/edge_addons/barrier_b.edge`原生隔音栏，装饰自身配置`noiseModifier=-0.65`；不叠加到道路修改器，也不据此宣称实测城市噪音下降65%。原生栏杆的桥隧、路口及地块兼容性沿用原版。
+
+已同步源码和本地staging，独立保留接收器与mod.io绑定，备份位于`output/country_large_barriers_800_20261018/`。Lua执行、完整结构差异检查及`check_mod_package.py --require-receiver`通过。未重载、上传、施工或进行游戏原生菜单/画面验收；重载模组后可检查新增条目。
+
 ## 中型与大型扩展（v0.12.45 / revision 21）
 
 2026-10-17新增两条800 km/h黄色乡村公路：

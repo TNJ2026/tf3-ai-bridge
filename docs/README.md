@@ -9,10 +9,22 @@
 
 | 要做什么 | 先读 | 再读 |
 |---|---|---|
+| 恢复全部道路属性、移除全部新增道具 | [完整移除范围与备份](reference/ALL_ADDED_RESOURCES_REMOVAL.md) | v0.12.119撤销全部资源覆盖，移除新增道路、车型和设施；存档缺失资源及既有道路验收边界 |
+| 小型街道参数恢复与历史修改 | [小型街道当前配置](reference/SMALL_STREET_500.md) | v0.12.116撤销速度／绿色／speedCoeffs覆盖，恢复原版约50 km/h；既有道路待重载验收 |
+| 小型乡村道路历史修改 | [小型乡村道路历史配置](reference/SMALL_COUNTRY_800.md) | v0.12.119撤销500 km/h、曲率系数和绿色样式覆盖 |
+| 独立GAZ 3307 600货车历史记录 | [车型记录](reference/GAZ3307_600.md) | v0.12.119已移除 |
+| 独立奔驰 eCitaro 历史记录 | [eCitaro配置与用户验收](reference/ECITARO_800.md) | v0.12.119已移除，历史验收保留 |
+| 独立 Urban eTruck 历史记录 | [Urban eTruck 800配置](reference/URBAN_ETRUCK_800.md) | v0.12.119已移除 |
+| 双向六车道高速历史记录 | [双向六车道高速配置](reference/HIGHWAY_TWO_WAY_SIX.md) | v0.12.119已移除普通版及残留资源 |
+| 了解已移除的加强道路与强化车辆 | [移除范围与备份](reference/ENHANCED_ROADS_VEHICLES_REMOVAL.md) | 11种道路、7款车型、保留项及既有存档加载边界 |
+| 了解模组怎样调用游戏 API、官方地址和能力范围 | [游戏 API 与桥接流程](guides/GAME_API_BRIDGE_FLOW.md) | 调用时序、官方模块、资源修改及项目代码入口 |
+| 分类了解贴图、涂装、新增道具/模型及相关资源能力 | [资源能力汇总（第15章）](guides/GAME_API_BRIDGE_FLOW.md#15-贴图涂装道具模型及其他资源能做什么) | 区分运行时API、本地涂装生成、模组资源加载和未封装功能；包含操作入口与验收边界 |
+| 独立直升机场历史记录 | [强化直升机场副本](reference/HELIPORT_8_3000.md) | v0.12.119已移除 |
+| 独立强化农场历史记录 | [强化农场副本](reference/FARM_5X_2000.md) | v0.12.119已移除，原版农场倍率覆盖同时撤销 |
+| 原版直升机场维护半径历史修改 | [直升机场维护范围](reference/HELIPORT_MAINTENANCE_3000.md) | v0.12.119撤销3000米覆盖 |
+| 独立零排放停靠点历史记录 | [零排放双侧停靠点](reference/ZERO_EMISSION_STREET_STOP.md) | v0.12.119已移除 |
 | 修改已有产业、车辆发车、城市建筑、日期环境和库存 | [世界操作接口](reference/WORLD_ACTIONS.md) | 47项目录、39项执行适配器、8项明确阻断；预览/备份/单次提交/读回 |
 | 镜头跟随、地图标记、界面引导、声音、性能与运输诊断 | [原生界面与诊断接口](reference/NATIVE_EXTRAS.md) | 30个工具、GUI/引擎分流、能力检测与未实机验收范围 |
-| 使用独立 Citaro G1 高速及10倍装载测试车型 | [Citaro 测试车型](reference/CITARO_TEST_MODEL.md) | 原版资源引用、自动价格及加载/购车边界 |
-| 使用独立800 km/h中型城市道路测试限速 | [高速测试道路](reference/SPEED_TEST_ROAD.md) | 资源加载、与原版差异及施工验收边界 |
 | 修改单车速度、噪音、污染、舒适度倍率，了解其他可改属性 | [载具属性接口](reference/VEHICLE_MODIFIERS.md) | 原生来源合成、备份、未决读回及尚未实机验收的边界 |
 | 首次连接 MCP、发现下载模组目录或排查连接 | [Agent 首次连接完整指南](guides/FIRST_CONNECTION.md) | [通信模式](reference/TRANSPORT_CHANNELS.md)、[下载版连接](reference/MODIO_CONNECTION.md) |
 | 一次发送工程，由接收器逐项预览、提交和验收 | [接收器工程批处理](reference/CONSTRUCTION_PROJECT.md) | 支持范围、进度续作、预算及未知结果保护 |
@@ -70,6 +82,10 @@
 
 
 ## 开发记录与历史复盘
+
+[JCI OBJ独立直升机](reference/JCI_HELICOPTER_OBJ.md)：转换及模型编辑器验收历史；v0.12.119已移除。
+
+[JCI OBJ独立半挂货车](reference/JCI_OBJ_TRUCK.md)：转换及模型编辑器验收历史；v0.12.119已移除。
 
 [首次公开发布前的开发记录](README_LEGACY.zh-CN.md)仅供技术追溯，其中的内部版本号、临时加载命令和现场步骤不是发布版本列表或当前操作指南。
 
