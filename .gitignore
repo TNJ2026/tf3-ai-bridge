@@ -26,3 +26,6 @@ server/uv.lock.bak
 /mod/tf3_mcp_bridge/mod.json
 /mod/tf3_mcp_bridge/_metadata/modinfo.json
 /mod/tf3_mcp_bridge/_metadata/mod.io*
+
+# Local repaint source assets
+/assets/repaints/
