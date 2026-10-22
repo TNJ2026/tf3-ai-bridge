@@ -27,5 +27,6 @@ server/uv.lock.bak
 /mod/tf3_mcp_bridge/_metadata/modinfo.json
 /mod/tf3_mcp_bridge/_metadata/mod.io*
 
-# Local repaint source assets
-/assets/repaints/
+# Local source assets and legacy generation tools
+/assets/
+/scripts/build_urban_etruck_logo.py
